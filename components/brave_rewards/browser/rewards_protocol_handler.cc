@@ -58,8 +58,21 @@ void LoadRewardsURL(
     return;
   }
 
-  // we should only allow rewards schema to be used from uphold.com domains
-  if (!web_contents->GetURL().DomainIs("uphold.com")) {
+  // Only accept rewards schema from allowed domains
+  const char* kAllowedDomains[] = {
+      "bitflyer.jp",                                   // bitFlyer production
+      "demo22oy5z2d2lu6pyoum26m7k.azurewebsites.net",  // bitFlyer staging
+      "uphold.com",                                    // Uphold staging/prod
+  };
+  bool allowed_domain = false;
+  for (const auto* domain : kAllowedDomains) {
+    if (web_contents->GetURL().DomainIs(domain)) {
+      allowed_domain = true;
+      break;
+    }
+  }
+
+  if (!allowed_domain) {
     return;
   }
 

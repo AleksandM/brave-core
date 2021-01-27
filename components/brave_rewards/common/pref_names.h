@@ -54,6 +54,7 @@ extern const char kFetchOldBalance[];
 extern const char kEmptyBalanceChecked[];
 extern const char kWalletBrave[];
 extern const char kWalletUphold[];
+extern const char kWalletBitflyer[];
 
 }  // namespace prefs
 }  // namespace brave_rewards

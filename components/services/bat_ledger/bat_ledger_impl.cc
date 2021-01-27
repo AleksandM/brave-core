@@ -816,6 +816,27 @@ void BatLedgerImpl::FetchBalance(
 }
 
 // static
+void BatLedgerImpl::OnGetBitflyerWallet(
+    CallbackHolder<GetBitflyerWalletCallback>* holder,
+    ledger::type::Result result,
+    ledger::type::BitflyerWalletPtr wallet) {
+  if (holder->is_valid())
+    std::move(holder->get()).Run(result, std::move(wallet));
+  delete holder;
+}
+
+void BatLedgerImpl::GetBitflyerWallet(GetBitflyerWalletCallback callback) {
+  auto* holder = new CallbackHolder<GetBitflyerWalletCallback>(
+      AsWeakPtr(), std::move(callback));
+
+  ledger_->GetBitflyerWallet(
+      std::bind(BatLedgerImpl::OnGetBitflyerWallet,
+                holder,
+                _1,
+                _2));
+}
+
+// static
 void BatLedgerImpl::OnGetUpholdWallet(
     CallbackHolder<GetUpholdWalletCallback>* holder,
     ledger::type::Result result,

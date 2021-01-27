@@ -94,6 +94,7 @@ void RewardsService::RegisterProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(prefs::kEmptyBalanceChecked, false);
   registry->RegisterStringPref(prefs::kWalletBrave, "");
   registry->RegisterStringPref(prefs::kWalletUphold, "");
+  registry->RegisterStringPref(prefs::kWalletBitflyer, "");
 }
 
 }  // namespace brave_rewards

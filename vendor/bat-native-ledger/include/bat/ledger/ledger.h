@@ -37,6 +37,9 @@ using HasSufficientBalanceToReconcileCallback = std::function<void(bool)>;
 using FetchBalanceCallback =
     std::function<void(type::Result, type::BalancePtr)>;
 
+using BitflyerWalletCallback =
+    std::function<void(type::Result, type::BitflyerWalletPtr)>;
+
 using UpholdWalletCallback =
     std::function<void(type::Result, type::UpholdWalletPtr)>;
 
@@ -336,6 +339,8 @@ class LEDGER_EXPORT Ledger {
       PendingContributionsTotalCallback callback) = 0;
 
   virtual void FetchBalance(FetchBalanceCallback callback) = 0;
+
+  virtual void GetBitflyerWallet(BitflyerWalletCallback callback) = 0;
 
   virtual void GetUpholdWallet(UpholdWalletCallback callback) = 0;
 

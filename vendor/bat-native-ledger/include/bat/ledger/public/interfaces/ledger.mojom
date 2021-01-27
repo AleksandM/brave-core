@@ -141,6 +141,17 @@ struct MediaEventInfo {
   string status;
 };
 
+struct BitflyerWallet {
+  string token;
+  string address;
+  WalletStatus status;
+  string verify_url;
+  string one_time_string;
+  string user_name;
+  string account_url;
+  string login_url;
+};
+
 struct UpholdWallet {
   string token;
   string address;

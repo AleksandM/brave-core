@@ -78,6 +78,9 @@ using GetCurrentCountryCallback = base::OnceCallback<void(const std::string&)>;
 using FetchBalanceCallback = base::OnceCallback<void(
     const ledger::type::Result,
     ledger::type::BalancePtr)>;
+using GetBitflyerWalletCallback = base::OnceCallback<void(
+    const ledger::type::Result result,
+    ledger::type::BitflyerWalletPtr wallet)>;
 using GetUpholdWalletCallback = base::OnceCallback<void(
     const ledger::type::Result result,
     ledger::type::UpholdWalletPtr wallet)>;
@@ -312,6 +315,8 @@ class RewardsService : public KeyedService {
       GetShareURLCallback callback) = 0;
 
   virtual void FetchBalance(FetchBalanceCallback callback) = 0;
+
+  virtual void GetBitflyerWallet(GetBitflyerWalletCallback callback) = 0;
 
   virtual void GetUpholdWallet(GetUpholdWalletCallback callback) = 0;
 

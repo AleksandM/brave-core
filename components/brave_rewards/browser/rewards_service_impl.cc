@@ -2866,6 +2866,25 @@ std::string RewardsServiceImpl::GetLegacyWallet() {
   return json;
 }
 
+void RewardsServiceImpl::OnGetBitflyerWallet(
+    GetBitflyerWalletCallback callback,
+    const ledger::type::Result result,
+    ledger::type::BitflyerWalletPtr wallet) {
+  std::move(callback).Run(result, std::move(wallet));
+}
+
+void RewardsServiceImpl::GetBitflyerWallet(GetBitflyerWalletCallback callback) {
+  if (!Connected()) {
+    std::move(callback).Run(ledger::type::Result::LEDGER_OK, nullptr);
+    return;
+  }
+
+  bat_ledger_->GetBitflyerWallet(
+      base::BindOnce(&RewardsServiceImpl::OnGetBitflyerWallet,
+                     AsWeakPtr(),
+                     std::move(callback)));
+}
+
 void RewardsServiceImpl::OnGetUpholdWallet(
     GetUpholdWalletCallback callback,
     const ledger::type::Result result,
@@ -2945,7 +2964,8 @@ void RewardsServiceImpl::ProcessRewardsPageUrl(
   }
 
   if (action == "authorization") {
-    if (wallet_type == ledger::constant::kWalletUphold) {
+    if (wallet_type == ledger::constant::kWalletUphold ||
+        wallet_type == ledger::constant::kWalletBitflyer) {
       ExternalWalletAuthorization(
           wallet_type,
           query_map,

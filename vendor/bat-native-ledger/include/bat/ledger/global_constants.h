@@ -19,6 +19,7 @@ namespace constant {
 const char kWalletAnonymous[] = "anonymous";
 const char kWalletUphold[] = "uphold";
 const char kWalletUnBlinded[] = "blinded";
+const char kWalletBitflyer[] = "bitflyer";
 
 }  // namespace constant
 }  // namespace ledger

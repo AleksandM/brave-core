@@ -289,6 +289,8 @@ class RewardsServiceImpl : public RewardsService,
 
   std::string GetLegacyWallet() override;
 
+  void GetBitflyerWallet(GetBitflyerWalletCallback callback) override;
+
   void GetUpholdWallet(GetUpholdWalletCallback callback) override;
 
   void ExternalWalletAuthorization(
@@ -465,6 +467,11 @@ class RewardsServiceImpl : public RewardsService,
   void OnFetchBalance(FetchBalanceCallback callback,
                       const ledger::type::Result result,
                       ledger::type::BalancePtr balance);
+
+  void OnGetBitflyerWallet(
+      GetBitflyerWalletCallback callback,
+      const ledger::type::Result result,
+      ledger::type::BitflyerWalletPtr wallet);
 
   void OnGetUpholdWallet(
       GetUpholdWalletCallback callback,

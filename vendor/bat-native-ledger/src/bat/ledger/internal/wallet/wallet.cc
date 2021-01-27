@@ -17,6 +17,8 @@
 #include "bat/ledger/internal/ledger_impl.h"
 #include "bat/ledger/internal/logging/event_log_keys.h"
 #include "bat/ledger/internal/state/state_keys.h"
+#include "bat/ledger/internal/bitflyer/bitflyer.h"
+#include "bat/ledger/internal/bitflyer/bitflyer_util.h"
 #include "bat/ledger/internal/uphold/uphold.h"
 #include "bat/ledger/internal/uphold/uphold_util.h"
 
@@ -115,6 +117,11 @@ void Wallet::AuthorizeWallet(
     return;
   }
 
+  if (wallet_type == constant::kWalletBitflyer) {
+    ledger_->bitflyer()->WalletAuthorization(args, callback);
+    return;
+  }
+
   NOTREACHED();
   callback(type::Result::LEDGER_ERROR, {});
 }
@@ -124,6 +131,12 @@ void Wallet::DisconnectWallet(
       ledger::ResultCallback callback) {
   if (wallet_type == constant::kWalletUphold) {
     ledger_->uphold()->DisconnectWallet(true);
+    callback(type::Result::LEDGER_OK);
+    return;
+  }
+
+  if (wallet_type == constant::kWalletBitflyer) {
+    ledger_->bitflyer()->DisconnectWallet(true);
     callback(type::Result::LEDGER_OK);
     return;
   }
@@ -183,6 +196,7 @@ void Wallet::GetAnonWalletStatus(ledger::ResultCallback callback) {
 
 void Wallet::DisconnectAllWallets(ledger::ResultCallback callback) {
   DisconnectWallet(constant::kWalletUphold, callback);
+  DisconnectWallet(constant::kWalletBitflyer, callback);
 }
 
 type::BraveWalletPtr Wallet::GetWallet() {

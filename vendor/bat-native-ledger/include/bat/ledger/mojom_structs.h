@@ -86,6 +86,9 @@ using ExcludeFilter = mojom::ExcludeFilter;
 using UpholdWallet = mojom::UpholdWallet;
 using UpholdWalletPtr = mojom::UpholdWalletPtr;
 
+using BitflyerWallet = mojom::BitflyerWallet;
+using BitflyerWalletPtr = mojom::BitflyerWalletPtr;
+
 using InlineTipsPlatforms = mojom::InlineTipsPlatforms;
 
 using MediaEventInfo = mojom::MediaEventInfo;
