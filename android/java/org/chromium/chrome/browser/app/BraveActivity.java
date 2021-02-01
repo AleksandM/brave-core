@@ -48,6 +48,7 @@ import org.chromium.chrome.browser.BraveRewardsNativeWorker;
 import org.chromium.chrome.browser.BraveSyncReflectionUtils;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.CrossPromotionalModalDialogFragment;
+import org.chromium.chrome.browser.DeprecateBAPModalDialogFragment;
 import org.chromium.chrome.browser.LaunchIntentDispatcher;
 import org.chromium.chrome.browser.bookmarks.BookmarkBridge;
 import org.chromium.chrome.browser.bookmarks.BookmarkModel;
@@ -354,6 +355,8 @@ public abstract class BraveActivity<C extends ChromeActivityComponent> extends C
             openRewardsPanel();
             BraveRewardsHelper.setRewardsOnboardingModalShown(true);
         }
+
+        showRewardsTooltip();
     }
 
     private void checkForYandexSE() {
@@ -439,6 +442,14 @@ public abstract class BraveActivity<C extends ChromeActivityComponent> extends C
         assert layout != null;
         if (layout != null) {
             layout.hideRewardsOnboardingIcon();
+        }
+    }
+
+    public void showRewardsTooltip() {
+        BraveToolbarLayout layout = (BraveToolbarLayout) findViewById(R.id.toolbar);
+        assert layout != null;
+        if (layout != null) {
+            layout.showRewardsTooltip();
         }
     }
 
@@ -607,6 +618,14 @@ public abstract class BraveActivity<C extends ChromeActivityComponent> extends C
         CrossPromotionalModalDialogFragment mCrossPromotionalModalDialogFragment = new CrossPromotionalModalDialogFragment();
         mCrossPromotionalModalDialogFragment.setCancelable(false);
         mCrossPromotionalModalDialogFragment.show(getSupportFragmentManager(), "CrossPromotionalModalDialogFragment");
+    }
+
+    public void showDeprecateBAPDialog() {
+        DeprecateBAPModalDialogFragment mDeprecateBAPModalDialogFragment =
+                new DeprecateBAPModalDialogFragment();
+        mDeprecateBAPModalDialogFragment.setCancelable(false);
+        mDeprecateBAPModalDialogFragment.show(
+                getSupportFragmentManager(), "DeprecateBAPModalDialogFragment");
     }
 
     private native void nativeRestartStatsUpdater();
