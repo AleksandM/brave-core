@@ -32,6 +32,7 @@ class BitflyerAuthorization {
   void OnAuthorize(
       const type::Result result,
       const std::string& token,
+      const std::string& address,
       ledger::ExternalWalletAuthorizationCallback callback);
 
   LedgerImpl* ledger_;  // NOT OWNED

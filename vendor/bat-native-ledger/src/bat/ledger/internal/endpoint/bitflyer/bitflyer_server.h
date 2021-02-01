@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include "bat/ledger/internal/endpoint/bitflyer/get_balance/bitflyer_get_balance.h"
 #include "bat/ledger/internal/endpoint/bitflyer/post_oauth/bitflyer_post_oauth.h"
 // #include "bat/ledger/internal/endpoint/bitflyer/post_transaction/post_transaction.h"
 // #include "bat/ledger/internal/endpoint/bitflyer/post_transaction_commit/post_transaction_commit.h"
@@ -23,9 +24,12 @@ class BitflyerServer {
   explicit BitflyerServer(LedgerImpl* ledger);
   ~BitflyerServer();
 
+  bitflyer::GetBalance* get_balance() const;
+
   bitflyer::PostOauth* post_oauth() const;
 
  private:
+  std::unique_ptr<bitflyer::GetBalance> get_balance_;
   std::unique_ptr<bitflyer::PostOauth> post_oauth_;
 //  std::unique_ptr<bitflyer::PostTransaction> post_transaction_;
 //  std::unique_ptr<bitflyer::PostTransactionCommit> post_transaction_commit_;

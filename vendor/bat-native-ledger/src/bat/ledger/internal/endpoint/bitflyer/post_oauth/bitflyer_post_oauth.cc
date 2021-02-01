@@ -68,7 +68,8 @@ type::Result PostOauth::CheckStatusCode(const int status_code) {
 
 type::Result PostOauth::ParseBody(
     const std::string& body,
-    std::string* token) {
+    std::string* token,
+    std::string* address) {
   DCHECK(token);
 
   base::Optional<base::Value> value = base::JSONReader::Read(body);
@@ -89,7 +90,14 @@ type::Result PostOauth::ParseBody(
     return type::Result::LEDGER_ERROR;
   }
 
+  const auto* deposit_id = dictionary->FindStringKey("deposit_id");
+  if (!deposit_id) {
+    BLOG(0, "Missing deposit id");
+    return type::Result::LEDGER_ERROR;
+  }
+
   *token = *access_token;
+  *address = *deposit_id;
 
   return type::Result::LEDGER_OK;
 }
@@ -119,13 +127,14 @@ void PostOauth::OnRequest(
   type::Result result = CheckStatusCode(response.status_code);
 
   if (result != type::Result::LEDGER_OK) {
-    callback(result, "");
+    callback(result, "", "");
     return;
   }
 
   std::string token;
-  result = ParseBody(response.body, &token);
-  callback(result, token);
+  std::string address;
+  result = ParseBody(response.body, &token, &address);
+  callback(result, token, address);
 }
 
 }  // namespace bitflyer

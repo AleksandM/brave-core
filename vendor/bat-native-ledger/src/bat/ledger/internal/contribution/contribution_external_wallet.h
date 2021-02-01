@@ -47,6 +47,7 @@ class ContributionExternalWallet {
       const std::string& contribution_id,
       const double amount,
       const type::RewardsType type,
+      const type::ContributionProcessor processor,
       const bool single_publisher,
       ledger::ResultCallback callback);
 

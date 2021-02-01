@@ -101,6 +101,7 @@ void BitflyerAuthorization::Authorize(
       this,
       _1,
       _2,
+      _3,
       callback);
 
   bitflyer_server_->post_oauth()->Request(code, url_callback);
@@ -109,6 +110,7 @@ void BitflyerAuthorization::Authorize(
 void BitflyerAuthorization::OnAuthorize(
     const type::Result result,
     const std::string& token,
+    const std::string& address,
     ledger::ExternalWalletAuthorizationCallback callback) {
   if (result == type::Result::EXPIRED_TOKEN) {
     BLOG(0, "Expired token");
@@ -129,9 +131,16 @@ void BitflyerAuthorization::OnAuthorize(
     return;
   }
 
+  if (address.empty()) {
+    BLOG(0, "Address is empty");
+    callback(type::Result::LEDGER_ERROR, {});
+    return;
+  }
+
   auto wallet_ptr = GetWallet(ledger_);
 
   wallet_ptr->token = token;
+  wallet_ptr->address = address;
 
   switch (wallet_ptr->status) {
     case type::WalletStatus::NOT_CONNECTED: {

@@ -50,7 +50,8 @@ namespace bitflyer {
 
 using PostOauthCallback = std::function<void(
     const type::Result result,
-    const std::string& token)>;
+    const std::string& token,
+    const std::string& address)>;
 
 class PostOauth {
  public:
@@ -70,7 +71,8 @@ class PostOauth {
 
   type::Result ParseBody(
       const std::string& body,
-      std::string* token);
+      std::string* token,
+      std::string* address);
 
   void OnRequest(
       const type::UrlResponse& response,

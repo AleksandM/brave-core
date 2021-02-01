@@ -48,6 +48,13 @@ void ContributionExternalWallet::ContributionInfo(
     return;
   }
 
+  // TODO: Support BitFlyer
+  if (contribution->processor != type::ContributionProcessor::UPHOLD) {
+    BLOG(0, "Only Uphold wallets are currently supported");
+    callback(type::Result::LEDGER_ERROR);
+    return;
+  }
+
   // In this phase we only support one wallet
   // so we will just always pick uphold.
   // In the future we will allow user to pick which wallet to use via UI
@@ -89,6 +96,7 @@ void ContributionExternalWallet::ContributionInfo(
           contribution->contribution_id,
           publisher->total_amount,
           contribution->type,
+          contribution->processor,
           single_publisher,
           callback);
 
@@ -115,6 +123,7 @@ void ContributionExternalWallet::OnServerPublisherInfo(
     const std::string& contribution_id,
     const double amount,
     const type::RewardsType type,
+    const type::ContributionProcessor processor,
     const bool single_publisher,
     ledger::ResultCallback callback) {
   if (!info) {
@@ -142,6 +151,13 @@ void ContributionExternalWallet::OnServerPublisherInfo(
     ledger_->database()->SavePendingContribution(
         std::move(list),
         save_callback);
+    callback(type::Result::LEDGER_ERROR);
+    return;
+  }
+
+  // TODO: Support BitFlyer
+  if (processor != type::ContributionProcessor::UPHOLD) {
+    BLOG(0, "Only Uphold wallets are currently supported");
     callback(type::Result::LEDGER_ERROR);
     return;
   }

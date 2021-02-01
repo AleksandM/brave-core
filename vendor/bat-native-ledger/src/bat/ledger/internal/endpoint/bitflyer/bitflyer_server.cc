@@ -11,7 +11,8 @@ namespace ledger {
 namespace endpoint {
 
 BitflyerServer::BitflyerServer(LedgerImpl* ledger)
-    : post_oauth_(std::make_unique<bitflyer::PostOauth>(ledger))
+    : get_balance_(std::make_unique<bitflyer::GetBalance>(ledger)),
+      post_oauth_(std::make_unique<bitflyer::PostOauth>(ledger))
 #if 0
       post_transaction_(std::make_unique<bitflyer::PostTransaction>(ledger)),
       post_transaction_commit_(
@@ -20,6 +21,10 @@ BitflyerServer::BitflyerServer(LedgerImpl* ledger)
 {}
 
 BitflyerServer::~BitflyerServer() = default;
+
+bitflyer::GetBalance* BitflyerServer::get_balance() const {
+  return get_balance_.get();
+}
 
 bitflyer::PostOauth* BitflyerServer::post_oauth() const {
   return post_oauth_.get();
@@ -30,7 +35,8 @@ bitflyer::PostTransaction* BitflyerServer::post_transaction() const {
   return post_transaction_.get();
 }
 
-bitflyer::PostTransactionCommit* BitflyerServer::post_transaction_commit() const {
+bitflyer::PostTransactionCommit* BitflyerServer::post_transaction_commit()
+    const {
   return post_transaction_commit_.get();
 }
 #endif

@@ -411,7 +411,8 @@ void Contribution::OnEntrySaved(
       contribution_id);
 
     sku_->AnonUserFunds(contribution_id, wallet_type, result_callback);
-  } else if (wallet_type == constant::kWalletUphold) {
+  } else if (wallet_type == constant::kWalletUphold ||
+             wallet_type == constant::kWalletBitflyer) {
     auto result_callback = std::bind(&Contribution::Result,
         this,
         _1,
@@ -730,7 +731,8 @@ void Contribution::Retry(
           result_callback);
       return;
     }
-    case type::ContributionProcessor::UPHOLD: {
+    case type::ContributionProcessor::UPHOLD:
+    case type::ContributionProcessor::BITFLYER: {
       if ((*shared_contribution)->type ==
           type::RewardsType::AUTO_CONTRIBUTE) {
         sku_->Retry((*shared_contribution)->Clone(), result_callback);

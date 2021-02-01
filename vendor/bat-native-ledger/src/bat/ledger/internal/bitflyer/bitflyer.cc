@@ -133,12 +133,10 @@ void Bitflyer::FetchBalance(FetchBalanceCallback callback) {
       _2,
       callback);
 
-#if 0
-  bitflyer_server_->get_card()->Request(
+  bitflyer_server_->get_balance()->Request(
       wallet->address,
       wallet->token,
       url_callback);
-#endif
 }
 
 void Bitflyer::OnFetchBalance(

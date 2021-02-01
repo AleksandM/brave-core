@@ -50,7 +50,21 @@ class WalletBalance {
       type::BalancePtr balance,
       ledger::FetchBalanceCallback callback);
 
-  void OnUpholdFetchBalance(
+  void FetchBalanceUphold(
+      type::BalancePtr balance,
+      ledger::FetchBalanceCallback callback);
+
+  void OnFetchBalanceUphold(
+      type::Balance info,
+      ledger::FetchBalanceCallback callback,
+      const type::Result result,
+      const double balance);
+
+  void FetchBalanceBitflyer(
+      type::BalancePtr balance,
+      ledger::FetchBalanceCallback callback);
+
+  void OnFetchBalanceBitflyer(
       type::Balance info,
       ledger::FetchBalanceCallback callback,
       const type::Result result,
