@@ -232,6 +232,14 @@ std::string GenerateRandomString(bool testing) {
   return base::HexEncode(bytes, sizeof(bytes));
 }
 
+std::string GetAccountUrl() {
+  const std::string url = GetUrl();
+
+  return base::StringPrintf(
+      "%s/ex/Home",
+      url.c_str());
+}
+
 type::ExternalWalletPtr GenerateLinks(type::ExternalWalletPtr wallet) {
   if (!wallet) {
     return nullptr;
@@ -265,6 +273,7 @@ type::ExternalWalletPtr GenerateLinks(type::ExternalWalletPtr wallet) {
 #endif
 
   wallet->verify_url = GenerateVerifyLink(wallet->Clone());
+  wallet->account_url = GetAccountUrl();
   wallet->login_url = GetAuthorizeUrl(wallet->one_time_string, false);
 
   return wallet;

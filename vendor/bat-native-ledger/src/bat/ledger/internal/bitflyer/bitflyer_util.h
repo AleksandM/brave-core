@@ -46,6 +46,8 @@ bool SetWallet(LedgerImpl* ledger, type::ExternalWalletPtr wallet);
 
 std::string GenerateRandomString(bool testing);
 
+std::string GetAccountUrl();
+
 type::ExternalWalletPtr GenerateLinks(type::ExternalWalletPtr wallet);
 
 std::string GenerateVerifyLink(type::ExternalWalletPtr wallet);
