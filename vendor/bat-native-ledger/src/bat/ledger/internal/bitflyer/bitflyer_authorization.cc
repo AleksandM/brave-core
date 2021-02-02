@@ -143,18 +143,11 @@ void BitflyerAuthorization::OnAuthorize(
   wallet_ptr->address = address;
 
   switch (wallet_ptr->status) {
-    case type::WalletStatus::NOT_CONNECTED: {
-      wallet_ptr->status = type::WalletStatus::CONNECTED;
-      break;
-    }
-    case type::WalletStatus::DISCONNECTED_NOT_VERIFIED: {
-      wallet_ptr->status = type::WalletStatus::CONNECTED;
-      break;
-    }
-    case type::WalletStatus::DISCONNECTED_VERIFIED: {
+    case type::WalletStatus::NOT_CONNECTED:
+    case type::WalletStatus::DISCONNECTED_NOT_VERIFIED:
+    case type::WalletStatus::DISCONNECTED_VERIFIED:
       wallet_ptr->status = type::WalletStatus::VERIFIED;
       break;
-    }
     default:
       break;
   }

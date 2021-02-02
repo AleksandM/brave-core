@@ -75,16 +75,13 @@ type::Result GetBalance::ParseBody(
       continue;
     }
 
-    const auto* available_str = dictionary->FindStringKey("available");
-    if (!available_str) {
+    const auto available_value = item.FindDoubleKey("available");
+    if (!available_value) {
       BLOG(0, "Missing available");
       return type::Result::LEDGER_ERROR;
     }
 
-    const bool success = base::StringToDouble(*available_str, available);
-    if (!success) {
-      *available = 0.0;
-    }
+    *available = available_value.value();
 
     return type::Result::LEDGER_OK;
   }
