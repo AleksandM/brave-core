@@ -322,6 +322,7 @@ type::BitflyerWalletPtr ResetWallet(type::BitflyerWalletPtr wallet) {
 
   const auto status = wallet->status;
   wallet = type::BitflyerWallet::New();
+  wallet->type = constant::kWalletBitflyer;
 
   if (status != type::WalletStatus::NOT_CONNECTED) {
     if (status == type::WalletStatus::VERIFIED) {

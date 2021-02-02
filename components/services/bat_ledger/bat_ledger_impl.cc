@@ -816,45 +816,23 @@ void BatLedgerImpl::FetchBalance(
 }
 
 // static
-void BatLedgerImpl::OnGetBitflyerWallet(
-    CallbackHolder<GetBitflyerWalletCallback>* holder,
+void BatLedgerImpl::OnGetExternalWallet(
+    CallbackHolder<GetExternalWalletCallback>* holder,
     ledger::type::Result result,
-    ledger::type::BitflyerWalletPtr wallet) {
+    ledger::type::ExternalWalletPtr wallet) {
   if (holder->is_valid())
     std::move(holder->get()).Run(result, std::move(wallet));
   delete holder;
 }
 
-void BatLedgerImpl::GetBitflyerWallet(GetBitflyerWalletCallback callback) {
-  auto* holder = new CallbackHolder<GetBitflyerWalletCallback>(
+void BatLedgerImpl::GetExternalWallet(const std::string& wallet_type,
+                                       GetExternalWalletCallback callback) {
+  auto* holder = new CallbackHolder<GetExternalWalletCallback>(
       AsWeakPtr(), std::move(callback));
 
-  ledger_->GetBitflyerWallet(
-      std::bind(BatLedgerImpl::OnGetBitflyerWallet,
-                holder,
-                _1,
-                _2));
-}
-
-// static
-void BatLedgerImpl::OnGetUpholdWallet(
-    CallbackHolder<GetUpholdWalletCallback>* holder,
-    ledger::type::Result result,
-    ledger::type::UpholdWalletPtr wallet) {
-  if (holder->is_valid())
-    std::move(holder->get()).Run(result, std::move(wallet));
-  delete holder;
-}
-
-void BatLedgerImpl::GetUpholdWallet(GetUpholdWalletCallback callback) {
-  auto* holder = new CallbackHolder<GetUpholdWalletCallback>(
-      AsWeakPtr(), std::move(callback));
-
-  ledger_->GetUpholdWallet(
-      std::bind(BatLedgerImpl::OnGetUpholdWallet,
-                holder,
-                _1,
-                _2));
+  ledger_->GetExternalWallet(
+      wallet_type,
+      std::bind(BatLedgerImpl::OnGetExternalWallet, holder, _1, _2));
 }
 
 // static

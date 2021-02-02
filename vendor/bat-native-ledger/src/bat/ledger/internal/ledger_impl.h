@@ -300,9 +300,8 @@ class LedgerImpl : public ledger::Ledger {
 
   void FetchBalance(ledger::FetchBalanceCallback callback) override;
 
-  void GetBitflyerWallet(ledger::BitflyerWalletCallback callback) override;
-
-  void GetUpholdWallet(ledger::UpholdWalletCallback callback) override;
+  void GetExternalWallet(const std::string& wallet_type,
+                         ledger::ExternalWalletCallback callback) override;
 
   void ExternalWalletAuthorization(
       const std::string& wallet_type,

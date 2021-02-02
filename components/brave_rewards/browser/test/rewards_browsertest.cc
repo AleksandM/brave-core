@@ -281,7 +281,7 @@ IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, ZeroBalanceWalletClaimNotCalled) {
   auto test_callback =
       [&](
           const ledger::type::Result result,
-          ledger::type::UpholdWalletPtr wallet) {
+          ledger::type::ExternalWalletPtr wallet) {
         auto requests = response_->GetRequests();
         EXPECT_EQ(result, ledger::type::Result::LEDGER_OK);
         EXPECT_FALSE(requests.empty());
@@ -299,7 +299,9 @@ IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, ZeroBalanceWalletClaimNotCalled) {
         run_loop.Quit();
       };
 
-  rewards_service_->GetUpholdWallet(base::BindLambdaForTesting(test_callback));
+  rewards_service_->GetExternalWallet(
+      ledger::constant::kWalletUphold,
+      base::BindLambdaForTesting(test_callback));
   run_loop.Run();
 }
 

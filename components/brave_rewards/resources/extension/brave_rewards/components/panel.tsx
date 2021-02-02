@@ -575,7 +575,7 @@ export class Panel extends React.Component<Props, State> {
     const { externalWallet } = this.props.rewardsPanelData
 
     if (!externalWallet || !externalWallet.accountUrl) {
-      this.actions.getExternalWallet('uphold')
+      this.actions.getExternalWallet()
       return
     }
 
@@ -583,7 +583,7 @@ export class Panel extends React.Component<Props, State> {
   }
 
   onDisconnectClick = () => {
-    chrome.braveRewards.disconnectWallet('uphold')
+    chrome.braveRewards.disconnectWallet()
   }
 
   shouldShowConnectedMessage = () => {

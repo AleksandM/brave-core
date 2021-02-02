@@ -83,11 +83,12 @@ using Environment = mojom::Environment;
 
 using ExcludeFilter = mojom::ExcludeFilter;
 
-using UpholdWallet = mojom::UpholdWallet;
-using UpholdWalletPtr = mojom::UpholdWalletPtr;
+using ExternalWallet = mojom::ExternalWallet;
+using ExternalWalletPtr = mojom::ExternalWalletPtr;
 
-using BitflyerWallet = mojom::BitflyerWallet;
-using BitflyerWalletPtr = mojom::BitflyerWalletPtr;
+// TODO: Remove remaining references to BitflyerWallet/BitflyerWalletPtr
+using BitflyerWallet = ExternalWallet;
+using BitflyerWalletPtr = ExternalWalletPtr;
 
 using InlineTipsPlatforms = mojom::InlineTipsPlatforms;
 

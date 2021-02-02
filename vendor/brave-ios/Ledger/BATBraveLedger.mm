@@ -577,19 +577,21 @@ BATClassLedgerBridge(BOOL, useShortRetries, setUseShortRetries, short_retries)
 - (void)fetchUpholdWallet:(nullable void (^)(BATUpholdWallet * _Nullable wallet))completion
 {
   const auto __weak weakSelf = self;
-  ledger->GetUpholdWallet(^(ledger::type::Result result, ledger::type::UpholdWalletPtr walletPtr) {
-    if (result == ledger::type::Result::LEDGER_OK && walletPtr.get() != nullptr) {
-      const auto bridgedWallet = [[BATUpholdWallet alloc] initWithUpholdWallet:*walletPtr];
-      weakSelf.upholdWallet = bridgedWallet;
-      if (completion) {
-        completion(bridgedWallet);
+  ledger->GetExternalWallet(
+    ledger::constant::kWalletUphold,
+    (^(ledger::type::Result result, ledger::type::ExternalWalletPtr walletPtr) {
+      if (result == ledger::type::Result::LEDGER_OK && walletPtr.get() != nullptr) {
+        const auto bridgedWallet = [[BATUpholdWallet alloc] initWithUpholdWallet:*walletPtr];
+        weakSelf.upholdWallet = bridgedWallet;
+        if (completion) {
+          completion(bridgedWallet);
+        }
+      } else {
+        if (completion) {
+          completion(nil);
+        }
       }
-    } else {
-      if (completion) {
-        completion(nil);
-      }
-    }
-  });
+    });
 }
 
 - (void)disconnectWalletOfType:(BATWalletType)walletType

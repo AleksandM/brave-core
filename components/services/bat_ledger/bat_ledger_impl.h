@@ -200,9 +200,8 @@ class BatLedgerImpl :
 
   void FetchBalance(FetchBalanceCallback callback) override;
 
-  void GetBitflyerWallet(GetBitflyerWalletCallback callback) override;
-
-  void GetUpholdWallet(GetUpholdWalletCallback callback) override;
+  void GetExternalWallet(const std::string& wallet_type,
+                         GetExternalWalletCallback) override;
 
   void ExternalWalletAuthorization(
     const std::string& wallet_type,
@@ -390,15 +389,10 @@ class BatLedgerImpl :
       ledger::type::Result result,
       ledger::type::BalancePtr balance);
 
-  static void OnGetBitflyerWallet(
-    CallbackHolder<GetBitflyerWalletCallback>* holder,
+  static void OnGetExternalWallet(
+    CallbackHolder<GetExternalWalletCallback>* holder,
     ledger::type::Result result,
-    ledger::type::BitflyerWalletPtr wallet);
-
-  static void OnGetUpholdWallet(
-    CallbackHolder<GetUpholdWalletCallback>* holder,
-    ledger::type::Result result,
-    ledger::type::UpholdWalletPtr wallet);
+    ledger::type::ExternalWalletPtr wallet);
 
   static void OnExternalWalletAuthorization(
     CallbackHolder<ExternalWalletAuthorizationCallback>* holder,

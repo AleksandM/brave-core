@@ -520,13 +520,13 @@ void RewardsServiceImpl::MaybeShowBackupNotification(uint64_t boot_stamp) {
       boot_stamp);
 
   // Don't display notification if user has a verified wallet.
-  GetUpholdWallet(std::move(callback));
+  GetExternalWallet(GetExternalWalletType(), std::move(callback));
 }
 
 void RewardsServiceImpl::WalletBackupNotification(
     const uint64_t boot_stamp,
     const ledger::type::Result result,
-    ledger::type::UpholdWalletPtr wallet) {
+    ledger::type::ExternalWalletPtr wallet) {
   if (wallet &&
       (wallet->status == ledger::type::WalletStatus::VERIFIED ||
       wallet->status == ledger::type::WalletStatus::DISCONNECTED_VERIFIED)) {
@@ -2866,41 +2866,23 @@ std::string RewardsServiceImpl::GetLegacyWallet() {
   return json;
 }
 
-void RewardsServiceImpl::OnGetBitflyerWallet(
-    GetBitflyerWalletCallback callback,
+void RewardsServiceImpl::OnGetExternalWallet(
+    GetExternalWalletCallback callback,
     const ledger::type::Result result,
-    ledger::type::BitflyerWalletPtr wallet) {
+    ledger::type::ExternalWalletPtr wallet) {
   std::move(callback).Run(result, std::move(wallet));
 }
 
-void RewardsServiceImpl::GetBitflyerWallet(GetBitflyerWalletCallback callback) {
+void RewardsServiceImpl::GetExternalWallet(const std::string& wallet_type,
+                                           GetExternalWalletCallback callback) {
   if (!Connected()) {
     std::move(callback).Run(ledger::type::Result::LEDGER_OK, nullptr);
     return;
   }
 
-  bat_ledger_->GetBitflyerWallet(
-      base::BindOnce(&RewardsServiceImpl::OnGetBitflyerWallet,
-                     AsWeakPtr(),
-                     std::move(callback)));
-}
-
-void RewardsServiceImpl::OnGetUpholdWallet(
-    GetUpholdWalletCallback callback,
-    const ledger::type::Result result,
-    ledger::type::UpholdWalletPtr wallet) {
-  std::move(callback).Run(result, std::move(wallet));
-}
-
-void RewardsServiceImpl::GetUpholdWallet(GetUpholdWalletCallback callback) {
-  if (!Connected()) {
-    std::move(callback).Run(ledger::type::Result::LEDGER_OK, nullptr);
-    return;
-  }
-
-  bat_ledger_->GetUpholdWallet(
-      base::BindOnce(&RewardsServiceImpl::OnGetUpholdWallet,
-                     AsWeakPtr(),
+  bat_ledger_->GetExternalWallet(
+      wallet_type,
+      base::BindOnce(&RewardsServiceImpl::OnGetExternalWallet, AsWeakPtr(),
                      std::move(callback)));
 }
 
@@ -3001,8 +2983,7 @@ void RewardsServiceImpl::DisconnectWallet(const std::string& wallet_type) {
 
   bat_ledger_->DisconnectWallet(
       wallet_type,
-      base::BindOnce(&RewardsServiceImpl::OnDisconnectWallet,
-                     AsWeakPtr(),
+      base::BindOnce(&RewardsServiceImpl::OnDisconnectWallet, AsWeakPtr(),
                      wallet_type));
 }
 
@@ -3026,22 +3007,7 @@ void RewardsServiceImpl::ShowNotification(
 }
 
 bool RewardsServiceImpl::OnlyAnonWallet() {
-  const int32_t current_country =
-      country_codes::GetCountryIDFromPrefs(profile_->GetPrefs());
-
-  for (const auto& country : kOnlyAnonWalletCountries) {
-    if (country.length() != 2) {
-      continue;
-    }
-
-    const int id = country_codes::CountryCharsToCountryID(
-        country.at(0), country.at(1));
-
-    if (id == current_country) {
-      return true;
-    }
-  }
-
+  // TODO: Remove this function and modify all call sites.
   return false;
 }
 
@@ -3529,6 +3495,26 @@ void RewardsServiceImpl::OnWalletCreatedForSetAdsEnabled(
   if (ads_service) {
     ads_service->SetEnabled(true);
   }
+}
+
+std::string RewardsServiceImpl::GetExternalWalletType() const {
+  const int32_t current_country =
+      country_codes::GetCountryIDFromPrefs(profile_->GetPrefs());
+
+  // TODO: Rename |kOnlyAnonWalletCountries| to reflect current usage
+  for (const auto& country : kOnlyAnonWalletCountries) {
+    if (country.length() == 2) {
+      const int id = country_codes::CountryCharsToCountryID(
+          country.at(0), country.at(1));
+
+      if (id == current_country)
+        return ledger::constant::kWalletBitflyer;
+    }
+  }
+
+  // TODO: For development, we just want to use bitflyer everywhere
+  return ledger::constant::kWalletBitflyer;
+  // return ledger::constant::kWalletUphold;
 }
 
 }  // namespace brave_rewards

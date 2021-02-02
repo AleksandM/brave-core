@@ -152,7 +152,7 @@ export const handleUpholdLink = (balance: RewardsExtension.Balance, externalWall
 }
 
 export const getExternalWallet = (actions: any, externalWallet?: RewardsExtension.ExternalWallet) => {
-  chrome.braveRewards.getExternalWallet('uphold', (result: number, wallet: RewardsExtension.ExternalWallet) => {
+  chrome.braveRewards.getExternalWallet((result: number, wallet: RewardsExtension.ExternalWallet) => {
     // EXPIRED TOKEN
     if (result === 24) {
       getExternalWallet(actions, externalWallet)

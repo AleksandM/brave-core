@@ -153,16 +153,9 @@ class RewardsDOMHandler : public WebUIMessageHandler,
     ledger::type::BalancePtr balance);
 
   void GetExternalWallet(const base::ListValue* args);
-
-  void GetBitflyerWallet(const base::ListValue* args);
-  void OnGetBitflyerWallet(
+  void OnGetExternalWallet(
       const ledger::type::Result result,
-      ledger::type::BitflyerWalletPtr wallet);
-
-  void GetUpholdWallet(const base::ListValue* args);
-  void OnGetUpholdWallet(
-      const ledger::type::Result result,
-      ledger::type::UpholdWalletPtr wallet);
+      ledger::type::ExternalWalletPtr wallet);
 
   void ProcessRewardsPageUrl(const base::ListValue* args);
 
@@ -1572,22 +1565,19 @@ void RewardsDOMHandler::FetchBalance(const base::ListValue* args) {
 }
 
 void RewardsDOMHandler::GetExternalWallet(const base::ListValue* args) {
-  GetBitflyerWallet(args);
-}
-
-void RewardsDOMHandler::GetBitflyerWallet(const base::ListValue* args) {
   if (!rewards_service_) {
     return;
   }
 
-  rewards_service_->GetBitflyerWallet(
-      base::BindOnce(&RewardsDOMHandler::OnGetBitflyerWallet,
+  rewards_service_->GetExternalWallet(
+      rewards_service_->GetExternalWalletType(),
+      base::BindOnce(&RewardsDOMHandler::OnGetExternalWallet,
                      weak_factory_.GetWeakPtr()));
 }
 
-void RewardsDOMHandler::OnGetBitflyerWallet(
+void RewardsDOMHandler::OnGetExternalWallet(
     const ledger::type::Result result,
-    ledger::type::BitflyerWalletPtr wallet) {
+    ledger::type::ExternalWalletPtr wallet) {
   if (web_ui()->CanCallJavascript()) {
     base::Value data(base::Value::Type::DICTIONARY);
 
@@ -1595,44 +1585,7 @@ void RewardsDOMHandler::OnGetBitflyerWallet(
     base::Value wallet_dict(base::Value::Type::DICTIONARY);
 
     if (wallet) {
-      wallet_dict.SetStringKey("token", wallet->token);
-      wallet_dict.SetStringKey("address", wallet->address);
-      wallet_dict.SetIntKey("status", static_cast<int>(wallet->status));
-      wallet_dict.SetStringKey("verifyUrl", wallet->verify_url);
-//      wallet_dict.SetStringKey("addUrl", wallet->add_url);
-//      wallet_dict.SetStringKey("withdrawUrl", wallet->withdraw_url);
-      wallet_dict.SetStringKey("userName", wallet->user_name);
-      wallet_dict.SetStringKey("accountUrl", wallet->account_url);
-      wallet_dict.SetStringKey("loginUrl", wallet->login_url);
-    }
-
-    data.SetKey("wallet", std::move(wallet_dict));
-
-    web_ui()->CallJavascriptFunctionUnsafe("brave_rewards.externalWallet",
-                                           data);
-  }
-}
-
-void RewardsDOMHandler::GetUpholdWallet(const base::ListValue* args) {
-  if (!rewards_service_) {
-    return;
-  }
-
-  rewards_service_->GetUpholdWallet(
-      base::BindOnce(&RewardsDOMHandler::OnGetUpholdWallet,
-                     weak_factory_.GetWeakPtr()));
-}
-
-void RewardsDOMHandler::OnGetUpholdWallet(
-    const ledger::type::Result result,
-    ledger::type::UpholdWalletPtr wallet) {
-  if (web_ui()->CanCallJavascript()) {
-    base::Value data(base::Value::Type::DICTIONARY);
-
-    data.SetIntKey("result", static_cast<int>(result));
-    base::Value wallet_dict(base::Value::Type::DICTIONARY);
-
-    if (wallet) {
+      // TODO: Add wallet "type"
       wallet_dict.SetStringKey("token", wallet->token);
       wallet_dict.SetStringKey("address", wallet->address);
       wallet_dict.SetIntKey("status", static_cast<int>(wallet->status));
@@ -1691,13 +1644,10 @@ void RewardsDOMHandler::ProcessRewardsPageUrl(const base::ListValue* args) {
 }
 
 void RewardsDOMHandler::DisconnectWallet(const base::ListValue* args) {
-  CHECK_EQ(1U, args->GetSize());
   if (!rewards_service_) {
     return;
   }
-
-  const std::string wallet_type = args->GetList()[0].GetString();
-  rewards_service_->DisconnectWallet(wallet_type);
+  rewards_service_->DisconnectWallet(rewards_service_->GetExternalWalletType());
 }
 
 void RewardsDOMHandler::OnDisconnectWallet(

@@ -42,19 +42,19 @@ std::string GetWithdrawUrl(const std::string& address);
 
 std::string GetSecondStepVerify();
 
-type::UpholdWalletPtr GetWallet(LedgerImpl* ledger);
+type::ExternalWalletPtr GetWallet(LedgerImpl* ledger);
 
-bool SetWallet(LedgerImpl* ledger, type::UpholdWalletPtr wallet);
+bool SetWallet(LedgerImpl* ledger, type::ExternalWalletPtr wallet);
 
 std::string GenerateRandomString(bool testing);
 
 std::string GetAccountUrl();
 
-type::UpholdWalletPtr GenerateLinks(type::UpholdWalletPtr wallet);
+type::ExternalWalletPtr GenerateLinks(type::ExternalWalletPtr wallet);
 
-std::string GenerateVerifyLink(type::UpholdWalletPtr wallet);
+std::string GenerateVerifyLink(type::ExternalWalletPtr wallet);
 
-type::UpholdWalletPtr ResetWallet(type::UpholdWalletPtr wallet);
+type::ExternalWalletPtr ResetWallet(type::ExternalWalletPtr wallet);
 
 }  // namespace uphold
 }  // namespace ledger

@@ -504,10 +504,11 @@ IN_PROC_BROWSER_TEST_F(
   total_amount += amount;
 
   base::RunLoop run_loop_first;
-  rewards_service_->GetUpholdWallet(
+  rewards_service_->GetExternalWallet(
+      rewards_service_->GetExternalWalletType(),
       base::BindLambdaForTesting([&](
           const ledger::mojom::Result,
-          ledger::type::UpholdWalletPtr wallet) {
+          ledger::type::ExternalWalletPtr wallet) {
         ASSERT_EQ(wallet->fees.size(), 2UL);
         for (auto const& value : wallet->fees) {
           ASSERT_EQ(value.second, tip_fee);

@@ -74,9 +74,9 @@ class Uphold {
 
   void GetUser(GetUserCallback callback);
 
-  type::UpholdWalletPtr GetWallet();
+  type::ExternalWalletPtr GetWallet();
 
-  bool SetWallet(type::UpholdWalletPtr wallet);
+  bool SetWallet(type::ExternalWalletPtr wallet);
 
  private:
   void ContributionCompleted(

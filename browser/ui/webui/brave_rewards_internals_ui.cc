@@ -56,10 +56,10 @@ class RewardsInternalsDOMHandler : public content::WebUIMessageHandler {
   void OnGetFulllLog(const std::string& log);
   void ClearLog(const base::ListValue* args);
   void OnClearLog(const bool success);
-  void GetUpholdWallet(const base::ListValue* args);
-  void OnGetUpholdWallet(
+  void GetExternalWallet(const base::ListValue* args);
+  void OnGetExternalWallet(
       const ledger::type::Result result,
-      ledger::type::UpholdWalletPtr wallet);
+      ledger::type::ExternalWalletPtr wallet);
   void GetEventLogs(const base::ListValue* args);
   void OnGetEventLogs(ledger::type::EventLogs logs);
 
@@ -114,7 +114,7 @@ void RewardsInternalsDOMHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
       "brave_rewards_internals.getExternalWallet",
       base::BindRepeating(
-          &RewardsInternalsDOMHandler::GetUpholdWallet,
+          &RewardsInternalsDOMHandler::GetExternalWallet,
           base::Unretained(this)));
   web_ui()->RegisterMessageCallback(
       "brave_rewards_internals.getEventLogs",
@@ -339,20 +339,21 @@ void RewardsInternalsDOMHandler::OnClearLog(const bool success) {
       base::Value(""));
 }
 
-void RewardsInternalsDOMHandler::GetUpholdWallet(const base::ListValue* args) {
+void RewardsInternalsDOMHandler::GetExternalWallet(
+    const base::ListValue* args) {
   if (!rewards_service_) {
     return;
   }
 
-  rewards_service_->GetUpholdWallet(
-      base::BindOnce(
-          &RewardsInternalsDOMHandler::OnGetUpholdWallet,
-          weak_ptr_factory_.GetWeakPtr()));
+  rewards_service_->GetExternalWallet(
+      rewards_service_->GetExternalWalletType(),
+      base::BindOnce(&RewardsInternalsDOMHandler::OnGetExternalWallet,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
-void RewardsInternalsDOMHandler::OnGetUpholdWallet(
+void RewardsInternalsDOMHandler::OnGetExternalWallet(
     const ledger::type::Result result,
-    ledger::type::UpholdWalletPtr wallet) {
+    ledger::type::ExternalWalletPtr wallet) {
   if (!web_ui()->CanCallJavascript()) {
     return;
   }
@@ -361,6 +362,7 @@ void RewardsInternalsDOMHandler::OnGetUpholdWallet(
   data.SetIntKey("result", static_cast<int>(result));
   base::Value wallet_dict(base::Value::Type::DICTIONARY);
 
+  // TODO: Set wallet "type"?
   if (wallet) {
     wallet_dict.SetStringKey("address", wallet->address);
     wallet_dict.SetIntKey("status", static_cast<int>(wallet->status));

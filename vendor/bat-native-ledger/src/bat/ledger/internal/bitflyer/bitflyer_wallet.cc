@@ -27,7 +27,8 @@ BitflyerWallet::~BitflyerWallet() = default;
 void BitflyerWallet::Generate(ledger::ResultCallback callback) {
   auto wallet = GetWallet(ledger_);
   if (!wallet) {
-    wallet = type::BitflyerWallet::New();
+    wallet = type::ExternalWallet::New();
+    wallet->type = constant::kWalletBitflyer;
     wallet->status = type::WalletStatus::NOT_CONNECTED;
   }
 

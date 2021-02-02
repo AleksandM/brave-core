@@ -344,7 +344,7 @@ class PageWallet extends React.Component<Props, State> {
     const { externalWallet } = this.props.rewardsData
 
     if (!externalWallet || !externalWallet.verifyUrl) {
-      this.actions.getExternalWallet('uphold')
+      this.actions.getExternalWallet()
       return
     }
 
@@ -417,7 +417,7 @@ class PageWallet extends React.Component<Props, State> {
     const { externalWallet } = this.props.rewardsData
 
     if (!externalWallet || !externalWallet.accountUrl) {
-      this.actions.getExternalWallet('uphold')
+      this.actions.getExternalWallet()
       return
     }
 
@@ -434,7 +434,7 @@ class PageWallet extends React.Component<Props, State> {
   }
 
   onDisconnectClick = () => {
-    this.actions.disconnectWallet('uphold')
+    this.actions.disconnectWallet()
   }
 
   getActions = () => {
