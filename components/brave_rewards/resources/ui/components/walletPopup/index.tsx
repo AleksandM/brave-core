@@ -21,12 +21,15 @@ import {
   UpholdColorIcon
 } from 'brave-ui/components/icons'
 
+import { BitflyerIcon } from '../../../shared/components/icons/bitflyer_icon'
+
 export interface Props {
   children: React.ReactNode
   onClose: () => void
   greetings: string
   id?: string
   walletState?: WalletState
+  walletType?: string
 }
 
 export default class WalletPopup extends React.PureComponent<Props, {}> {
@@ -62,16 +65,20 @@ export default class WalletPopup extends React.PureComponent<Props, {}> {
       children,
       onClose,
       greetings,
+      walletType,
       id
     } = this.props
-    // TODO(zenparsing): Add bitflyer icon and wallet type prop
     return (
       <StyledWrapper onClick={onClose} id={id}>
         <StyledDialog onClick={this.insideClick}>
           <StyledContent>
             <StyledHeader>
               <StyledIcon>
-                <UpholdColorIcon />
+                {
+                  walletType === 'uphold' ? <UpholdColorIcon /> :
+                  walletType === 'bitflyer' ? <BitflyerIcon /> :
+                  null
+                }
               </StyledIcon>
               {greetings}
               <StyledStatus isVerified={this.isVerified()}>

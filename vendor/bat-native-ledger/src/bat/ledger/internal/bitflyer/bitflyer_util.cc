@@ -110,6 +110,7 @@ type::ExternalWalletPtr GetWallet(LedgerImpl* ledger) {
   }
 
   auto wallet = ledger::type::ExternalWallet::New();
+  wallet->type = constant::kWalletBitflyer;
 
   auto* token = dictionary->FindStringKey("token");
   if (token) {

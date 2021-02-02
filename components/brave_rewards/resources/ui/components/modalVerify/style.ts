@@ -103,6 +103,7 @@ export const StyledFooterIcon = styled<{}, 'div'>('div')`
   vertical-align: middle;
   width: 20px;
   height: 20px;
+  margin-left: 2px;
 `
 
 export const StyledContent = styled<{}, 'div'>('div')`

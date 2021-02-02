@@ -789,6 +789,7 @@ export class Panel extends React.Component<Props, State> {
         onNotificationClick={notificationClick}
         onSolution={this.onSolution}
         onFinish={this.onFinish}
+        walletType={externalWallet ? externalWallet.type : undefined}
         walletState={walletStatus}
         onVerifyClick={onVerifyClick}
         onDisconnectClick={this.onDisconnectClick}

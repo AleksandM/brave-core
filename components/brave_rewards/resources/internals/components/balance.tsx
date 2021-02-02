@@ -22,7 +22,9 @@ const getWalletName = (walletKey: string) => {
     case 'uphold': {
       return getLocale('processorUphold')
     }
-    // TODO(zenparsing): Add 'bitflyer'
+    case 'bitflyer': {
+      return getLocale('processorBitflyer')
+    }
   }
 
   return 'Missing wallet'

@@ -35,10 +35,13 @@ import {
 import { Modal } from 'brave-ui/components'
 import { getLocaleWithTag } from '../../../../../common/locale'
 
+import { BitflyerIcon } from '../../../shared/components/icons/bitflyer_icon'
+
 export interface Props {
   onVerifyClick: () => void
   onClose: () => void
   id?: string
+  walletType?: string
 }
 
 export default class ModalVerify extends React.PureComponent<Props, {}> {
@@ -72,6 +75,7 @@ export default class ModalVerify extends React.PureComponent<Props, {}> {
   )
 
   getFooter = () => {
+    const { walletType } = this.props
     // TODO(zenparsing): This string contains Uphold.
     const tags = getLocaleWithTag('walletVerificationFooter')
     // TODO(zenparsing): Add bitflyer icons. Either add icon to props
@@ -84,7 +88,11 @@ export default class ModalVerify extends React.PureComponent<Props, {}> {
           {tags.afterTag}
         </span>
         <StyledFooterIcon>
-          <UpholdColorIcon />
+          {
+            walletType === 'uphold' ? <UpholdColorIcon /> :
+            walletType === 'bitflyer' ? <BitflyerIcon white={true} /> :
+            null
+          }
         </StyledFooterIcon>
       </StyledFooter>
     )

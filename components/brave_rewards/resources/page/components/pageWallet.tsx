@@ -600,7 +600,10 @@ class PageWallet extends React.Component<Props, State> {
       case 3: { // Rewards.Processor.BRAVE_USER_FUNDS
         text = getLocale('processorBraveUserFunds')
         break
-      // TODO(zenparsing): Add bitflyer (4)
+      }
+      case 4: { // Rewards.Processor.BITFLYER
+        text = getLocale('processorBitflyer')
+        break
       }
     }
 
@@ -771,12 +774,14 @@ class PageWallet extends React.Component<Props, State> {
       balance,
       ui,
       pendingContributionTotal,
-      recoveryKey
+      recoveryKey,
+      externalWallet
     } = this.props.rewardsData
     const { total } = balance
     const { emptyWallet, modalBackup, onlyAnonWallet } = ui
 
     const pendingTotal = parseFloat((pendingContributionTotal || 0).toFixed(3))
+    const walletType = externalWallet ? externalWallet.type : undefined
 
     let onVerifyClick = undefined
     let showCopy = false
@@ -795,6 +800,7 @@ class PageWallet extends React.Component<Props, State> {
           showCopy={showCopy}
           showSecActions={true}
           alert={this.walletAlerts()}
+          walletType={walletType}
           walletState={this.getWalletStatus()}
           onVerifyClick={onVerifyClick}
           onDisconnectClick={this.onDisconnectClick}
@@ -849,6 +855,7 @@ class PageWallet extends React.Component<Props, State> {
             ? <ModalVerify
               onVerifyClick={this.onVerifyClick.bind(this, true)}
               onClose={this.toggleVerifyModal}
+              walletType={walletType}
             />
             : null
         }

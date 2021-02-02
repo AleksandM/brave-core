@@ -56,6 +56,8 @@ import {
   CaratCircleRightIcon
 } from 'brave-ui/components/icons'
 
+import { BitflyerIcon } from '../../../shared/components/icons/bitflyer_icon'
+
 import giftIconUrl from './assets/gift.svg'
 import loveIconUrl from './assets/love.svg'
 import megaphoneIconUrl from './assets/megaphone.svg'
@@ -122,6 +124,7 @@ export interface Props {
   balance: string
   converted: string | null
   actions: ActionWallet[]
+  walletType?: string
   walletState?: WalletState
   compact?: boolean
   contentPadding?: boolean
@@ -327,6 +330,12 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
   }
 
   generateWalletButton = (walletState: WalletState) => {
+    const { walletType } = this.props
+    const walletProviderIcon =
+      walletType === 'uphold' ? <UpholdSystemIcon /> :
+      walletType === 'bitflyer' ? <BitflyerIcon white={true} /> :
+      null
+
     const buttonProps: Partial<ButtonProps> = {
       size: 'small',
       level: 'primary',
@@ -356,7 +365,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
             id={'verified-wallet-button'}
           >
             <StyledVerifiedButtonIcon position={'before'}>
-              <UpholdSystemIcon />
+              {walletProviderIcon}
             </StyledVerifiedButtonIcon>
             <StyledVerifiedButtonText>
               {getLocale('walletButtonVerified')}
@@ -390,7 +399,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
             text={getLocale('walletButtonDisconnected')}
             type={'subtle'}
             icon={{
-              image: <UpholdSystemIcon />,
+              image: walletProviderIcon,
               position: 'before'
             }}
             {...buttonProps}
@@ -412,7 +421,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
   }
 
   getVerificationDetails = () => {
-    const { goToExternalWallet, greetings, onDisconnectClick, onVerifyClick, walletState } = this.props
+    const { goToExternalWallet, greetings, onDisconnectClick, onVerifyClick, walletState, walletType } = this.props
     const notVerified = walletState === 'connected' || walletState === 'pending'
 
     return (
@@ -420,6 +429,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
         onClose={this.toggleVerificationDetails}
         greetings={greetings || ''}
         walletState={walletState}
+        walletType={walletType}
       >
         {
           <StyledDialogList>
@@ -435,7 +445,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
             <li>
               <StyledLink onClick={this.onDetailsLinkClicked.bind(this, goToExternalWallet)} target={'_blank'}>
                 {/* TODO(zenparsing): String contains Uphold */}
-                {getLocale('walletGoToUphold')}
+                {getLocale('walletGoToProvider')}
               </StyledLink>
             </li>
             <li>
@@ -543,6 +553,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
       converted,
       actions,
       showCopy,
+      walletType,
       walletState,
       compact,
       contentPadding,
@@ -553,7 +564,6 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
       gradientTop,
       notification,
       isMobile,
-      onVerifyClick,
       onDisconnectClick,
       onlyAnonWallet
     } = this.props
@@ -602,6 +612,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
     const connectedVerified = walletState === 'verified'
     const batFormatString = onlyAnonWallet ? getLocale('batPoints') : getLocale('bat')
 
+    // TODO(zenparsing): Contains "uphold"
     const loginText = getLocale('loginMessageText').split('$1')
     const loginText1 = loginText[0]
     const loginText2 = loginText[1]
@@ -609,7 +620,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
     const rewardsText1 = getLocaleWithTag('rewardsPanelText1')
     // TODO(zenparsing): Contains "Uphold", may not make sense at all.
     // "Your Brave wallet is powered by Uphold" (not anymore?)
-    const rewardsText2 = getLocaleWithTag('rewardsPanelText2')
+    // const rewardsText2 = getLocaleWithTag('rewardsPanelText2')
 
     return (
       <>
@@ -684,6 +695,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
                       {loginText2}
                     </p>
                     <br/>
+                    {/* TODO(zenparsing) Contains "uphold" */}
                     {getLocale('walletVerificationNote3')}
                   </LoginMessageText>
                   <LoginMessageButtons>
@@ -715,37 +727,20 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
             showCopy && !onlyAnonWallet
               ? <StyledCopy connected={connectedVerified}>
                 {
-                  walletVerified
-                    ? <>
+                  walletVerified &&
+                    <>
                       <StyledCopyImage>
-                        <UpholdColorIcon />
+                        {
+                          walletType === 'uphold' ? <UpholdColorIcon /> :
+                          walletType === 'bitflyer' ? <BitflyerIcon /> :
+                          null
+                        }
                       </StyledCopyImage>
                       <span>
                         {rewardsText1.beforeTag}
                         <b>{rewardsText1.duringTag}</b>
                         {rewardsText1.afterTag}
                       </span>
-                    </>
-                    : <>
-                      <StyledCopyImage>
-                        <UpholdSystemIcon />
-                      </StyledCopyImage>
-                      <span>
-                        {rewardsText2.beforeTag}
-                        <b>{rewardsText2.duringTag}</b>
-                        {rewardsText2.afterTag}
-                      </span>
-                      {
-                        onVerifyClick
-                          ? <>
-                            {' ('}
-                            <StyledLink onClick={this.onActionClick.bind(this, this.props.onVerifyClick)}>
-                              {getLocale('rewardsPanelTextVerify')}
-                            </StyledLink>
-                            {')'}
-                          </>
-                          : null
-                      }
                     </>
                 }
               </StyledCopy>

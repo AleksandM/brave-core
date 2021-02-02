@@ -111,7 +111,8 @@ declare namespace Rewards {
     NONE = 0,
     BRAVE_TOKENS = 1,
     UPHOLD = 2,
-    BRAVE_USER_FUNDS = 3
+    BRAVE_USER_FUNDS = 3,
+    BITFLYER = 4
   }
 
   export interface TransactionReport {
