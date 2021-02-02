@@ -45,6 +45,9 @@ export default class ModalRedirect extends React.PureComponent<Props, {}> {
       tags = splitStringForTag(errorText)
     }
 
+    // TODO(zenparsing): Add wallet type to props and add bitflyer link
+    // below
+
     return (
       <Modal id={id} displayCloseButton={false}>
         <StyledWrapper>

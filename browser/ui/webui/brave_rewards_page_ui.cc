@@ -1585,7 +1585,7 @@ void RewardsDOMHandler::OnGetExternalWallet(
     base::Value wallet_dict(base::Value::Type::DICTIONARY);
 
     if (wallet) {
-      // TODO: Add wallet "type"
+      wallet_dict.SetStringKey("type", wallet->type);
       wallet_dict.SetStringKey("token", wallet->token);
       wallet_dict.SetStringKey("address", wallet->address);
       wallet_dict.SetIntKey("status", static_cast<int>(wallet->status));

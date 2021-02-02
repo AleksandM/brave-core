@@ -362,7 +362,6 @@ void RewardsInternalsDOMHandler::OnGetExternalWallet(
   data.SetIntKey("result", static_cast<int>(result));
   base::Value wallet_dict(base::Value::Type::DICTIONARY);
 
-  // TODO: Set wallet "type"?
   if (wallet) {
     wallet_dict.SetStringKey("address", wallet->address);
     wallet_dict.SetIntKey("status", static_cast<int>(wallet->status));

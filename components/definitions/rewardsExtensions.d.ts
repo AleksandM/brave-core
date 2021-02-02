@@ -165,7 +165,7 @@ declare namespace RewardsExtension {
     wallets: Record<string, number>
   }
 
-  export type WalletType = 'anonymous' | 'uphold'
+  export type WalletType = 'anonymous' | 'uphold' | 'bitflyer'
 
   export enum WalletStatus {
     NOT_CONNECTED = 0,

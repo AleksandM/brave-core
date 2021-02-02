@@ -291,7 +291,7 @@ export class Panel extends React.Component<Props, State> {
       return
     }
 
-    utils.handleUpholdLink(balance, externalWallet)
+    utils.handleExternalWalletLink(balance, externalWallet)
   }
 
   showTipSiteDetail = (entryPoint: RewardsExtension.TipDialogEntryPoint) => {
@@ -571,7 +571,7 @@ export class Panel extends React.Component<Props, State> {
     }
   }
 
-  goToUphold = () => {
+  goToExternalWallet = () => {
     const { externalWallet } = this.props.rewardsPanelData
 
     if (!externalWallet || !externalWallet.accountUrl) {
@@ -770,7 +770,7 @@ export class Panel extends React.Component<Props, State> {
     let onVerifyClick = undefined
     if (!this.props.onlyAnonWallet) {
       walletStatus = utils.getWalletStatus(externalWallet)
-      onVerifyClick = utils.handleUpholdLink.bind(this, balance, externalWallet)
+      onVerifyClick = utils.handleExternalWalletLink.bind(this, balance, externalWallet)
     }
 
     return (
@@ -792,7 +792,7 @@ export class Panel extends React.Component<Props, State> {
         walletState={walletStatus}
         onVerifyClick={onVerifyClick}
         onDisconnectClick={this.onDisconnectClick}
-        goToUphold={this.goToUphold}
+        goToExternalWallet={this.goToExternalWallet}
         greetings={utils.getGreetings(externalWallet)}
         onlyAnonWallet={this.props.onlyAnonWallet}
         showLoginMessage={this.showLoginMessage()}

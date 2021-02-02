@@ -64,6 +64,7 @@ export default class WalletPopup extends React.PureComponent<Props, {}> {
       greetings,
       id
     } = this.props
+    // TODO(zenparsing): Add bitflyer icon and wallet type prop
     return (
       <StyledWrapper onClick={onClose} id={id}>
         <StyledDialog onClick={this.insideClick}>

@@ -72,7 +72,10 @@ export default class ModalVerify extends React.PureComponent<Props, {}> {
   )
 
   getFooter = () => {
+    // TODO(zenparsing): This string contains Uphold.
     const tags = getLocaleWithTag('walletVerificationFooter')
+    // TODO(zenparsing): Add bitflyer icons. Either add icon to props
+    // or add wallet type to props
     return (
       <StyledFooter>
         <span>
@@ -93,6 +96,8 @@ export default class ModalVerify extends React.PureComponent<Props, {}> {
       onClose,
       id
     } = this.props
+
+    // TODO(zenparsing): walletVerificationNote1/2/3 contain "Uphold"
 
     return (
       <Modal id={id} displayCloseButton={false} size={'small'}>

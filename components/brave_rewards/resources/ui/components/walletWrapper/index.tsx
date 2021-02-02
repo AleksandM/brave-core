@@ -141,7 +141,7 @@ export interface Props {
   onSolution?: (promotionId: string, x: number, y: number) => void
   onVerifyClick?: () => void
   onDisconnectClick?: () => void
-  goToUphold?: () => void
+  goToExternalWallet?: () => void
   greetings?: string
   onlyAnonWallet?: boolean
   showLoginMessage?: boolean
@@ -153,6 +153,8 @@ interface State {
   verificationDetails: boolean
   showLoginMessage: boolean
 }
+
+// TODO(zenparsing): Add wallet type to props and add bitflyer icons
 
 export default class WalletWrapper extends React.PureComponent<Props, State> {
   constructor (props: Props) {
@@ -410,7 +412,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
   }
 
   getVerificationDetails = () => {
-    const { goToUphold, greetings, onDisconnectClick, onVerifyClick, walletState } = this.props
+    const { goToExternalWallet, greetings, onDisconnectClick, onVerifyClick, walletState } = this.props
     const notVerified = walletState === 'connected' || walletState === 'pending'
 
     return (
@@ -431,7 +433,8 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
               : null
             }
             <li>
-              <StyledLink onClick={this.onDetailsLinkClicked.bind(this, goToUphold)} target={'_blank'}>
+              <StyledLink onClick={this.onDetailsLinkClicked.bind(this, goToExternalWallet)} target={'_blank'}>
+                {/* TODO(zenparsing): String contains Uphold */}
                 {getLocale('walletGoToUphold')}
               </StyledLink>
             </li>
@@ -602,7 +605,10 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
     const loginText = getLocale('loginMessageText').split('$1')
     const loginText1 = loginText[0]
     const loginText2 = loginText[1]
+    // TODO(zenparsing): Contains "Uphold"
     const rewardsText1 = getLocaleWithTag('rewardsPanelText1')
+    // TODO(zenparsing): Contains "Uphold", may not make sense at all.
+    // "Your Brave wallet is powered by Uphold" (not anymore?)
     const rewardsText2 = getLocaleWithTag('rewardsPanelText2')
 
     return (

@@ -3007,7 +3007,7 @@ void RewardsServiceImpl::ShowNotification(
 }
 
 bool RewardsServiceImpl::OnlyAnonWallet() {
-  // TODO: Remove this function and modify all call sites.
+  // TODO(zenparsing): Remove this function and modify all call sites.
   return false;
 }
 
@@ -3501,7 +3501,8 @@ std::string RewardsServiceImpl::GetExternalWalletType() const {
   const int32_t current_country =
       country_codes::GetCountryIDFromPrefs(profile_->GetPrefs());
 
-  // TODO: Rename |kOnlyAnonWalletCountries| to reflect current usage
+  // TODO(zenparsing): Rename |kOnlyAnonWalletCountries| to reflect current
+  // usage
   for (const auto& country : kOnlyAnonWalletCountries) {
     if (country.length() == 2) {
       const int id = country_codes::CountryCharsToCountryID(
@@ -3512,7 +3513,7 @@ std::string RewardsServiceImpl::GetExternalWalletType() const {
     }
   }
 
-  // TODO: For development, we just want to use bitflyer everywhere
+  // TODO(zenparsing): For development, we just want to use bitflyer everywhere
   return ledger::constant::kWalletBitflyer;
   // return ledger::constant::kWalletUphold;
 }

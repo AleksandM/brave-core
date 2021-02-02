@@ -89,7 +89,7 @@ export interface ExternalWalletInfo {
   token: string
   address: string
   status: ExternalWalletStatus
-  type: 'anonymous' | 'uphold'
+  type: 'anonymous' | 'uphold' | 'bitflyer'
   verifyUrl: string
   addUrl: string
   withdrawUrl: string

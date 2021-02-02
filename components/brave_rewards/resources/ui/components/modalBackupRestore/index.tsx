@@ -201,11 +201,13 @@ export default class ModalBackupRestore extends React.PureComponent<Props, State
     return (
       <>
         <StyledContent>
+          {/* TODO(zenparsing): Contains "uphold" */}
           {getLocale('rewardsBackupNoticeText1')}
         </StyledContent>
         <StyledContent>
           {getLocale('rewardsBackupNoticeText2')}
           <StyledLink onClick={onVerify} id={'backup-verify-link'}>
+            {/* TODO(zenparsing): Contains "uphold" */}
             {getLocale('rewardsBackupNoticeText3')}
           </StyledLink>
         </StyledContent>
@@ -311,6 +313,7 @@ export default class ModalBackupRestore extends React.PureComponent<Props, State
   }
 
   getReset = () => {
+    // TODO(zenparsing): Contains "uphold"
     const tags = getLocaleWithTag('rewardsResetTextFunds', {
       amount: this.props.internalFunds.toString()
     })

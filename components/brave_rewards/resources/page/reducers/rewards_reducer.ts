@@ -302,7 +302,7 @@ const rewardsReducer: Reducer<Rewards.State | undefined> = (state: Rewards.State
       const data = action.payload.data
       const ui = state.ui
 
-      chrome.send('brave_rewards.getExternalWallet', [data.walletType])
+      chrome.send('brave_rewards.getExternalWallet')
 
       // EXPIRED_TOKEN
       if (data.result === 24) {

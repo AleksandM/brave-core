@@ -36,6 +36,7 @@ const getProcessorString = (processor: number) => {
       return getLocale('processorUphold')
     case 3:
       return getLocale('processorBraveUserFunds')
+    // TODO(zenparsing): Add bitflyer (4)
   }
 
   return ''

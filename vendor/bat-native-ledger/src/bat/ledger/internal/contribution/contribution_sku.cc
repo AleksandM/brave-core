@@ -447,8 +447,8 @@ void ContributionSKU::RetryStartStep(
     return;
   }
 
-  // TODO: Do we need a similar branch for BF? This looks broken, since
-  // |get_callback| is never used.
+  // TODO(zenparsing): Do we need a similar branch for BF? This looks broken,
+  // since |get_callback| is never used.
   if (contribution->processor == type::ContributionProcessor::UPHOLD &&
       contribution->type == type::RewardsType::AUTO_CONTRIBUTE) {
     std::string order_id;

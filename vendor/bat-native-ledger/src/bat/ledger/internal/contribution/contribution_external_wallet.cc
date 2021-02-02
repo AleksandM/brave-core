@@ -48,7 +48,7 @@ void ContributionExternalWallet::ContributionInfo(
     return;
   }
 
-  // TODO: Support BitFlyer
+  // TODO(zenparsing): Support BitFlyer
   if (contribution->processor != type::ContributionProcessor::UPHOLD) {
     BLOG(0, "Only Uphold wallets are currently supported");
     callback(type::Result::LEDGER_ERROR);
@@ -155,7 +155,7 @@ void ContributionExternalWallet::OnServerPublisherInfo(
     return;
   }
 
-  // TODO: Support BitFlyer
+  // TODO(zenparsing): Support BitFlyer
   if (processor != type::ContributionProcessor::UPHOLD) {
     BLOG(0, "Only Uphold wallets are currently supported");
     callback(type::Result::LEDGER_ERROR);

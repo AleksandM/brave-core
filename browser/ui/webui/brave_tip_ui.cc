@@ -620,6 +620,7 @@ void TipMessageHandler::GetExternalWalletCallback(
   base::Value data(base::Value::Type::DICTIONARY);
 
   if (wallet) {
+    data.SetStringKey("type", wallet->type);
     data.SetStringKey("token", wallet->token);
     data.SetStringKey("address", wallet->address);
     data.SetStringKey("verifyUrl", wallet->verify_url);
