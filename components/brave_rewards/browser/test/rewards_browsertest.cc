@@ -8,6 +8,7 @@
 
 #include "base/containers/flat_map.h"
 #include "base/test/bind.h"
+#include "bat/ledger/global_constants.h"
 #include "bat/ledger/internal/uphold/uphold_util.h"
 #include "brave/browser/brave_rewards/rewards_service_factory.h"
 #include "brave/common/brave_paths.h"

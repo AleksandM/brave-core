@@ -1,4 +1,4 @@
-/* Copyright (c) 2020 The Brave Authors. All rights reserved.
+/* Copyright (c) 2021 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -8,40 +8,40 @@
 #include <vector>
 
 #include "base/test/task_environment.h"
+#include "bat/ledger/internal/endpoint/bitflyer/get_balance/bitflyer_get_balance.h"
 #include "bat/ledger/internal/ledger_client_mock.h"
 #include "bat/ledger/internal/ledger_impl_mock.h"
-#include "bat/ledger/internal/endpoint/uphold/get_card/get_card.h"
 #include "bat/ledger/ledger.h"
 #include "net/http/http_status_code.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-// npm run test -- brave_unit_tests --filter=GetCardTest.*
+// npm run test -- brave_unit_tests --filter=GetBalanceTest.*
 
 using ::testing::_;
 using ::testing::Invoke;
 
 namespace ledger {
 namespace endpoint {
-namespace uphold {
+namespace bitflyer {
 
-class GetCardTest : public testing::Test {
+class GetBalanceTest : public testing::Test {
  private:
   base::test::TaskEnvironment scoped_task_environment_;
 
  protected:
   std::unique_ptr<ledger::MockLedgerClient> mock_ledger_client_;
   std::unique_ptr<ledger::MockLedgerImpl> mock_ledger_impl_;
-  std::unique_ptr<GetCard> card_;
+  std::unique_ptr<GetBalance> balance_;
 
-  GetCardTest() {
+  GetBalanceTest() {
     mock_ledger_client_ = std::make_unique<ledger::MockLedgerClient>();
     mock_ledger_impl_ =
         std::make_unique<ledger::MockLedgerImpl>(mock_ledger_client_.get());
-    card_ = std::make_unique<GetCard>(mock_ledger_impl_.get());
+    balance_ = std::make_unique<GetBalance>(mock_ledger_impl_.get());
   }
 };
 
-TEST_F(GetCardTest, ServerOK) {
+TEST_F(GetBalanceTest, ServerOK) {
   ON_CALL(*mock_ledger_client_, LoadURL(_, _))
       .WillByDefault(
           Invoke([](
@@ -103,7 +103,7 @@ TEST_F(GetCardTest, ServerOK) {
             callback(response);
           }));
 
-  card_->Request(
+  balance_->Request(
       "193a77cf-02e8-4e10-8127-8a1b5a8bfece",
       "4c2b665ca060d912fec5c735c734859a06118cc8",
       [](const type::Result result, const double available) {
@@ -112,7 +112,7 @@ TEST_F(GetCardTest, ServerOK) {
       });
 }
 
-TEST_F(GetCardTest, ServerError401) {
+TEST_F(GetBalanceTest, ServerError401) {
   ON_CALL(*mock_ledger_client_, LoadURL(_, _))
       .WillByDefault(
           Invoke([](
@@ -125,7 +125,7 @@ TEST_F(GetCardTest, ServerError401) {
             callback(response);
           }));
 
-  card_->Request(
+  balance_->Request(
       "193a77cf-02e8-4e10-8127-8a1b5a8bfece",
       "4c2b665ca060d912fec5c735c734859a06118cc8",
       [](const type::Result result, const double available) {
@@ -134,7 +134,7 @@ TEST_F(GetCardTest, ServerError401) {
       });
 }
 
-TEST_F(GetCardTest, ServerErrorRandom) {
+TEST_F(GetBalanceTest, ServerErrorRandom) {
   ON_CALL(*mock_ledger_client_, LoadURL(_, _))
       .WillByDefault(
           Invoke([](
@@ -147,7 +147,7 @@ TEST_F(GetCardTest, ServerErrorRandom) {
             callback(response);
           }));
 
-  card_->Request(
+  balance_->Request(
       "193a77cf-02e8-4e10-8127-8a1b5a8bfece",
       "4c2b665ca060d912fec5c735c734859a06118cc8",
       [](const type::Result result, const double available) {
@@ -156,6 +156,6 @@ TEST_F(GetCardTest, ServerErrorRandom) {
       });
 }
 
-}  // namespace uphold
+}  // namespace bitflyer
 }  // namespace endpoint
 }  // namespace ledger

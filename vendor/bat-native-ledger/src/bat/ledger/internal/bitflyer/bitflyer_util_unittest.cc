@@ -145,22 +145,6 @@ TEST_F(BitflyerUtilTest, GetWithdrawUrl) {
       "https://sandbox.uphold.com/dashboard/cards/9324i5i32459i/use");
 }
 
-TEST_F(BitflyerUtilTest, GetSecondStepVerify) {
-  // production
-  ledger::_environment = type::Environment::PRODUCTION;
-  std::string result = bitflyer::GetSecondStepVerify();
-  ASSERT_EQ(result,
-      "https://uphold.com/signup/step2?"
-      "application_id=6d8d9473ed20be627f71ed46e207f40c004c5b1a&intention=kyc");
-
-  // staging
-  ledger::_environment = type::Environment::STAGING;
-  result = bitflyer::GetSecondStepVerify();
-  ASSERT_EQ(result,
-      "https://sandbox.uphold.com/signup/step2?"
-      "application_id=4c2b665ca060d912fec5c735c734859a06118cc8&intention=kyc");
-}
-
 TEST_F(BitflyerUtilTest, GetWallet) {
   // no wallet
   ON_CALL(*mock_ledger_client_, GetEncryptedStringState(state::kWalletBitflyer))
@@ -208,7 +192,7 @@ TEST_F(BitflyerUtilTest, GenerateRandomString) {
 TEST_F(BitflyerUtilTest, GenerateLinks) {
   ledger::_environment = type::Environment::STAGING;
 
-  auto wallet = type::BitflyerWallet::New();
+  auto wallet = type::ExternalWallet::New();
   wallet->address = "123123123124234234234";
 
   // Not connected
@@ -297,7 +281,7 @@ TEST_F(BitflyerUtilTest, GenerateLinks) {
 TEST_F(BitflyerUtilTest, GenerateVerifyLink) {
   ledger::_environment = type::Environment::STAGING;
 
-  auto wallet = type::BitflyerWallet::New();
+  auto wallet = type::ExternalWallet::New();
   wallet->one_time_string = "123123123124234234234";
 
   // Not connected

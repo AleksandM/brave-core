@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "base/test/task_environment.h"
-#include "bat/ledger/internal/endpoint/bitflyer/post_oauth/post_oauth.h"
+#include "bat/ledger/internal/endpoint/bitflyer/post_oauth/bitflyer_post_oauth.h"
 #include "bat/ledger/internal/ledger_client_mock.h"
 #include "bat/ledger/internal/ledger_impl_mock.h"
 #include "bat/ledger/ledger.h"
@@ -24,7 +24,7 @@ namespace ledger {
 namespace endpoint {
 namespace bitflyer {
 
-class PostOauthTest : public testing::Test {
+class BitflyerPostOauthTest : public testing::Test {
  private:
   base::test::TaskEnvironment scoped_task_environment_;
 
@@ -33,7 +33,7 @@ class PostOauthTest : public testing::Test {
   std::unique_ptr<ledger::MockLedgerImpl> mock_ledger_impl_;
   std::unique_ptr<PostOauth> oauth_;
 
-  PostOauthTest() {
+  BitflyerPostOauthTest() {
     mock_ledger_client_ = std::make_unique<ledger::MockLedgerClient>();
     mock_ledger_impl_ =
         std::make_unique<ledger::MockLedgerImpl>(mock_ledger_client_.get());
@@ -41,7 +41,7 @@ class PostOauthTest : public testing::Test {
   }
 };
 
-TEST_F(PostOauthTest, ServerOK) {
+TEST_F(BitflyerPostOauthTest, ServerOK) {
   ON_CALL(*mock_ledger_client_, LoadURL(_, _))
       .WillByDefault(
           Invoke([](
@@ -61,13 +61,15 @@ TEST_F(PostOauthTest, ServerOK) {
 
   oauth_->Request(
       "4c2b665ca060d912fec5c735c734859a06118cc8",
-      [](const type::Result result, const std::string& token) {
+      [](const type::Result result,
+         const std::string& token,
+         const std::string& address) {
         EXPECT_EQ(result, type::Result::LEDGER_OK);
         EXPECT_EQ(token, "edc8b465fe2e2a26ce553d937ccc6c7195e9f909");
       });
 }
 
-TEST_F(PostOauthTest, ServerError401) {
+TEST_F(BitflyerPostOauthTest, ServerError401) {
   ON_CALL(*mock_ledger_client_, LoadURL(_, _))
       .WillByDefault(
           Invoke([](
@@ -82,13 +84,15 @@ TEST_F(PostOauthTest, ServerError401) {
 
   oauth_->Request(
       "4c2b665ca060d912fec5c735c734859a06118cc8",
-      [](const type::Result result, const std::string& token) {
+      [](const type::Result result,
+         const std::string& token,
+         const std::string& address) {
         EXPECT_EQ(result, type::Result::EXPIRED_TOKEN);
         EXPECT_EQ(token, "");
       });
 }
 
-TEST_F(PostOauthTest, ServerErrorRandom) {
+TEST_F(BitflyerPostOauthTest, ServerErrorRandom) {
   ON_CALL(*mock_ledger_client_, LoadURL(_, _))
       .WillByDefault(
           Invoke([](
@@ -103,7 +107,9 @@ TEST_F(PostOauthTest, ServerErrorRandom) {
 
   oauth_->Request(
       "4c2b665ca060d912fec5c735c734859a06118cc8",
-      [](const type::Result result, const std::string& token) {
+      [](const type::Result result,
+         const std::string& token,
+         const std::string& address) {
         EXPECT_EQ(result, type::Result::LEDGER_ERROR);
         EXPECT_EQ(token, "");
       });
