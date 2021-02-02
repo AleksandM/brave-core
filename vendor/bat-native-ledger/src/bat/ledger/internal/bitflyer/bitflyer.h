@@ -70,9 +70,9 @@ class Bitflyer {
 
   void DisconnectWallet(const bool manual = false);
 
-  type::BitflyerWalletPtr GetWallet();
+  type::ExternalWalletPtr GetWallet();
 
-  bool SetWallet(type::BitflyerWalletPtr wallet);
+  bool SetWallet(type::ExternalWalletPtr wallet);
 
  private:
   void ContributionCompleted(

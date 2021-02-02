@@ -293,11 +293,11 @@ void Bitflyer::OnTransferFeeTimerElapsed(const std::string& id) {
 #endif
 }
 
-type::BitflyerWalletPtr Bitflyer::GetWallet() {
+type::ExternalWalletPtr Bitflyer::GetWallet() {
   return ::ledger::bitflyer::GetWallet(ledger_);
 }
 
-bool Bitflyer::SetWallet(type::BitflyerWalletPtr wallet) {
+bool Bitflyer::SetWallet(type::ExternalWalletPtr wallet) {
   return ::ledger::bitflyer::SetWallet(ledger_, std::move(wallet));
 }
 

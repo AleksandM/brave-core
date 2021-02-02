@@ -86,10 +86,6 @@ using ExcludeFilter = mojom::ExcludeFilter;
 using ExternalWallet = mojom::ExternalWallet;
 using ExternalWalletPtr = mojom::ExternalWalletPtr;
 
-// TODO: Remove remaining references to BitflyerWallet/BitflyerWalletPtr
-using BitflyerWallet = ExternalWallet;
-using BitflyerWalletPtr = ExternalWalletPtr;
-
 using InlineTipsPlatforms = mojom::InlineTipsPlatforms;
 
 using MediaEventInfo = mojom::MediaEventInfo;

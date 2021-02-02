@@ -42,19 +42,19 @@ std::string GetWithdrawUrl(const std::string& address);
 
 std::string GetSecondStepVerify();
 
-type::BitflyerWalletPtr GetWallet(LedgerImpl* ledger);
+type::ExternalWalletPtr GetWallet(LedgerImpl* ledger);
 
-bool SetWallet(LedgerImpl* ledger, type::BitflyerWalletPtr wallet);
+bool SetWallet(LedgerImpl* ledger, type::ExternalWalletPtr wallet);
 
 std::string GenerateRandomString(bool testing);
 
 std::string GetAccountUrl();
 
-type::BitflyerWalletPtr GenerateLinks(type::BitflyerWalletPtr wallet);
+type::ExternalWalletPtr GenerateLinks(type::ExternalWalletPtr wallet);
 
-std::string GenerateVerifyLink(type::BitflyerWalletPtr wallet);
+std::string GenerateVerifyLink(type::ExternalWalletPtr wallet);
 
-type::BitflyerWalletPtr ResetWallet(type::BitflyerWalletPtr wallet);
+type::ExternalWalletPtr ResetWallet(type::ExternalWalletPtr wallet);
 
 }  // namespace bitflyer
 }  // namespace ledger
