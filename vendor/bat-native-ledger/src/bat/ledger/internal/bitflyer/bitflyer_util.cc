@@ -88,16 +88,6 @@ std::string GetWithdrawUrl(const std::string& address) {
       address.c_str());
 }
 
-std::string GetSecondStepVerify() {
-  const std::string url = GetUrl();
-  const std::string id = GetClientId();
-
-  return base::StringPrintf(
-      "%s/signup/step2?application_id=%s&intention=kyc",
-      url.c_str(),
-      id.c_str());
-}
-
 type::ExternalWalletPtr GetWallet(LedgerImpl* ledger) {
   DCHECK(ledger);
   const std::string wallet_string =
@@ -242,14 +232,6 @@ std::string GenerateRandomString(bool testing) {
   return base::HexEncode(bytes, sizeof(bytes));
 }
 
-std::string GetAccountUrl() {
-  const std::string url = GetUrl();
-
-  return base::StringPrintf(
-      "%s/dashboard",
-      url.c_str());
-}
-
 type::ExternalWalletPtr GenerateLinks(type::ExternalWalletPtr wallet) {
   if (!wallet) {
     return nullptr;
@@ -283,7 +265,6 @@ type::ExternalWalletPtr GenerateLinks(type::ExternalWalletPtr wallet) {
 #endif
 
   wallet->verify_url = GenerateVerifyLink(wallet->Clone());
-  wallet->account_url = GetAccountUrl();
   wallet->login_url = GetAuthorizeUrl(wallet->one_time_string, false);
 
   return wallet;
@@ -297,10 +278,7 @@ std::string GenerateVerifyLink(type::ExternalWalletPtr wallet) {
 
   switch (wallet->status) {
     case type::WalletStatus::PENDING:
-    case type::WalletStatus::CONNECTED: {
-      url = GetSecondStepVerify();
-      break;
-    }
+    case type::WalletStatus::CONNECTED:
     case type::WalletStatus::VERIFIED: {
       break;
     }

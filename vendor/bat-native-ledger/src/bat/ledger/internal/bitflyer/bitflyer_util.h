@@ -40,15 +40,11 @@ std::string GetAddUrl(const std::string& address);
 
 std::string GetWithdrawUrl(const std::string& address);
 
-std::string GetSecondStepVerify();
-
 type::ExternalWalletPtr GetWallet(LedgerImpl* ledger);
 
 bool SetWallet(LedgerImpl* ledger, type::ExternalWalletPtr wallet);
 
 std::string GenerateRandomString(bool testing);
-
-std::string GetAccountUrl();
 
 type::ExternalWalletPtr GenerateLinks(type::ExternalWalletPtr wallet);
 
