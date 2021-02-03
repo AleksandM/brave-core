@@ -43,7 +43,6 @@ import {
   LoginMessageText
 } from './style'
 import { getLocale } from 'brave-ui/helpers'
-import { getLocaleWithTag } from '../../../../../common/locale'
 import { GrantCaptcha, GrantComplete, GrantError, GrantWrapper, WalletPopup } from '../'
 import Alert, { Type as AlertType } from '../alert'
 import Button, { Props as ButtonProps } from 'brave-ui/components/buttonsIndicators/button'
@@ -126,6 +125,7 @@ export interface Props {
   actions: ActionWallet[]
   walletType?: string
   walletState?: WalletState
+  walletProvider: string
   compact?: boolean
   contentPadding?: boolean
   showCopy?: boolean
@@ -156,8 +156,6 @@ interface State {
   verificationDetails: boolean
   showLoginMessage: boolean
 }
-
-// TODO(zenparsing): Add wallet type to props and add bitflyer icons
 
 export default class WalletWrapper extends React.PureComponent<Props, State> {
   constructor (props: Props) {
@@ -421,7 +419,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
   }
 
   getVerificationDetails = () => {
-    const { goToExternalWallet, greetings, onDisconnectClick, onVerifyClick, walletState, walletType } = this.props
+    const { goToExternalWallet, greetings, onDisconnectClick, onVerifyClick, walletState, walletType, walletProvider } = this.props
     const notVerified = walletState === 'connected' || walletState === 'pending'
 
     return (
@@ -444,8 +442,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
             }
             <li>
               <StyledLink onClick={this.onDetailsLinkClicked.bind(this, goToExternalWallet)} target={'_blank'}>
-                {/* TODO(zenparsing): String contains Uphold */}
-                {getLocale('walletGoToProvider')}
+                {getLocale('walletGoToProvider').replace('$1', walletProvider)}
               </StyledLink>
             </li>
             <li>
@@ -555,6 +552,7 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
       showCopy,
       walletType,
       walletState,
+      walletProvider,
       compact,
       contentPadding,
       showSecActions,
@@ -612,13 +610,10 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
     const connectedVerified = walletState === 'verified'
     const batFormatString = onlyAnonWallet ? getLocale('batPoints') : getLocale('bat')
 
-    // TODO(zenparsing): Contains "uphold"
-    const loginText = getLocale('loginMessageText').split('$1')
-    const loginText1 = loginText[0]
-    const loginText2 = loginText[1]
-    // TODO(zenparsing): Contains "Uphold"
-    const rewardsText1 = getLocaleWithTag('rewardsPanelText1')
-    // TODO(zenparsing): Contains "Uphold", may not make sense at all.
+    const loginText = getLocale('loginMessageText').split(/\$\d/g)
+    const rewardsText1 = getLocale('rewardsPanelText1').split(/\$\d/g)
+
+    // TODO(zenparsing): Contains "Uphold", bold. May not make sense at all.
     // "Your Brave wallet is powered by Uphold" (not anymore?)
     // const rewardsText2 = getLocaleWithTag('rewardsPanelText2')
 
@@ -690,13 +685,16 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
                   <LoginMessageText>
                     <b>{getLocale('loginMessageTitle')}</b>
                     <p>
-                      {loginText1}
+                      {loginText[0]}
+                      {walletProvider}
+                      {loginText[1]}
                       <br />
-                      {loginText2}
+                      {loginText[2]}
+                      {walletProvider}
+                      {loginText[3]}
                     </p>
                     <br/>
-                    {/* TODO(zenparsing) Contains "uphold" */}
-                    {getLocale('walletVerificationNote3')}
+                    {getLocale('walletVerificationNote3').replace('$1', walletProvider)}
                   </LoginMessageText>
                   <LoginMessageButtons>
                     <Button
@@ -737,9 +735,9 @@ export default class WalletWrapper extends React.PureComponent<Props, State> {
                         }
                       </StyledCopyImage>
                       <span>
-                        {rewardsText1.beforeTag}
-                        <b>{rewardsText1.duringTag}</b>
-                        {rewardsText1.afterTag}
+                        {rewardsText1[0]}
+                        <b>{walletProvider}</b>
+                        {rewardsText1[1]}
                       </span>
                     </>
                 }

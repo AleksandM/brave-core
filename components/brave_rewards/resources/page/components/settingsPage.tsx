@@ -28,6 +28,7 @@ import * as rewardsActions from '../actions/rewards_actions'
 import Promotion from './promotion'
 import { getLocale } from '../../../../common/locale'
 import { getActivePromos, getPromo, PromoType, Promo } from '../promos'
+import { getWalletProviderName } from '../utils'
 
 interface Props extends Rewards.ComponentProps {
 }
@@ -222,13 +223,15 @@ class SettingsPage extends React.Component<Props, State> {
   }
 
   getRedirectModal = () => {
-    const { ui } = this.props.rewardsData
+    const { externalWallet, ui } = this.props.rewardsData
+    const walletType = externalWallet ? externalWallet.type : ''
 
     if (ui.modalRedirect === 'show') {
       return (
         <ModalRedirect
           id={'redirect-modal-show'}
           titleText={getLocale('processingRequest')}
+          walletType={walletType}
         />
       )
     }
@@ -240,18 +243,21 @@ class SettingsPage extends React.Component<Props, State> {
           errorText={getLocale('redirectModalNotAllowed')}
           titleText={getLocale('redirectModalErrorWallet')}
           buttonText={getLocale('redirectModalClose')}
+          walletType={walletType}
           onClick={this.actions.hideRedirectModal}
         />
       )
     }
 
     if (ui.modalRedirect === 'batLimit') {
+      const provider = getWalletProviderName(this.props.rewardsData.externalWallet)
       return (
         <ModalRedirect
           id={'redirect-modal-bat-limit'}
           titleText={getLocale('redirectModalBatLimitTitle')}
-          errorText={getLocale('redirectModalBatLimitText')}
+          errorText={getLocale('redirectModalBatLimitText').replace(/\$\d/g, provider)}
           buttonText={getLocale('redirectModalClose')}
+          walletType={walletType}
           onClick={this.actions.hideRedirectModal}
         />
       )
@@ -264,6 +270,7 @@ class SettingsPage extends React.Component<Props, State> {
           errorText={getLocale('redirectModalError')}
           buttonText={getLocale('processingRequestButton')}
           titleText={getLocale('processingRequest')}
+          walletType={walletType}
           onClick={this.onRedirectError}
         />
       )

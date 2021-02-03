@@ -22,7 +22,6 @@ import {
 } from './style'
 import { TextArea, Modal, Button } from 'brave-ui/components'
 import { getLocale } from 'brave-ui/helpers'
-import { getLocaleWithTag } from '../../../../../common/locale'
 import { Alert, Tab } from '../'
 import ControlWrapper from 'brave-ui/components/formControls/controlWrapper'
 
@@ -30,6 +29,7 @@ export interface Props {
   backupKey: string
   activeTabId: number
   showBackupNotice: boolean
+  walletProvider: string
   onTabChange: (newTabId: number) => void
   onClose: () => void
   onCopy?: (key: string) => void
@@ -115,7 +115,8 @@ export default class ModalBackupRestore extends React.PureComponent<Props, State
       onCopy,
       onPrint,
       onSaveFile,
-      onVerify
+      onVerify,
+      walletProvider
     } = this.props
 
     return (
@@ -177,7 +178,7 @@ export default class ModalBackupRestore extends React.PureComponent<Props, State
         <StyledContent>
             {getLocale('rewardsBackupText5')}
           <StyledLink onClick={onVerify}>
-            {getLocale('rewardsBackupText6')}
+            {getLocale('rewardsBackupText6').replace('$1', walletProvider)}
           </StyledLink>
         </StyledContent>
         <StyledDoneWrapper>
@@ -195,20 +196,19 @@ export default class ModalBackupRestore extends React.PureComponent<Props, State
   getBackupNotice = () => {
     const {
       onClose,
-      onVerify
+      onVerify,
+      walletProvider
     } = this.props
 
     return (
       <>
         <StyledContent>
-          {/* TODO(zenparsing): Contains "uphold" */}
           {getLocale('rewardsBackupNoticeText1')}
         </StyledContent>
         <StyledContent>
           {getLocale('rewardsBackupNoticeText2')}
           <StyledLink onClick={onVerify} id={'backup-verify-link'}>
-            {/* TODO(zenparsing): Contains "uphold" */}
-            {getLocale('rewardsBackupNoticeText3')}
+            {getLocale('rewardsBackupNoticeText3').replace('$1', walletProvider)}
           </StyledLink>
         </StyledContent>
         <StyledDoneWrapper>
@@ -313,10 +313,7 @@ export default class ModalBackupRestore extends React.PureComponent<Props, State
   }
 
   getReset = () => {
-    // TODO(zenparsing): Contains "uphold"
-    const tags = getLocaleWithTag('rewardsResetTextFunds', {
-      amount: this.props.internalFunds.toString()
-    })
+    const parts = getLocale('rewardsResetTextFunds').split(/\$\d/g)
     return (
       <>
         <StyledTextWrapper>
@@ -324,9 +321,11 @@ export default class ModalBackupRestore extends React.PureComponent<Props, State
             {
               this.props.internalFunds > 0
               ? <span>
-                {tags.beforeTag}
-                <b>{tags.duringTag}</b>
-                {tags.afterTag}
+                {parts[0]}
+                <b>{this.props.internalFunds.toString()}</b>
+                {parts[1]}
+                {this.props.walletProvider}
+                {parts[2]}
               </span>
               : getLocale('rewardsResetTextNoFunds')
             }

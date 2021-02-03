@@ -33,7 +33,6 @@ import {
   RewardsCheckIcon
 } from 'brave-ui/components/icons'
 import { Modal } from 'brave-ui/components'
-import { getLocaleWithTag } from '../../../../../common/locale'
 
 import { BitflyerIcon } from '../../../shared/components/icons/bitflyer_icon'
 
@@ -42,6 +41,7 @@ export interface Props {
   onClose: () => void
   id?: string
   walletType?: string
+  walletProvider: string
 }
 
 export default class ModalVerify extends React.PureComponent<Props, {}> {
@@ -75,17 +75,14 @@ export default class ModalVerify extends React.PureComponent<Props, {}> {
   )
 
   getFooter = () => {
-    const { walletType } = this.props
-    // TODO(zenparsing): This string contains Uphold.
-    const tags = getLocaleWithTag('walletVerificationFooter')
-    // TODO(zenparsing): Add bitflyer icons. Either add icon to props
-    // or add wallet type to props
+    const { walletType, walletProvider } = this.props
+    const tags = getLocale('walletVerificationFooter').split(/\$\d/g)
     return (
       <StyledFooter>
         <span>
-          {tags.beforeTag}
-          <b>{tags.duringTag}</b>
-          {tags.afterTag}
+          {tags[0]}
+          <b>{walletProvider}</b>
+          {tags[1]}
         </span>
         <StyledFooterIcon>
           {
@@ -102,10 +99,9 @@ export default class ModalVerify extends React.PureComponent<Props, {}> {
     const {
       onVerifyClick,
       onClose,
-      id
+      id,
+      walletProvider
     } = this.props
-
-    // TODO(zenparsing): walletVerificationNote1/2/3 contain "Uphold"
 
     return (
       <Modal id={id} displayCloseButton={false} size={'small'}>
@@ -130,13 +126,14 @@ export default class ModalVerify extends React.PureComponent<Props, {}> {
               />
               {this.getFooter()}
               <StyledNote>
-                {getLocale('walletVerificationNote1')}<br/><br/>
-                {getLocale('walletVerificationNote2')}
+                {getLocale('walletVerificationNote1').replace('$1', walletProvider)}
+                <br/><br/>
+                {getLocale('walletVerificationNote2').replace('$1', walletProvider)}
               </StyledNote>
             </StyledRightSide>
           </StyledContent>
           <NoteText>
-            {getLocale('walletVerificationNote3')}
+            {getLocale('walletVerificationNote3').replace('$1', walletProvider)}
           </NoteText>
         </StyledWrapper>
       </Modal>

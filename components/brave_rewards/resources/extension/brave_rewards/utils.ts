@@ -162,3 +162,11 @@ export const getExternalWallet = (actions: any, externalWallet?: RewardsExtensio
     actions.onExternalWallet(wallet)
   })
 }
+
+export const getWalletProviderName = (wallet?: RewardsExtension.ExternalWallet) => {
+  switch (wallet ? wallet.type : '') {
+    case 'uphold' : return 'Uphold'
+    case 'bitflyer': return 'bitFlyer'
+    default: return ''
+  }
+}

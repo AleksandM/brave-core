@@ -791,6 +791,7 @@ export class Panel extends React.Component<Props, State> {
         onFinish={this.onFinish}
         walletType={externalWallet ? externalWallet.type : undefined}
         walletState={walletStatus}
+        walletProvider={utils.getWalletProviderName(externalWallet)}
         onVerifyClick={onVerifyClick}
         onDisconnectClick={this.onDisconnectClick}
         goToExternalWallet={this.goToExternalWallet}

@@ -33,7 +33,7 @@ ledger::type::SKUTransactionType GetTransactionTypeFromWalletType(
     return ledger::type::SKUTransactionType::TOKENS;
   }
 
-  // TODO(zenparsing): Add bitFlyerƒ
+  // TODO(zenparsing): Add bitFlyer
 
   NOTREACHED();
   return ledger::type::SKUTransactionType::ANONYMOUS_CARD;
