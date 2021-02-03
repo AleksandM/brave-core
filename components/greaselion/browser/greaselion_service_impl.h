@@ -7,6 +7,7 @@
 #define BRAVE_COMPONENTS_GREASELION_BROWSER_GREASELION_SERVICE_IMPL_H_
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/path_service.h"
 #include "base/version.h"
+#include "brave/components/greaselion/browser/greaselion_converted_extension.h"
 #include "brave/components/greaselion/browser/greaselion_service.h"
 #include "extensions/common/extension_id.h"
 #include "url/gurl.h"
@@ -64,7 +66,8 @@ class GreaselionServiceImpl : public GreaselionService {
  private:
   void SetBrowserVersionForTesting(const base::Version& version) override;
   void CreateAndInstallExtensions();
-  void PostConvert(scoped_refptr<extensions::Extension> extension);
+  void PostConvert(
+      std::unique_ptr<GreaselionConvertedExtension> converted_extension);
   void Install(scoped_refptr<extensions::Extension> extension);
   void MaybeNotifyObservers();
 
