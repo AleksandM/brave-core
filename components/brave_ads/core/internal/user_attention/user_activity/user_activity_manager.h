@@ -8,12 +8,12 @@
 
 #include <cstdint>
 
-#include "brave/components/brave_ads/core/ads_client_notifier_observer.h"
-#include "brave/components/brave_ads/core/internal/browser/browser_manager_observer.h"
+#include "brave/components/brave_ads/core/internal/application_state/browser_manager_observer.h"
 #include "brave/components/brave_ads/core/internal/tabs/tab_manager_observer.h"
+#include "brave/components/brave_ads/core/internal/user_attention/user_activity/page_transition_types.h"
 #include "brave/components/brave_ads/core/internal/user_attention/user_activity/user_activity_event_info.h"
 #include "brave/components/brave_ads/core/internal/user_attention/user_activity/user_activity_event_types.h"
-#include "brave/components/brave_ads/core/page_transition_types.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client_notifier_observer.h"
 
 namespace base {
 class TimeDelta;
@@ -31,9 +31,6 @@ class UserActivityManager final : public AdsClientNotifierObserver,
 
   UserActivityManager(const UserActivityManager&) = delete;
   UserActivityManager& operator=(const UserActivityManager&) = delete;
-
-  UserActivityManager(UserActivityManager&&) noexcept = delete;
-  UserActivityManager& operator=(UserActivityManager&&) noexcept = delete;
 
   ~UserActivityManager() override;
 
@@ -58,14 +55,14 @@ class UserActivityManager final : public AdsClientNotifierObserver,
   void OnBrowserDidEnterBackground() override;
 
   // TabManagerObserver:
+  void OnDidOpenNewTab(const TabInfo& tab) override;
   void OnTabDidChangeFocus(int32_t tab_id) override;
   void OnTabDidChange(const TabInfo& tab) override;
-  void OnDidOpenNewTab(const TabInfo& tab) override;
   void OnDidCloseTab(int32_t tab_id) override;
   void OnTabDidStartPlayingMedia(int32_t tab_id) override;
   void OnTabDidStopPlayingMedia(int32_t tab_id) override;
 
-  UserActivityEventList history_;
+  UserActivityEventList user_activity_events_;
 };
 
 }  // namespace brave_ads

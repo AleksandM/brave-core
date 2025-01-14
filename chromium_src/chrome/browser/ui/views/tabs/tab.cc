@@ -5,6 +5,18 @@
 
 #include "chrome/browser/ui/views/tabs/tab.h"
 
+#include "brave/browser/ui/views/tabs/brave_tab_strip_layout_helper.h"
+#include "brave/browser/ui/views/tabs/vertical_tab_utils.h"
+#include "chrome/browser/ui/layout_constants.h"
+
+// Upstream is no longer centering the tab favicon vertically within the tab
+// view (likely due to the fact that their tab contents rect happens to be the
+// same height as the favicon). Ensure that the favicon is centered vertically
+// within the tab.
+#define BRAVE_UI_VIEWS_TABS_TAB_LAYOUT_ADJUST_ICON_POSITION \
+  favicon_bounds.set_y(contents_rect.y() +                  \
+                       Center(contents_rect.height(), gfx::kFaviconSize));
+
 // Set alert indicator's pos to start of the title and
 // move title after the alert indicator.
 // Title right should respect close btn's space
@@ -19,6 +31,20 @@
 #define BRAVE_UI_VIEWS_TABS_TAB_UPDATE_ICON_VISIBILITY \
   showing_close_button_ &= mouse_hovered();
 
+// `UpdateIconVisibility` currently has an early return when the tab view's
+// height is less than `GetLayoutConstant(TAB_HEIGHT)`. Unfortunately, when in
+// vertical tabs mode this will prevent the favicon and close button from
+// appearing. As a workaround, use `tabs::kVerticalTabHeight` instead of
+// TAB_HEIGHT when in vertical tabs mode.
+#define GetLayoutConstant(COMPONENT)                                 \
+  ((COMPONENT == TAB_HEIGHT &&                                       \
+    tabs::utils::ShouldShowVerticalTabs(controller()->GetBrowser())) \
+       ? tabs::kVerticalTabHeight                                    \
+       : GetLayoutConstant(COMPONENT))
+
 #include "src/chrome/browser/ui/views/tabs/tab.cc"
+
+#undef GetLayoutConstant
 #undef BRAVE_UI_VIEWS_TABS_TAB_UPDATE_ICON_VISIBILITY
 #undef BRAVE_UI_VIEWS_TABS_TAB_ALERT_INDICATOR_POSITION
+#undef BRAVE_UI_VIEWS_TABS_TAB_LAYOUT_ADJUST_ICON_POSITION

@@ -3,16 +3,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include <optional>
+
 #include "base/command_line.h"
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/test/bind.h"
 #include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
 #include "brave/browser/brave_wallet/brave_wallet_tab_helper.h"
-#include "brave/browser/brave_wallet/keyring_service_factory.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/keyring_service.h"
+#include "brave/components/brave_wallet/browser/test_utils.h"
 #include "brave/components/constants/brave_paths.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -61,7 +63,6 @@ class WalletWatchAssetBrowserTest : public InProcessBrowserTest {
     mock_cert_verifier_.mock_cert_verifier()->set_default_result(net::OK);
     host_resolver()->AddRule("*", "127.0.0.1");
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     test_data_dir = test_data_dir.AppendASCII("brave-wallet");
@@ -72,8 +73,6 @@ class WalletWatchAssetBrowserTest : public InProcessBrowserTest {
     brave_wallet_service_ =
         brave_wallet::BraveWalletServiceFactory::GetServiceForContext(
             browser()->profile());
-    keyring_service_ =
-        KeyringServiceFactory::GetServiceForContext(browser()->profile());
   }
 
   content::WebContents* web_contents() {
@@ -83,25 +82,16 @@ class WalletWatchAssetBrowserTest : public InProcessBrowserTest {
   net::EmbeddedTestServer* https_server() { return &https_server_; }
 
   void RestoreWallet() {
-    const char mnemonic[] =
-        "drip caution abandon festival order clown oven regular absorb "
-        "evidence crew where";
-    base::RunLoop run_loop;
-    keyring_service_->RestoreWallet(
-        mnemonic, "brave123", false,
-        base::BindLambdaForTesting([&](bool success) {
-          ASSERT_TRUE(success);
-          run_loop.Quit();
-        }));
-    run_loop.Run();
+    ASSERT_TRUE(brave_wallet_service_->keyring_service()->RestoreWalletSync(
+        kMnemonicDripCaution, kTestWalletPassword, false));
   }
 
   std::vector<mojom::BlockchainTokenPtr> GetUserAssets() const {
     base::RunLoop run_loop;
     std::vector<mojom::BlockchainTokenPtr> tokens_out;
     brave_wallet_service_->GetUserAssets(
-        GetCurrentChainId(browser()->profile()->GetPrefs(),
-                          mojom::CoinType::ETH, absl::nullopt),
+        brave_wallet_service_->network_manager()->GetCurrentChainId(
+            mojom::CoinType::ETH, std::nullopt),
         mojom::CoinType::ETH,
         base::BindLambdaForTesting(
             [&](std::vector<mojom::BlockchainTokenPtr> tokens) {
@@ -115,7 +105,8 @@ class WalletWatchAssetBrowserTest : public InProcessBrowserTest {
   }
 
  protected:
-  raw_ptr<BraveWalletService> brave_wallet_service_ = nullptr;
+  raw_ptr<BraveWalletService, DanglingUntriaged> brave_wallet_service_ =
+      nullptr;
   std::vector<std::string> methods_{"request", "send1", "send2", "sendAsync"};
   std::vector<std::string> addresses_{
       "0x6B175474E89094C44Da98b954EedeAC495271d0F",
@@ -128,7 +119,6 @@ class WalletWatchAssetBrowserTest : public InProcessBrowserTest {
  private:
   content::ContentMockCertVerifier mock_cert_verifier_;
   net::test_server::EmbeddedTestServer https_server_;
-  raw_ptr<KeyringService> keyring_service_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(WalletWatchAssetBrowserTest, UserApprovedRequest) {
@@ -139,12 +129,12 @@ IN_PROC_BROWSER_TEST_F(WalletWatchAssetBrowserTest, UserApprovedRequest) {
 
   size_t asset_num = GetUserAssets().size();
   for (size_t i = 0; i < methods_.size(); i++) {
-    ASSERT_TRUE(ExecJs(
-        web_contents(),
-        base::StringPrintf("wallet_watchAsset('%s', 'ERC20', '%s', '%s', %d)",
-                           methods_[i].c_str(), addresses_[i].c_str(),
-                           symbols_[i].c_str(), decimals_[i]),
-        content::EXECUTE_SCRIPT_NO_RESOLVE_PROMISES));
+    ASSERT_TRUE(
+        ExecJs(web_contents(),
+               content::JsReplace("wallet_watchAsset($1, 'ERC20', $2, $3, $4)",
+                                  methods_[i], addresses_[i], symbols_[i],
+                                  decimals_[i]),
+               content::EXECUTE_SCRIPT_NO_RESOLVE_PROMISES));
     base::RunLoop().RunUntilIdle();
     EXPECT_TRUE(
         brave_wallet::BraveWalletTabHelper::FromWebContents(web_contents())
@@ -163,12 +153,12 @@ IN_PROC_BROWSER_TEST_F(WalletWatchAssetBrowserTest, UserRejectedRequest) {
 
   size_t asset_num = GetUserAssets().size();
   for (size_t i = 0; i < methods_.size(); i++) {
-    ASSERT_TRUE(ExecJs(
-        web_contents(),
-        base::StringPrintf("wallet_watchAsset('%s', 'ERC20', '%s', '%s', %d)",
-                           methods_[i].c_str(), addresses_[i].c_str(),
-                           symbols_[i].c_str(), decimals_[i]),
-        content::EXECUTE_SCRIPT_NO_RESOLVE_PROMISES));
+    ASSERT_TRUE(
+        ExecJs(web_contents(),
+               content::JsReplace("wallet_watchAsset($1, 'ERC20', $2, $3, $4)",
+                                  methods_[i], addresses_[i], symbols_[i],
+                                  decimals_[i]),
+               content::EXECUTE_SCRIPT_NO_RESOLVE_PROMISES));
     base::RunLoop().RunUntilIdle();
     EXPECT_TRUE(
         brave_wallet::BraveWalletTabHelper::FromWebContents(web_contents())
@@ -187,10 +177,9 @@ IN_PROC_BROWSER_TEST_F(WalletWatchAssetBrowserTest, InvalidTypeParam) {
 
   for (size_t i = 0; i < methods_.size(); i++) {
     EXPECT_EQ(EvalJs(web_contents(),
-                     base::StringPrintf(
-                         "wallet_watchAsset('%s', 'ERC721', '%s', '%s', %d)",
-                         methods_[i].c_str(), addresses_[i].c_str(),
-                         symbols_[i].c_str(), decimals_[i]))
+                     content::JsReplace(
+                         "wallet_watchAsset($1, 'ERC721', $2, $3, $4)",
+                         methods_[i], addresses_[i], symbols_[i], decimals_[i]))
                   .ExtractString(),
               "Asset of type 'ERC721' not supported");
   }

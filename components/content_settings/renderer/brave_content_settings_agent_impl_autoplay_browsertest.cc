@@ -33,7 +33,7 @@ class MockContentSettingsManagerImpl : public mojom::ContentSettingsManager {
     ADD_FAILURE() << "Not reached";
   }
 
-  void AllowStorageAccess(int32_t render_frame_id,
+  void AllowStorageAccess(const blink::LocalFrameToken& frame_token,
                           StorageType storage_type,
                           const url::Origin& origin,
                           const ::net::SiteForCookies& site_for_cookies,
@@ -41,13 +41,13 @@ class MockContentSettingsManagerImpl : public mojom::ContentSettingsManager {
                           base::OnceCallback<void(bool)> callback) override {}
 
   void AllowEphemeralStorageAccess(
-      int32_t render_frame_id,
+      const blink::LocalFrameToken& frame_token,
       const ::url::Origin& origin,
       const ::net::SiteForCookies& site_for_cookies,
       const ::url::Origin& top_frame_origin,
       AllowEphemeralStorageAccessCallback callback) override {}
 
-  void OnContentBlocked(int32_t render_frame_id,
+  void OnContentBlocked(const blink::LocalFrameToken& frame_token,
                         ContentSettingsType type) override {
     ++log_->on_content_blocked_count;
     log_->on_content_blocked_type = type;
@@ -82,7 +82,6 @@ MockContentSettingsAgentImpl::MockContentSettingsAgentImpl(
     content::RenderFrame* render_frame)
     : BraveContentSettingsAgentImpl(
           render_frame,
-          false,
           std::make_unique<ContentSettingsAgentImpl::Delegate>()) {}
 
 void MockContentSettingsAgentImpl::BindContentSettingsManager(
@@ -121,7 +120,7 @@ TEST_F(BraveContentSettingsAgentImplAutoplayBrowserTest,
   autoplay_setting_rules.push_back(ContentSettingPatternSource(
       ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
       content_settings::ContentSettingToValue(CONTENT_SETTING_BLOCK),
-      std::string(), false));
+      content_settings::ProviderType::kNone, false));
 
   MockContentSettingsAgentImpl agent(GetMainRenderFrame());
   agent.SetRendererContentSettingRulesForTest(content_setting_rules);
@@ -137,7 +136,7 @@ TEST_F(BraveContentSettingsAgentImplAutoplayBrowserTest,
           ContentSettingsPattern::Wildcard(),
           ContentSettingsPattern::FromString("https://example.com"),
           content_settings::ContentSettingToValue(CONTENT_SETTING_ALLOW),
-          std::string(), false));
+          content_settings::ProviderType::kNone, false));
   agent.SetRendererContentSettingRulesForTest(content_setting_rules);
   EXPECT_TRUE(agent.AllowAutoplay(true));
 }
@@ -153,7 +152,7 @@ TEST_F(BraveContentSettingsAgentImplAutoplayBrowserTest,
   autoplay_setting_rules.push_back(ContentSettingPatternSource(
       ContentSettingsPattern::Wildcard(), ContentSettingsPattern::Wildcard(),
       content_settings::ContentSettingToValue(CONTENT_SETTING_ALLOW),
-      std::string(), false));
+      content_settings::ProviderType::kNone, false));
 
   MockContentSettingsAgentImpl agent(GetMainRenderFrame());
   agent.SetRendererContentSettingRulesForTest(content_setting_rules);
@@ -166,7 +165,7 @@ TEST_F(BraveContentSettingsAgentImplAutoplayBrowserTest,
           ContentSettingsPattern::Wildcard(),
           ContentSettingsPattern::FromString("https://example.com"),
           content_settings::ContentSettingToValue(CONTENT_SETTING_BLOCK),
-          std::string(), false));
+          content_settings::ProviderType::kNone, false));
   agent.SetRendererContentSettingRulesForTest(content_setting_rules);
   EXPECT_FALSE(agent.AllowAutoplay(true));
   base::RunLoop().RunUntilIdle();

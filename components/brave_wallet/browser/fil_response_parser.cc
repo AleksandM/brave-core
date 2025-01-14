@@ -6,35 +6,36 @@
 #include "brave/components/brave_wallet/browser/fil_response_parser.h"
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "base/strings/string_number_conversions.h"
 #include "brave/components/brave_wallet/browser/json_rpc_response_parser.h"
-#include "brave/components/json/rs/src/lib.rs.h"
+#include "brave/components/json/json_helper.h"
 
 namespace brave_wallet {
 
-absl::optional<std::string> ParseFilGetBalance(const base::Value& json_value) {
+std::optional<std::string> ParseFilGetBalance(const base::Value& json_value) {
   return ParseSingleStringResult(json_value);
 }
 
-absl::optional<uint64_t> ParseFilGetTransactionCount(
+std::optional<uint64_t> ParseFilGetTransactionCount(
     const base::Value& json_value) {
   if (json_value.is_none()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   auto count_string = ParseSingleStringResult(json_value);
   if (!count_string) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   if (count_string->empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   uint64_t count = 0;
   if (!base::StringToUint64(*count_string, &count)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return count;
 }

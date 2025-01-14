@@ -17,6 +17,4 @@ import {RegisterPolymerComponentToIgnore} from 'chrome://resources/brave/polymer
 RegisterPolymerComponentToIgnore('add-site-dialog')
 RegisterPolymerComponentToIgnore('settings-site-settings-page')
 RegisterPolymerComponentToIgnore('settings-clear-browsing-data-dialog')
-RegisterPolymerComponentToIgnore('site-details')
-RegisterPolymerComponentToIgnore('site-details-permission')
-RegisterPolymerComponentToIgnore('settings-privacy-page')
+RegisterPolymerComponentToIgnore('settings-autofill-page')

@@ -1,170 +1,138 @@
-/* Copyright (c) 2021 The Brave Authors. All rights reserved.
+/* Copyright (c) 2024 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+// npm run test -- brave_unit_tests --filter=BraveAds*
+
 #include "brave/components/brave_ads/core/internal/account/account_util.h"
 
-#include "base/functional/bind.h"
-#include "brave/components/brave_ads/core/internal/account/confirmations/confirmation_unittest_util.h"
-#include "brave/components/brave_ads/core/internal/account/transactions/transactions_database_table.h"
-#include "brave/components/brave_ads/core/internal/account/transactions/transactions_unittest_util.h"
-#include "brave/components/brave_ads/core/internal/ads/ad_unittest_util.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
-#include "brave/components/brave_ads/core/internal/deprecated/confirmations/confirmation_state_manager.h"
-#include "brave/components/brave_ads/core/internal/privacy/tokens/token_generator_mock.h"
-#include "brave/components/brave_ads/core/internal/privacy/tokens/token_generator_unittest_util.h"
-#include "brave/components/brave_ads/core/internal/privacy/tokens/unblinded_payment_tokens/unblinded_payment_token_util.h"
-#include "brave/components/brave_ads/core/internal/privacy/tokens/unblinded_payment_tokens/unblinded_payment_tokens_unittest_util.h"
-#include "brave/components/brave_ads/core/internal/privacy/tokens/unblinded_tokens/unblinded_tokens_unittest_util.h"
-
-// npm run test -- brave_unit_tests --filter=BraveAds*
+#include "base/test/scoped_feature_list.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
+#include "brave/components/brave_ads/core/internal/settings/settings_test_util.h"
+#include "brave/components/brave_ads/core/public/ads_feature.h"
 
 namespace brave_ads {
 
-using ::testing::NiceMock;
+class BraveAdsAccountUtilTest : public test::TestBase {};
 
-class BraveAdsAccountUtilTest : public UnitTestBase {
- protected:
-  NiceMock<privacy::TokenGeneratorMock> token_generator_mock_;
-};
-
-TEST_F(BraveAdsAccountUtilTest, UserHasOptedInToBravePrivateAds) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(UserHasOptedInToBravePrivateAds());
+TEST_F(BraveAdsAccountUtilTest, AlwaysAllowDepositsForRewardsUser) {
+  // Act & Assert
+  for (int i = 0; i < static_cast<int>(mojom::AdType::kMaxValue); ++i) {
+    for (int j = 0; j < static_cast<int>(mojom::ConfirmationType::kMaxValue);
+         ++j) {
+      EXPECT_TRUE(IsAllowedToDeposit(static_cast<mojom::AdType>(i),
+                                     static_cast<mojom::ConfirmationType>(j)));
+    }
+  }
 }
 
-TEST_F(BraveAdsAccountUtilTest, UserHasNotOptedInToBravePrivateAds) {
+TEST_F(BraveAdsAccountUtilTest,
+       AlwaysAllowInlineContentAdDepositsForNonRewardsUser) {
   // Arrange
-  DisableBravePrivateAds();
+  test::DisableBraveRewards();
 
-  // Act
-
-  // Assert
-  EXPECT_FALSE(UserHasOptedInToBravePrivateAds());
+  // Act & Assert
+  for (int i = 0; i < static_cast<int>(mojom::ConfirmationType::kMaxValue);
+       ++i) {
+    EXPECT_TRUE(IsAllowedToDeposit(mojom::AdType::kInlineContentAd,
+                                   static_cast<mojom::ConfirmationType>(i)));
+  }
 }
 
-TEST_F(BraveAdsAccountUtilTest, UserHasOptedInToBraveNews) {
+TEST_F(BraveAdsAccountUtilTest,
+       AlwaysAllowPromotedContentAdDepositsForNonRewardsUser) {
   // Arrange
+  test::DisableBraveRewards();
 
-  // Act
-
-  // Assert
-  EXPECT_TRUE(UserHasOptedInToBraveNews());
+  // Act & Assert
+  for (int i = 0; i < static_cast<int>(mojom::ConfirmationType::kMaxValue);
+       ++i) {
+    EXPECT_TRUE(IsAllowedToDeposit(mojom::AdType::kPromotedContentAd,
+                                   static_cast<mojom::ConfirmationType>(i)));
+  }
 }
 
-TEST_F(BraveAdsAccountUtilTest, UserHasNotOptedInToBraveNews) {
+TEST_F(BraveAdsAccountUtilTest,
+       DoNotAllowNewTabPageAdDepositsForNonRewardsUser) {
   // Arrange
-  DisableBraveNewsAds();
+  test::DisableBraveRewards();
 
-  // Act
-
-  // Assert
-  EXPECT_FALSE(UserHasOptedInToBraveNews());
+  // Act & Assert
+  for (int i = 0; i < static_cast<int>(mojom::ConfirmationType::kMaxValue);
+       ++i) {
+    EXPECT_FALSE(IsAllowedToDeposit(mojom::AdType::kNewTabPageAd,
+                                    static_cast<mojom::ConfirmationType>(i)));
+  }
 }
 
-TEST_F(BraveAdsAccountUtilTest, UserHasOptedInToNewTabPageAds) {
+TEST_F(
+    BraveAdsAccountUtilTest,
+    AllowNewTabPageAdDepositsForNonRewardsUserIfShouldAlwaysTriggerNewTabPageAdEvents) {
   // Arrange
+  const base::test::ScopedFeatureList scoped_feature_list(
+      kShouldAlwaysTriggerBraveNewTabPageAdEventsFeature);
 
-  // Act
+  test::DisableBraveRewards();
 
-  // Assert
-  EXPECT_TRUE(UserHasOptedInToNewTabPageAds());
+  // Act & Assert
+  for (int i = 0; i < static_cast<int>(mojom::ConfirmationType::kMaxValue);
+       ++i) {
+    EXPECT_TRUE(IsAllowedToDeposit(mojom::AdType::kNewTabPageAd,
+                                   static_cast<mojom::ConfirmationType>(i)));
+  }
 }
 
-TEST_F(BraveAdsAccountUtilTest, UserHasNotOptedInToNewTabPageAds) {
+TEST_F(BraveAdsAccountUtilTest,
+       DoNotAllowNotificationAdDepositsForNonRewardsUser) {
   // Arrange
-  DisableNewTabPageAds();
+  test::DisableBraveRewards();
 
-  // Act
-
-  // Assert
-  EXPECT_FALSE(UserHasOptedInToNewTabPageAds());
+  // Act & Assert
+  for (int i = 0; i < static_cast<int>(mojom::ConfirmationType::kMaxValue);
+       ++i) {
+    EXPECT_FALSE(IsAllowedToDeposit(mojom::AdType::kNotificationAd,
+                                    static_cast<mojom::ConfirmationType>(i)));
+  }
 }
 
-TEST_F(BraveAdsAccountUtilTest, ShouldRewardUser) {
+TEST_F(
+    BraveAdsAccountUtilTest,
+    DoNotAllowSearchResultAdDepositsForNonRewardsUserIfShouldNotAlwaysTriggerSearchResultAdEvents) {
   // Arrange
+  test::DisableBraveRewards();
 
-  // Act
-
-  // Assert
-  EXPECT_TRUE(ShouldRewardUser());
+  // Act & Assert
+  for (int i = 0; i < static_cast<int>(mojom::ConfirmationType::kMaxValue);
+       ++i) {
+    EXPECT_FALSE(IsAllowedToDeposit(mojom::AdType::kSearchResultAd,
+                                    static_cast<mojom::ConfirmationType>(i)));
+  }
 }
 
-TEST_F(BraveAdsAccountUtilTest, ShouldNotRewardUser) {
+TEST_F(
+    BraveAdsAccountUtilTest,
+    OnlyAllowSearchResultAdConversionDepositForNonRewardsUserIfShouldAlwaysTriggerSearchResultAdEvents) {
   // Arrange
-  DisableBravePrivateAds();
+  const base::test::ScopedFeatureList scoped_feature_list(
+      kShouldAlwaysTriggerBraveSearchResultAdEventsFeature);
 
-  // Act
+  test::DisableBraveRewards();
 
-  // Assert
-  EXPECT_FALSE(ShouldRewardUser());
-}
+  // Act & Assert
+  for (int i = 0; i < static_cast<int>(mojom::ConfirmationType::kMaxValue);
+       ++i) {
+    const auto confirmation_type = static_cast<mojom::ConfirmationType>(i);
 
-TEST_F(BraveAdsAccountUtilTest, ResetRewards) {
-  // Arrange
-  TransactionList transactions;
-  const TransactionInfo transaction =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
-  transactions.push_back(transaction);
-  SaveTransactions(transactions);
+    const bool is_allowed_to_deposit =
+        IsAllowedToDeposit(mojom::AdType::kSearchResultAd, confirmation_type);
 
-  MockTokenGenerator(token_generator_mock_, /*count*/ 1);
-
-  privacy::SetUnblindedTokens(/*count*/ 1);
-  privacy::SetUnblindedPaymentTokens(/*count*/ 1);
-
-  const absl::optional<ConfirmationInfo> confirmation =
-      BuildConfirmation(&token_generator_mock_, transaction);
-  ASSERT_TRUE(confirmation);
-  ConfirmationStateManager::GetInstance().AppendFailedConfirmation(
-      *confirmation);
-
-  // Act
-  ResetRewards(base::BindOnce([](const bool success) {
-    ASSERT_TRUE(success);
-
-    // Assert
-    const database::table::Transactions database_table;
-    database_table.GetAll(base::BindOnce(
-        [](const bool success, const TransactionList& transactions) {
-          ASSERT_TRUE(success);
-          EXPECT_TRUE(transactions.empty());
-        }));
-
-    const ConfirmationList& failed_confirmations =
-        ConfirmationStateManager::GetInstance().GetFailedConfirmations();
-    EXPECT_TRUE(failed_confirmations.empty());
-
-    EXPECT_TRUE(privacy::UnblindedPaymentTokensIsEmpty());
-  }));
-}
-
-TEST_F(BraveAdsAccountUtilTest, ResetRewardsIfNoState) {
-  // Arrange
-
-  // Act
-  ResetRewards(base::BindOnce([](const bool success) {
-    ASSERT_TRUE(success);
-
-    // Assert
-    const database::table::Transactions database_table;
-    database_table.GetAll(base::BindOnce(
-        [](const bool success, const TransactionList& transactions) {
-          ASSERT_TRUE(success);
-          EXPECT_TRUE(transactions.empty());
-        }));
-
-    const ConfirmationList& failed_confirmations =
-        ConfirmationStateManager::GetInstance().GetFailedConfirmations();
-    EXPECT_TRUE(failed_confirmations.empty());
-
-    EXPECT_TRUE(privacy::UnblindedPaymentTokensIsEmpty());
-  }));
+    if (confirmation_type == mojom::ConfirmationType::kConversion) {
+      EXPECT_TRUE(is_allowed_to_deposit);
+    } else {
+      EXPECT_FALSE(is_allowed_to_deposit);
+    }
+  }
 }
 
 }  // namespace brave_ads

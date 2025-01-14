@@ -6,7 +6,6 @@
 package org.chromium.chrome.browser.suggestions.tile;
 
 import android.content.res.Resources;
-import android.view.ViewGroup;
 import android.view.ViewStub;
 
 import androidx.annotation.Nullable;
@@ -17,15 +16,27 @@ import org.chromium.ui.modelutil.PropertyModel;
 
 public class BraveMostVisitedTilesMediator extends MostVisitedTilesMediator {
     private TileGroup mTileGroup;
-    public BraveMostVisitedTilesMediator(Resources resources, UiConfig uiConfig,
-            ViewGroup mvTilesLayout, ViewStub noMvPlaceholderStub, TileRenderer renderer,
-            PropertyModel propertyModel, boolean shouldShowSkeletonUIPreNative,
-            boolean isScrollableMVTEnabled, boolean isTablet,
+
+    public BraveMostVisitedTilesMediator(
+            Resources resources,
+            UiConfig uiConfig,
+            MostVisitedTilesLayout mvTilesLayout,
+            ViewStub noMvPlaceholderStub,
+            TileRenderer renderer,
+            PropertyModel propertyModel,
+            boolean isTablet,
             @Nullable Runnable snapshotTileGridChangedRunnable,
             @Nullable Runnable tileCountChangedRunnable) {
-        super(resources, uiConfig, mvTilesLayout, noMvPlaceholderStub, renderer, propertyModel,
-                shouldShowSkeletonUIPreNative, isScrollableMVTEnabled, isTablet,
-                snapshotTileGridChangedRunnable, tileCountChangedRunnable);
+        super(
+                resources,
+                uiConfig,
+                mvTilesLayout,
+                noMvPlaceholderStub,
+                renderer,
+                propertyModel,
+                isTablet,
+                snapshotTileGridChangedRunnable,
+                tileCountChangedRunnable);
     }
 
     protected void updateTilePlaceholderVisibility() {

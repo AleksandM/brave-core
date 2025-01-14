@@ -22,8 +22,8 @@ class PaddedImageButton;
 class PaddedImageView;
 
 class NotificationAdControlButtonsView : public views::View {
+  METADATA_HEADER(NotificationAdControlButtonsView, views::View)
  public:
-  METADATA_HEADER(NotificationAdControlButtonsView);
 
   explicit NotificationAdControlButtonsView(
       NotificationAdView& notification_ad_view);
@@ -32,11 +32,6 @@ class NotificationAdControlButtonsView : public views::View {
       delete;
   NotificationAdControlButtonsView& operator=(
       const NotificationAdControlButtonsView&) = delete;
-
-  NotificationAdControlButtonsView(
-      NotificationAdControlButtonsView&&) noexcept = delete;
-  NotificationAdControlButtonsView& operator=(
-      NotificationAdControlButtonsView&&) noexcept = delete;
 
   ~NotificationAdControlButtonsView() override;
 
@@ -54,7 +49,7 @@ class NotificationAdControlButtonsView : public views::View {
   void CreateCloseButton();
   void UpdateCloseButton();
 
-  raw_ref<NotificationAdView> notification_ad_view_;
+  const raw_ref<NotificationAdView> notification_ad_view_;
 
   raw_ptr<PaddedImageView> info_button_ = nullptr;
   raw_ptr<PaddedImageButton> close_button_ = nullptr;

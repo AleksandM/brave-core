@@ -19,33 +19,36 @@ struct TabInfo;
 
 class TabManagerObserver : public base::CheckedObserver {
  public:
-  // Invoked when the tab specfied by |id| changes focus.
-  virtual void OnTabDidChangeFocus(const int32_t tab_id) {}
-
-  // Invoked when the tab specified by |id| is updated.
-  virtual void OnTabDidChange(const TabInfo& tab) {}
-
-  // Invoked when a new tab is opened for the specified |id|.
+  // Invoked when a new `tab` is opened.
   virtual void OnDidOpenNewTab(const TabInfo& tab) {}
 
-  // Invoked when the text content for the tab specified by |id| did change.
-  virtual void OnTextContentDidChange(const int32_t tab_id,
+  // Invoked when the `tab` has loaded.
+  virtual void OnTabDidLoad(const TabInfo& tab, int http_status_code) {}
+
+  // Invoked when the tab specfied by `tab_id` changes focus.
+  virtual void OnTabDidChangeFocus(int32_t tab_id) {}
+
+  // Invoked when the `tab` is updated.
+  virtual void OnTabDidChange(const TabInfo& tab) {}
+
+  // Invoked when the text content for the tab specified by `tab_id` did change.
+  virtual void OnTextContentDidChange(int32_t tab_id,
                                       const std::vector<GURL>& redirect_chain,
-                                      const std::string& content) {}
+                                      const std::string& text) {}
 
-  // Invoked when the HTML content for the tab specified by |id| did change.
-  virtual void OnHtmlContentDidChange(const int32_t tab_id,
+  // Invoked when the HTML content for the tab specified by `tab_id` did change.
+  virtual void OnHtmlContentDidChange(int32_t tab_id,
                                       const std::vector<GURL>& redirect_chain,
-                                      const std::string& content) {}
+                                      const std::string& html) {}
 
-  // Invoked when a tab is closed.
-  virtual void OnDidCloseTab(const int32_t tab_id) {}
+  // Invoked when a tab is closed with the given `tab_id`.
+  virtual void OnDidCloseTab(int32_t tab_id) {}
 
-  // Invoked when media starts playing in a tab specified by |id|.
-  virtual void OnTabDidStartPlayingMedia(const int32_t tab_id) {}
+  // Invoked when media starts playing in a tab specified by `tab_id`.
+  virtual void OnTabDidStartPlayingMedia(int32_t tab_id) {}
 
-  // Invoked when media stops playing in a tab specified by |id|.
-  virtual void OnTabDidStopPlayingMedia(const int32_t tab_id) {}
+  // Invoked when media stops playing in a tab specified by `tab_id`.
+  virtual void OnTabDidStopPlayingMedia(int32_t tab_id) {}
 };
 
 }  // namespace brave_ads

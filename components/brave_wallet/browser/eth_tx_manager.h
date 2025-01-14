@@ -7,9 +7,11 @@
 #define BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_ETH_TX_MANAGER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/gtest_prod_util.h"
 #include "brave/components/brave_wallet/browser/eip1559_transaction.h"
 #include "brave/components/brave_wallet/browser/eth_block_tracker.h"
 #include "brave/components/brave_wallet/browser/eth_nonce_tracker.h"
@@ -19,8 +21,6 @@
 #include "brave/components/brave_wallet/browser/tx_manager.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/fil_address.h"
-
-class PrefService;
 
 namespace brave_wallet {
 
@@ -33,41 +33,37 @@ class KeyringService;
 
 class EthTxManager : public TxManager, public EthBlockTracker::Observer {
  public:
-  EthTxManager(TxService* tx_service,
+  using AddUnapprovedEvmTransactionCallback =
+      mojom::TxService::AddUnapprovedEvmTransactionCallback;
+
+  EthTxManager(TxService& tx_service,
                JsonRpcService* json_rpc_service,
-               KeyringService* keyring_service,
-               PrefService* prefs);
+               KeyringService& keyring_service,
+               TxStorageDelegate& delegate,
+               AccountResolverDelegate& account_resolver_delegate);
   ~EthTxManager() override;
   EthTxManager(const EthTxManager&) = delete;
   EthTxManager operator=(const EthTxManager&) = delete;
 
+  void AddUnapprovedEvmTransaction(
+      mojom::NewEvmTransactionParamsPtr params,
+      const std::optional<url::Origin>& origin,
+      AddUnapprovedEvmTransactionCallback callback);
+
   // TxManager
   void AddUnapprovedTransaction(const std::string& chain_id,
                                 mojom::TxDataUnionPtr tx_data_union,
-                                const std::string& from,
-                                const absl::optional<url::Origin>& origin,
-                                const absl::optional<std::string>& groupId,
+                                const mojom::AccountIdPtr& from,
+                                const std::optional<url::Origin>& origin,
                                 AddUnapprovedTransactionCallback) override;
-  void ApproveTransaction(const std::string& chain_id,
-                          const std::string& tx_meta_id,
+  void ApproveTransaction(const std::string& tx_meta_id,
                           ApproveTransactionCallback) override;
-  void GetAllTransactionInfo(const absl::optional<std::string>& chain_id,
-                             const absl::optional<std::string>& from,
-                             GetAllTransactionInfoCallback) override;
-
   void SpeedupOrCancelTransaction(
-      const std::string& chain_id,
       const std::string& tx_meta_id,
       bool cancel,
       SpeedupOrCancelTransactionCallback callback) override;
-  void RetryTransaction(const std::string& chain_id,
-                        const std::string& tx_meta_id,
+  void RetryTransaction(const std::string& tx_meta_id,
                         RetryTransactionCallback callback) override;
-  void GetTransactionMessageToSign(
-      const std::string& chain_id,
-      const std::string& tx_meta_id,
-      GetTransactionMessageToSignCallback callback) override;
-
   // Resets things back to the original state of EthTxManager
   // To be used when the Wallet is reset / erased
   void Reset() override;
@@ -90,8 +86,10 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
       mojom::EthTxManagerProxy::SetNonceForUnapprovedTransactionCallback;
   using GetNonceForHardwareTransactionCallback =
       mojom::EthTxManagerProxy::GetNonceForHardwareTransactionCallback;
-  using ProcessHardwareSignatureCallback =
-      mojom::EthTxManagerProxy::ProcessHardwareSignatureCallback;
+  using GetEthTransactionMessageToSignCallback =
+      mojom::EthTxManagerProxy::GetEthTransactionMessageToSignCallback;
+  using ProcessEthHardwareSignatureCallback =
+      mojom::EthTxManagerProxy::ProcessEthHardwareSignatureCallback;
   using GetGasEstimation1559Callback =
       mojom::EthTxManagerProxy::GetGasEstimation1559Callback;
   using MakeFilForwarderDataCallback =
@@ -120,38 +118,34 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
                                    MakeERC1155TransferFromDataCallback);
 
   void SetGasPriceAndLimitForUnapprovedTransaction(
-      const std::string& chain_id,
       const std::string& tx_meta_id,
       const std::string& gas_price,
       const std::string& gas_limit,
       SetGasPriceAndLimitForUnapprovedTransactionCallback callback);
   void SetGasFeeAndLimitForUnapprovedTransaction(
-      const std::string& chain_id,
       const std::string& tx_meta_id,
       const std::string& max_priority_fee_per_gas,
       const std::string& max_fee_per_gas,
       const std::string& gas_limit,
       SetGasFeeAndLimitForUnapprovedTransactionCallback callback);
   void SetDataForUnapprovedTransaction(
-      const std::string& chain_id,
       const std::string& tx_meta_id,
       const std::vector<uint8_t>& data,
       SetDataForUnapprovedTransactionCallback callback);
   void SetNonceForUnapprovedTransaction(
-      const std::string& chain_id,
       const std::string& tx_meta_id,
       const std::string& nonce,
       SetNonceForUnapprovedTransactionCallback);
   void GetNonceForHardwareTransaction(
-      const std::string& chain_id,
       const std::string& tx_meta_id,
       GetNonceForHardwareTransactionCallback callback);
-  void ProcessHardwareSignature(const std::string& chain_id,
-                                const std::string& tx_meta_id,
-                                const std::string& v,
-                                const std::string& r,
-                                const std::string& s,
-                                ProcessHardwareSignatureCallback callback);
+  void GetEthTransactionMessageToSign(
+      const std::string& tx_meta_id,
+      GetEthTransactionMessageToSignCallback callback);
+  void ProcessEthHardwareSignature(
+      const std::string& tx_meta_id,
+      mojom::EthereumSignatureVRSPtr hw_signature,
+      ProcessEthHardwareSignatureCallback callback);
 
   // Gas estimation API via eth_feeHistory API
   void GetGasEstimation1559(const std::string& chain_id,
@@ -161,8 +155,7 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
                              std::string* error);
   static bool ValidateTxData1559(const mojom::TxData1559Ptr& tx_data,
                                  std::string* error);
-  std::unique_ptr<EthTxMeta> GetTxForTesting(const std::string& chain_id,
-                                             const std::string& tx_meta_id);
+  std::unique_ptr<EthTxMeta> GetTxForTesting(const std::string& tx_meta_id);
 
  private:
   FRIEND_TEST_ALL_PREFIXES(EthTxManagerUnitTest, TestSubmittedToConfirmed);
@@ -174,15 +167,13 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
 
   void AddUnapprovedTransaction(const std::string& chain_id,
                                 mojom::TxDataPtr tx_data,
-                                const std::string& from,
+                                const mojom::AccountIdPtr& from,
                                 const url::Origin& origin,
-                                const absl::optional<std::string>& groupId,
                                 AddUnapprovedTransactionCallback);
   void AddUnapproved1559Transaction(const std::string& chain_id,
                                     mojom::TxData1559Ptr tx_data,
-                                    const std::string& from,
+                                    const mojom::AccountIdPtr& from,
                                     const url::Origin& origin,
-                                    const absl::optional<std::string>& groupId,
                                     AddUnapprovedTransactionCallback);
 
   void NotifyUnapprovedTxUpdated(TxMeta* meta);
@@ -207,13 +198,12 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
                             mojom::ProviderError error,
                             const std::string& error_message);
   void OnGetGasPrice(const std::string& chain_id,
-                     const std::string& from,
+                     const mojom::AccountIdPtr& from,
                      const url::Origin& origin,
                      const std::string& to,
                      const std::string& value,
                      const std::string& data,
                      const std::string& gas_limit,
-                     const absl::optional<std::string>& group_id,
                      std::unique_ptr<EthTransaction> tx,
                      AddUnapprovedTransactionCallback callback,
                      bool sign_only,
@@ -222,9 +212,8 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
                      const std::string& error_message);
   void ContinueAddUnapprovedTransaction(
       const std::string& chain_id,
-      const std::string& from,
-      const absl::optional<url::Origin>& origin,
-      const absl::optional<std::string>& group_id,
+      const mojom::AccountIdPtr& from,
+      const std::optional<url::Origin>& origin,
       std::unique_ptr<EthTransaction> tx,
       AddUnapprovedTransactionCallback callback,
       bool sign_only,
@@ -242,25 +231,23 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
       const std::string& error_message);
   void OnGetGasOracleForUnapprovedTransaction(
       const std::string& chain_id,
-      const std::string& from,
+      const mojom::AccountIdPtr& from,
       const url::Origin& origin,
       const std::string& to,
       const std::string& value,
       const std::string& data,
       const std::string& gas_limit,
-      const absl::optional<std::string>& group_id,
       std::unique_ptr<Eip1559Transaction> tx,
       AddUnapprovedTransactionCallback callback,
       bool sign_only,
       mojom::GasEstimation1559Ptr gas_estimation);
   void UpdatePendingTransactions(
-      const absl::optional<std::string>& chain_id) override;
+      const std::optional<std::string>& chain_id) override;
 
   void ContinueSpeedupOrCancelTransaction(
       const std::string& chain_id,
-      const std::string& from,
-      const absl::optional<url::Origin>& origin,
-      const absl::optional<std::string>& group_id,
+      const mojom::AccountIdPtr& from,
+      const std::optional<url::Origin>& origin,
       const std::string& gas_limit,
       std::unique_ptr<EthTransaction> tx,
       SpeedupOrCancelTransactionCallback callback,
@@ -269,9 +256,8 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
       const std::string& error_message);
   void ContinueSpeedupOrCancel1559Transaction(
       const std::string& chain_id,
-      const std::string& from,
-      const absl::optional<url::Origin>& origin,
-      const absl::optional<std::string>& group_id,
+      const mojom::AccountIdPtr& from,
+      const std::optional<url::Origin>& origin,
       const std::string& gas_limit,
       std::unique_ptr<Eip1559Transaction> tx,
       SpeedupOrCancelTransactionCallback callback,
@@ -287,7 +273,7 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
       const std::string& error_message);
 
   void ContinueProcessHardwareSignature(
-      ProcessHardwareSignatureCallback callback,
+      ProcessEthHardwareSignatureCallback callback,
       bool status,
       mojom::ProviderErrorUnionPtr error_union,
       const std::string& error_message);
@@ -302,13 +288,14 @@ class EthTxManager : public TxManager, public EthBlockTracker::Observer {
                      uint256_t block_num) override {}
   void OnNewBlock(const std::string& chain_id, uint256_t block_num) override;
 
-  EthTxStateManager* GetEthTxStateManager();
-  EthBlockTracker* GetEthBlockTracker();
+  EthTxStateManager& GetEthTxStateManager();
+  EthBlockTracker& GetEthBlockTracker();
 
   std::unique_ptr<EthNonceTracker> nonce_tracker_;
   std::unique_ptr<EthPendingTxTracker> pending_tx_tracker_;
+  raw_ptr<JsonRpcService> json_rpc_service_ = nullptr;
 
-  base::WeakPtrFactory<EthTxManager> weak_factory_;
+  base::WeakPtrFactory<EthTxManager> weak_factory_{this};
 };
 
 }  // namespace brave_wallet

@@ -4,6 +4,7 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "brave/browser/ui/views/profiles/brave_avatar_toolbar_button.h"
+#include "brave/browser/ui/views/toolbar/brave_browser_app_menu_button.h"
 #include "extensions/buildflags/buildflags.h"
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
@@ -13,13 +14,15 @@
 #define LocationBarView BraveLocationBarView
 #endif
 
-#define BRAVE_TOOLBAR_VIEW_INIT                                                \
-  avatar_ =                                                                    \
-      AddChildView(std::make_unique<BraveAvatarToolbarButton>(browser_view_)); \
+#define BrowserAppMenuButton BraveBrowserAppMenuButton
+#define BRAVE_TOOLBAR_VIEW_INIT                                   \
+  avatar_ = container_view_->AddChildView(                        \
+      std::make_unique<BraveAvatarToolbarButton>(browser_view_)); \
   if (false)
 
 #include "src/chrome/browser/ui/views/toolbar/toolbar_view.cc"
 #undef BRAVE_TOOLBAR_VIEW_INIT
+#undef BrowserAppMenuButton
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #undef LocationBarView
 #endif

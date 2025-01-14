@@ -1,60 +1,60 @@
-/* Copyright (c) 2021 The Brave Authors. All rights reserved.
+/* Copyright (c) 2024 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "brave/components/brave_ads/core/internal/account/account_util.h"
 
-#include <utility>
-
-#include "base/functional/bind.h"
-#include "base/functional/callback.h"
-#include "brave/components/brave_ads/common/pref_names.h"
-#include "brave/components/brave_ads/core/internal/account/confirmations/confirmation_util.h"
-#include "brave/components/brave_ads/core/internal/account/transactions/transactions.h"
-#include "brave/components/brave_ads/core/internal/ads_client_helper.h"
-#include "brave/components/brave_ads/core/internal/common/logging_util.h"
-#include "brave/components/brave_news/common/pref_names.h"
-#include "brave/components/ntp_background_images/common/pref_names.h"
+#include "base/notreached.h"
+#include "base/types/cxx23_to_underlying.h"
+#include "brave/components/brave_ads/core/internal/settings/settings.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
+#include "brave/components/brave_ads/core/public/ads_feature.h"
 
 namespace brave_ads {
 
-bool UserHasOptedInToBravePrivateAds() {
-  return AdsClientHelper::GetInstance()->GetBooleanPref(prefs::kEnabled);
-}
+bool IsAllowedToDeposit(mojom::AdType mojom_ad_type,
+                        mojom::ConfirmationType mojom_confirmation_type) {
+  if (UserHasJoinedBraveRewards()) {
+    // Always allow deposits for Rewards users.
+    return true;
+  }
 
-bool UserHasOptedInToBraveNews() {
-  return AdsClientHelper::GetInstance()->GetBooleanPref(
-             brave_news::prefs::kBraveNewsOptedIn) &&
-         AdsClientHelper::GetInstance()->GetBooleanPref(
-             brave_news::prefs::kNewTabPageShowToday);
-}
+  switch (mojom_ad_type) {
+    case mojom::AdType::kInlineContentAd:
+    case mojom::AdType::kPromotedContentAd: {
+      // Only allow deposits for non-Rewards users who have joined Brave News.
+      return UserHasOptedInToBraveNewsAds();
+    }
 
-bool UserHasOptedInToNewTabPageAds() {
-  return AdsClientHelper::GetInstance()->GetBooleanPref(
-             ntp_background_images::prefs::kNewTabPageShowBackgroundImage) &&
-         AdsClientHelper::GetInstance()->GetBooleanPref(
-             ntp_background_images::prefs::
-                 kNewTabPageShowSponsoredImagesBackgroundImage);
-}
+    case mojom::AdType::kNewTabPageAd: {
+      // Only allow deposits for non-Rewards users if
+      // brave://flags/#brave-ads-should-always-trigger-new-tab-page-ad-events
+      // is enabled.
+      return ShouldAlwaysTriggerNewTabPageAdEvents();
+    }
 
-bool ShouldRewardUser() {
-  return UserHasOptedInToBravePrivateAds();
-}
+    case mojom::AdType::kNotificationAd: {
+      // Never allow deposits because users cannot opt into notification ads
+      // without joining Brave Rewards.
+      return false;
+    }
 
-void ResetRewards(ResetRewardsCallback callback) {
-  RemoveAllTransactions(base::BindOnce(
-      [](ResetRewardsCallback callback, const bool success) {
-        if (!success) {
-          BLOG(0, "Failed to remove transactions");
-          return std::move(callback).Run(/*success*/ false);
-        }
+    case mojom::AdType::kSearchResultAd: {
+      // Only allow conversion deposits for non-Rewards users if
+      // brave://flags/#brave-ads-should-always-trigger-search-result-ad-events
+      // is enabled.
+      return ShouldAlwaysTriggerSearchResultAdEvents() &&
+             mojom_confirmation_type == mojom::ConfirmationType::kConversion;
+    }
 
-        ResetConfirmations();
+    case mojom::AdType::kUndefined: {
+      break;
+    }
+  }
 
-        std::move(callback).Run(/*success*/ true);
-      },
-      std::move(callback)));
+  NOTREACHED() << "Unexpected value for mojom::AdType: "
+               << base::to_underlying(mojom_ad_type);
 }
 
 }  // namespace brave_ads

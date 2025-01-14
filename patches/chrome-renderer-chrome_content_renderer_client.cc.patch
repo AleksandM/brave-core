@@ -1,21 +1,13 @@
 diff --git a/chrome/renderer/chrome_content_renderer_client.cc b/chrome/renderer/chrome_content_renderer_client.cc
-index c5c1deb4a388c7e59cb15607c5f360a3ced92c19..98468c088452cfcb806e2dfaa6cecdedaa5dfe4e 100644
+index a00e0e601bcebe65f9d4c63210dcbd64f97e9ac8..0e0cbc7ba1c89022a2e42d5880ac90ea79075b7e 100644
 --- a/chrome/renderer/chrome_content_renderer_client.cc
 +++ b/chrome/renderer/chrome_content_renderer_client.cc
-@@ -578,7 +578,7 @@ void ChromeContentRendererClient::RenderFrameCreated(
-       ChromeExtensionsRendererClient::GetInstance()->extension_dispatcher());
+@@ -616,7 +616,7 @@ void ChromeContentRendererClient::RenderFrameCreated(
+       extensions::ExtensionsRendererClient::Get()->dispatcher());
  #endif
    content_settings::ContentSettingsAgentImpl* content_settings =
 -      new content_settings::ContentSettingsAgentImpl(
 +      new content_settings::BraveContentSettingsAgentImpl(
-           render_frame, should_allow_for_content_settings,
-           std::move(content_settings_delegate));
+           render_frame, std::move(content_settings_delegate));
    if (chrome_observer_.get()) {
-@@ -767,6 +767,7 @@ void ChromeContentRendererClient::RenderFrameCreated(
-                                 render_frame));
-   }
- #endif
-+  BRAVE_RENDER_FRAME_CREATED
- }
- 
- void ChromeContentRendererClient::WebViewCreated(
+     if (chrome_observer_->content_settings_manager()) {

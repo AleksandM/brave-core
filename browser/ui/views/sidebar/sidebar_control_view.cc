@@ -6,21 +6,24 @@
 #include "brave/browser/ui/views/sidebar/sidebar_control_view.h"
 
 #include "brave/app/brave_command_ids.h"
-#include "brave/app/vector_icons/vector_icons.h"
 #include "brave/browser/ui/brave_browser.h"
 #include "brave/browser/ui/color/brave_color_id.h"
 #include "brave/browser/ui/sidebar/sidebar_controller.h"
 #include "brave/browser/ui/sidebar/sidebar_service_factory.h"
 #include "brave/browser/ui/sidebar/sidebar_utils.h"
+#include "brave/browser/ui/views/frame/brave_contents_view_util.h"
 #include "brave/browser/ui/views/sidebar/sidebar_item_add_button.h"
 #include "brave/browser/ui/views/sidebar/sidebar_items_scroll_view.h"
 #include "brave/components/l10n/common/localization_util.h"
-#include "brave/components/sidebar/sidebar_service.h"
+#include "brave/components/sidebar/browser/sidebar_service.h"
+#include "brave/components/vector_icons/vector_icons.h"
 #include "brave/grit/brave_generated_resources.h"
-#include "brave/grit/brave_theme_resources.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_command_controller.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
+#include "chrome/browser/ui/singleton_tabs.h"
+#include "chrome/browser/ui/views/side_panel/side_panel_ui.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -30,6 +33,7 @@
 #include "ui/views/background.h"
 #include "ui/views/border.h"
 #include "ui/views/controls/menu/menu_runner.h"
+#include "ui/views/layout/flex_layout.h"
 
 namespace {
 
@@ -70,50 +74,8 @@ SidebarControlView::SidebarControlView(Delegate* delegate,
   UpdateSettingsButtonState();
 
   sidebar_model_observed_.Observe(browser_->sidebar_controller()->model());
-}
-
-void SidebarControlView::Layout() {
-  // Add item/settings buttons have more high priority than items container.
-  // If this view doesn't have enough space to show all child views, items
-  // container will get insufficient bounds.
-  gfx::Rect bounds = GetContentsBounds();
-  gfx::Size preferred_size = GetPreferredSize();
-  const bool has_sufficient_size = bounds.height() >= preferred_size.height();
-
-  const gfx::Size settings_size = sidebar_settings_view_->GetPreferredSize();
-  const gfx::Size items_view_size = sidebar_items_view_->GetPreferredSize();
-  const gfx::Size add_view_size = sidebar_item_add_view_->GetPreferredSize();
-
-  const int x = bounds.x();
-  if (has_sufficient_size) {
-    int y = bounds.y();
-    sidebar_items_view_->SetBounds(x, y, items_view_size.width(),
-                                   items_view_size.height());
-    y += items_view_size.height();
-    sidebar_item_add_view_->SetBounds(x, y, add_view_size.width(),
-                                      add_view_size.height());
-  } else {
-    // Give remained area to items view.
-    sidebar_items_view_->SetBounds(
-        x, bounds.y(), items_view_size.width(),
-        bounds.height() - add_view_size.width() - settings_size.width());
-    sidebar_item_add_view_->SetBounds(
-        x, bounds.height() - settings_size.height() - add_view_size.height(),
-        add_view_size.width(), add_view_size.height());
-  }
-  // Locate settings button at bottom line.
-  sidebar_settings_view_->SetBounds(x, bounds.height() - settings_size.height(),
-                                    settings_size.width(),
-                                    settings_size.height());
-}
-
-gfx::Size SidebarControlView::CalculatePreferredSize() const {
-  gfx::Size preferred(sidebar_item_add_view_->GetPreferredSize().width(), 0);
-  preferred.Enlarge(0, sidebar_items_view_->GetPreferredSize().height());
-  preferred.Enlarge(0, sidebar_item_add_view_->GetPreferredSize().height());
-  preferred.Enlarge(0, sidebar_settings_view_->GetPreferredSize().height());
-  preferred += GetInsets().size();
-  return preferred;
+  SetLayoutManager(std::make_unique<views::FlexLayout>())
+      ->SetOrientation(views::LayoutOrientation::kVertical);
 }
 
 void SidebarControlView::OnThemeChanged() {
@@ -121,18 +83,17 @@ void SidebarControlView::OnThemeChanged() {
 
   UpdateBackgroundAndBorder();
   UpdateItemAddButtonState();
-  UpdateSettingsButtonState();
 }
 
 void SidebarControlView::UpdateBackgroundAndBorder() {
   if (const ui::ColorProvider* color_provider = GetColorProvider()) {
-    constexpr int kBorderThickness = 1;
     SetBackground(
         views::CreateSolidBackground(color_provider->GetColor(kColorToolbar)));
-    SetBorder(views::CreateSolidSidedBorder(
-        gfx::Insets::TLBR(0, sidebar_on_left_ ? 0 : kBorderThickness, 0,
-                          sidebar_on_left_ ? kBorderThickness : 0),
-        color_provider->GetColor(kColorToolbarContentAreaSeparator)));
+    int border_thickness =
+        1 - BraveContentsViewUtil::GetRoundedCornersWebViewMargin(browser_);
+    SetBorder(views::CreateEmptyBorder(
+        gfx::Insets::TLBR(0, sidebar_on_left_ ? 0 : border_thickness, 0,
+                          sidebar_on_left_ ? border_thickness : 0)));
   }
 }
 
@@ -141,9 +102,10 @@ SidebarControlView::~SidebarControlView() = default;
 void SidebarControlView::ShowContextMenuForViewImpl(
     views::View* source,
     const gfx::Point& point,
-    ui::MenuSourceType source_type) {
-  if (context_menu_runner_ && context_menu_runner_->IsRunning())
+    ui::mojom::MenuSourceType source_type) {
+  if (context_menu_runner_ && context_menu_runner_->IsRunning()) {
     return;
+  }
 
   context_menu_model_ = std::make_unique<ControlViewMenuModel>(this);
   context_menu_model_->AddTitle(brave_l10n::GetLocalizedResourceUTF16String(
@@ -210,11 +172,25 @@ void SidebarControlView::OnItemRemoved(size_t index) {
 void SidebarControlView::AddChildViews() {
   sidebar_items_view_ =
       AddChildView(std::make_unique<SidebarItemsScrollView>(browser_));
-
+  sidebar_items_view_->SetProperty(
+      views::kFlexBehaviorKey,
+      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero)
+          .WithOrder(2));
   sidebar_item_add_view_ = AddChildView(std::make_unique<SidebarItemAddButton>(
       browser_, brave_l10n::GetLocalizedResourceUTF16String(
                     IDS_SIDEBAR_ADD_ITEM_BUTTON_TOOLTIP)));
   sidebar_item_add_view_->set_context_menu_controller(this);
+  // Remove top margin as the last item view has bottom margin.
+  sidebar_item_add_view_->GetProperty(views::kMarginsKey)->set_top(0);
+
+  // This helps the settings button to be on the bottom
+  auto* spacer = AddChildView(std::make_unique<views::View>());
+  spacer->SetEnabled(false);
+  spacer->SetProperty(
+      views::kFlexBehaviorKey,
+      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
+                               views::MaximumFlexSizeRule::kUnbounded)
+          .WithOrder(1));
 
   sidebar_settings_view_ = AddChildView(std::make_unique<SidebarButtonView>(
       brave_l10n::GetLocalizedResourceUTF16String(
@@ -227,7 +203,8 @@ void SidebarControlView::AddChildViews() {
 
 void SidebarControlView::OnButtonPressed(views::View* view) {
   if (view == sidebar_settings_view_) {
-    browser_->sidebar_controller()->LoadAtTab(
+    ShowSingletonTabOverwritingNTP(
+        browser_,
         GURL("brave://settings?search=" +
              l10n_util::GetStringUTF8(
                  IDS_SETTINGS_APPEARNCE_SETTINGS_SIDEBAR_PART_TITLE)));
@@ -252,20 +229,20 @@ void SidebarControlView::UpdateItemAddButtonState() {
 
 void SidebarControlView::UpdateSettingsButtonState() {
   DCHECK(sidebar_settings_view_);
-  if (const ui::ColorProvider* color_provider = GetColorProvider()) {
-    sidebar_settings_view_->SetImage(
-        views::Button::STATE_NORMAL,
-        gfx::CreateVectorIcon(
-            kSidebarSettingsIcon,
-            color_provider->GetColor(kColorSidebarButtonBase)));
-    auto& bundle = ui::ResourceBundle::GetSharedInstance();
-    sidebar_settings_view_->SetImage(
-        views::Button::STATE_HOVERED,
-        bundle.GetImageSkiaNamed(IDR_SIDEBAR_SETTINGS_FOCUSED));
-    sidebar_settings_view_->SetImage(
-        views::Button::STATE_PRESSED,
-        bundle.GetImageSkiaNamed(IDR_SIDEBAR_SETTINGS_FOCUSED));
-  }
+  sidebar_settings_view_->SetImageModel(
+      views::Button::STATE_NORMAL,
+      ui::ImageModel::FromVectorIcon(kLeoSettingsIcon, kColorSidebarButtonBase,
+                                     SidebarButtonView::kDefaultIconSize));
+  sidebar_settings_view_->SetImageModel(
+      views::Button::STATE_PRESSED,
+      ui::ImageModel::FromVectorIcon(kLeoSettingsIcon,
+                                     kColorSidebarButtonPressed,
+                                     SidebarButtonView::kDefaultIconSize));
+  sidebar_settings_view_->SetImageModel(
+      views::Button::STATE_DISABLED,
+      ui::ImageModel::FromVectorIcon(kLeoSettingsIcon,
+                                     kColorSidebarAddButtonDisabled,
+                                     SidebarButtonView::kDefaultIconSize));
 }
 
 bool SidebarControlView::IsItemReorderingInProgress() const {
@@ -273,23 +250,25 @@ bool SidebarControlView::IsItemReorderingInProgress() const {
 }
 
 bool SidebarControlView::IsBubbleWidgetVisible() const {
-  if (context_menu_runner_ && context_menu_runner_->IsRunning())
+  if (context_menu_runner_ && context_menu_runner_->IsRunning()) {
     return true;
+  }
 
-  if (sidebar_item_add_view_->IsBubbleVisible())
+  if (sidebar_item_add_view_->IsBubbleVisible()) {
     return true;
+  }
 
-  if (sidebar_items_view_->IsBubbleVisible())
+  if (sidebar_items_view_->IsBubbleVisible()) {
     return true;
+  }
 
   return false;
 }
 
 void SidebarControlView::SetSidebarOnLeft(bool sidebar_on_left) {
   sidebar_on_left_ = sidebar_on_left;
-  sidebar_items_view_->SetSidebarOnLeft(sidebar_on_left);
   UpdateBackgroundAndBorder();
 }
 
-BEGIN_METADATA(SidebarControlView, views::View)
+BEGIN_METADATA(SidebarControlView)
 END_METADATA

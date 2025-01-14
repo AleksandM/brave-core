@@ -6,6 +6,7 @@
 import("//mojo/public/tools/bindings/mojom.gni")
 
 mojom("interfaces") {
+  generate_java = true
   sources = [ "bat_ads.mojom" ]
 
   public_deps = [
@@ -13,8 +14,5 @@ mojom("interfaces") {
     "//url/mojom:url_mojom_gurl",
   ]
 
-  deps = [
-    "//brave/components/brave_ads/common/interfaces",
-    "//brave/components/brave_federated/public/interfaces",
-  ]
+  deps = [ "//brave/components/brave_ads/core/mojom" ]
 }

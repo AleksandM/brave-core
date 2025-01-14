@@ -3,6 +3,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "brave/components/brave_rewards/core/publisher/publisher.h"
+
 #include <algorithm>
 #include <cmath>
 #include <ctime>
@@ -11,31 +13,49 @@
 #include <utility>
 #include <vector>
 
+#include "base/feature_list.h"
 #include "base/strings/stringprintf.h"
 #include "base/uuid.h"
+#include "brave/components/brave_rewards/common/features.h"
 #include "brave/components/brave_rewards/core/constants.h"
 #include "brave/components/brave_rewards/core/contribution/contribution.h"
 #include "brave/components/brave_rewards/core/database/database.h"
 #include "brave/components/brave_rewards/core/global_constants.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
-#include "brave/components/brave_rewards/core/legacy/media/media.h"
 #include "brave/components/brave_rewards/core/legacy/static_values.h"
+#include "brave/components/brave_rewards/core/publisher/media/media.h"
 #include "brave/components/brave_rewards/core/publisher/prefix_util.h"
-#include "brave/components/brave_rewards/core/publisher/publisher.h"
 #include "brave/components/brave_rewards/core/publisher/publisher_prefix_list_updater.h"
 #include "brave/components/brave_rewards/core/publisher/server_publisher_fetcher.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/state/state.h"
 
-using std::placeholders::_1;
-using std::placeholders::_2;
-
 namespace brave_rewards::internal {
+
+namespace {
+
+bool IsPublisherExcluded(mojom::PublisherInfo& publisher_info) {
+  if (publisher_info.excluded == mojom::PublisherExclude::EXCLUDED) {
+    return true;
+  }
+  switch (publisher_info.status) {
+    case mojom::PublisherStatus::NOT_VERIFIED:
+    case mojom::PublisherStatus::WEB3_ENABLED:
+      return true;
+    case mojom::PublisherStatus::UPHOLD_VERIFIED:
+    case mojom::PublisherStatus::BITFLYER_VERIFIED:
+    case mojom::PublisherStatus::GEMINI_VERIFIED:
+      return false;
+  }
+}
+
+}  // namespace
+
 namespace publisher {
 
-Publisher::Publisher(LedgerImpl& ledger)
-    : ledger_(ledger),
-      prefix_list_updater_(ledger),
-      server_publisher_fetcher_(ledger) {}
+Publisher::Publisher(RewardsEngine& engine)
+    : engine_(engine),
+      prefix_list_updater_(engine),
+      server_publisher_fetcher_(engine) {}
 
 Publisher::~Publisher() = default;
 
@@ -46,24 +66,33 @@ bool Publisher::ShouldFetchServerPublisherInfo(
 
 void Publisher::FetchServerPublisherInfo(
     const std::string& publisher_key,
-    database::GetServerPublisherInfoCallback callback) {
-  server_publisher_fetcher_.Fetch(publisher_key, callback);
+    ServerPublisherFetcher::FetchCallback callback) {
+  server_publisher_fetcher_.Fetch(publisher_key, std::move(callback));
 }
 
 void Publisher::RefreshPublisher(const std::string& publisher_key,
                                  RefreshPublisherCallback callback) {
   // Bypass cache and unconditionally fetch the latest info
   // for the specified publisher.
-  server_publisher_fetcher_.Fetch(publisher_key, [callback](auto server_info) {
-    auto status = server_info ? server_info->status
-                              : mojom::PublisherStatus::NOT_VERIFIED;
-    callback(status);
-  });
+  server_publisher_fetcher_.Fetch(
+      publisher_key,
+      base::BindOnce(
+          [](RefreshPublisherCallback callback,
+             mojom::ServerPublisherInfoPtr server_info) {
+            auto status = server_info ? server_info->status
+                                      : mojom::PublisherStatus::NOT_VERIFIED;
+            std::move(callback).Run(status);
+          },
+          std::move(callback)));
 }
 
 void Publisher::SetPublisherServerListTimer() {
-  prefix_list_updater_.StartAutoUpdate(
-      [this]() { ledger_->client()->OnPublisherRegistryUpdated(); });
+  prefix_list_updater_.StartAutoUpdate(base::BindRepeating(
+      &Publisher::OnPrefixListUpdated, weak_factory_.GetWeakPtr()));
+}
+
+void Publisher::OnPrefixListUpdated() {
+  engine_->client()->OnPublisherRegistryUpdated();
 }
 
 void Publisher::CalcScoreConsts(const int min_duration_seconds) {
@@ -75,15 +104,15 @@ void Publisher::CalcScoreConsts(const int min_duration_seconds) {
   const double a = (1.0 / (d * 2.0)) - min_duration_big;
   const double b = min_duration_big - a;
 
-  ledger_->state()->SetScoreValues(a, b);
+  engine_->state()->SetScoreValues(a, b);
 }
 
 // courtesy of @dimitry-xyz:
-// https://github.com/brave/ledger/issues/2#issuecomment-221752002
+// https://github.com/brave/engine/issues/2#issuecomment-221752002
 double Publisher::concaveScore(const uint64_t& duration_seconds) {
   uint64_t duration_big = duration_seconds * 100;
   double a, b;
-  ledger_->state()->GetScoreValues(&a, &b);
+  engine_->state()->GetScoreValues(&a, &b);
   return (-b + std::sqrt((b * b) + (a * 4 * duration_big))) / (a * 2);
 }
 
@@ -91,8 +120,6 @@ std::string getProviderName(const std::string& publisher_id) {
   // TODO(anyone) this is for the media stuff
   if (publisher_id.find(YOUTUBE_MEDIA_TYPE) != std::string::npos) {
     return YOUTUBE_MEDIA_TYPE;
-  } else if (publisher_id.find(GITHUB_MEDIA_TYPE) != std::string::npos) {
-    return GITHUB_MEDIA_TYPE;
   }
 
   return "";
@@ -107,25 +134,32 @@ void Publisher::SaveVisit(const std::string& publisher_key,
                           const uint64_t duration,
                           const bool first_visit,
                           uint64_t window_id,
-                          const PublisherInfoCallback callback) {
+                          PublisherInfoCallback callback) {
   if (publisher_key.empty()) {
-    BLOG(0, "Publisher key is empty");
+    engine_->LogError(FROM_HERE) << "Publisher key is empty";
     return;
   }
 
   auto on_server_info =
-      std::bind(&Publisher::OnSaveVisitServerPublisher, this, _1, publisher_key,
-                visit_data, duration, first_visit, window_id, callback);
+      base::BindOnce(&Publisher::OnSaveVisitServerPublisher,
+                     weak_factory_.GetWeakPtr(), publisher_key, visit_data,
+                     duration, first_visit, window_id, std::move(callback));
 
-  ledger_->database()->SearchPublisherPrefixList(
-      publisher_key,
-      [this, publisher_key, on_server_info](bool publisher_exists) {
-        if (publisher_exists) {
-          GetServerPublisherInfo(publisher_key, on_server_info);
-        } else {
-          on_server_info(nullptr);
-        }
-      });
+  engine_->database()->SearchPublisherPrefixList(
+      publisher_key, base::BindOnce(&Publisher::OnSearchPrefixListForSaveVisit,
+                                    weak_factory_.GetWeakPtr(), publisher_key,
+                                    std::move(on_server_info)));
+}
+
+void Publisher::OnSearchPrefixListForSaveVisit(
+    const std::string& publisher_key,
+    GetServerPublisherInfoCallback callback,
+    bool publisher_exists) {
+  if (publisher_exists) {
+    GetServerPublisherInfo(publisher_key, std::move(callback));
+  } else {
+    std::move(callback).Run(nullptr);
+  }
 }
 
 mojom::ActivityInfoFilterPtr Publisher::CreateActivityFilter(
@@ -139,26 +173,26 @@ mojom::ActivityInfoFilterPtr Publisher::CreateActivityFilter(
   filter->id = publisher_id;
   filter->excluded = excluded;
   filter->min_duration =
-      min_duration ? ledger_->state()->GetPublisherMinVisitTime() : 0;
+      min_duration ? engine_->state()->GetPublisherMinVisitTime() : 0;
   filter->reconcile_stamp = current_reconcile_stamp;
   filter->non_verified = non_verified;
   filter->min_visits =
-      min_visits ? ledger_->state()->GetPublisherMinVisits() : 0;
+      min_visits ? engine_->state()->GetPublisherMinVisits() : 0;
 
   return filter;
 }
 
 void Publisher::OnSaveVisitServerPublisher(
-    mojom::ServerPublisherInfoPtr server_info,
     const std::string& publisher_key,
     const mojom::VisitData& visit_data,
     const uint64_t duration,
     const bool first_visit,
     uint64_t window_id,
-    const PublisherInfoCallback callback) {
+    PublisherInfoCallback callback,
+    mojom::ServerPublisherInfoPtr server_info) {
   auto filter = CreateActivityFilter(
       publisher_key, mojom::ExcludeFilter::FILTER_ALL, false,
-      ledger_->state()->GetReconcileStamp(), true, false);
+      engine_->state()->GetReconcileStamp(), true, false);
 
   // we need to do this as I can't move server publisher into final function
   auto status = mojom::PublisherStatus::NOT_VERIFIED;
@@ -167,30 +201,32 @@ void Publisher::OnSaveVisitServerPublisher(
   }
 
   PublisherInfoCallback get_callback =
-      std::bind(&Publisher::SaveVisitInternal, this, status, publisher_key,
-                visit_data, duration, first_visit, window_id, callback, _1, _2);
+      base::BindOnce(&Publisher::SaveVisitInternal, weak_factory_.GetWeakPtr(),
+                     status, publisher_key, visit_data, duration, first_visit,
+                     window_id, std::move(callback));
 
-  auto list_callback = std::bind(&Publisher::OnGetActivityInfo, this, _1,
-                                 get_callback, filter->id);
+  auto list_callback =
+      base::BindOnce(&Publisher::OnGetActivityInfo, weak_factory_.GetWeakPtr(),
+                     std::move(get_callback), filter->id);
 
-  ledger_->database()->GetActivityInfoList(0, 2, std::move(filter),
-                                           list_callback);
+  engine_->database()->GetActivityInfoList(0, 2, std::move(filter),
+                                           std::move(list_callback));
 }
 
-void Publisher::OnGetActivityInfo(std::vector<mojom::PublisherInfoPtr> list,
-                                  PublisherInfoCallback callback,
-                                  const std::string& publisher_key) {
+void Publisher::OnGetActivityInfo(PublisherInfoCallback callback,
+                                  const std::string& publisher_key,
+                                  std::vector<mojom::PublisherInfoPtr> list) {
   if (list.empty()) {
-    ledger_->database()->GetPublisherInfo(publisher_key, callback);
+    engine_->database()->GetPublisherInfo(publisher_key, std::move(callback));
     return;
   }
 
   if (list.size() > 1) {
-    callback(mojom::Result::TOO_MANY_RESULTS, nullptr);
+    std::move(callback).Run(mojom::Result::TOO_MANY_RESULTS, nullptr);
     return;
   }
 
-  callback(mojom::Result::LEDGER_OK, std::move(list[0]));
+  std::move(callback).Run(mojom::Result::OK, std::move(list[0]));
 }
 
 void Publisher::SaveVisitInternal(const mojom::PublisherStatus status,
@@ -199,18 +235,17 @@ void Publisher::SaveVisitInternal(const mojom::PublisherStatus status,
                                   const uint64_t duration,
                                   const bool first_visit,
                                   uint64_t window_id,
-                                  const PublisherInfoCallback callback,
+                                  PublisherInfoCallback callback,
                                   mojom::Result result,
                                   mojom::PublisherInfoPtr publisher_info) {
   DCHECK(result != mojom::Result::TOO_MANY_RESULTS);
-  if (result != mojom::Result::LEDGER_OK &&
-      result != mojom::Result::NOT_FOUND) {
-    BLOG(0, "Visit was not saved " << result);
-    callback(mojom::Result::LEDGER_ERROR, nullptr);
+  if (result != mojom::Result::OK && result != mojom::Result::NOT_FOUND) {
+    engine_->LogError(FROM_HERE) << "Visit was not saved " << result;
+    std::move(callback).Run(mojom::Result::FAILED, nullptr);
     return;
   }
 
-  bool is_verified = IsVerified(status);
+  bool is_verified = status != mojom::PublisherStatus::NOT_VERIFIED;
 
   bool new_publisher = false;
   bool updated_publisher = false;
@@ -226,11 +261,11 @@ void Publisher::SaveVisitInternal(const mojom::PublisherStatus status,
   std::string fav_icon = visit_data.favicon_url;
   if (is_verified && !fav_icon.empty()) {
     if (fav_icon.find(".invalid") == std::string::npos) {
-      ledger_->client()->FetchFavIcon(
+      engine_->client()->FetchFavIcon(
           fav_icon,
           "https://" + base::Uuid::GenerateRandomV4().AsLowercaseString() +
               ".invalid",
-          base::BindOnce(&Publisher::onFetchFavIcon, base::Unretained(this),
+          base::BindOnce(&Publisher::onFetchFavIcon, weak_factory_.GetWeakPtr(),
                          publisher_info->id, window_id));
     } else {
       publisher_info->favicon_url = fav_icon;
@@ -244,7 +279,8 @@ void Publisher::SaveVisitInternal(const mojom::PublisherStatus status,
   publisher_info->url = visit_data.url;
   publisher_info->status = status;
 
-  bool excluded = publisher_info->excluded == mojom::PublisherExclude::EXCLUDED;
+  bool excluded = IsPublisherExcluded(*publisher_info);
+
   bool ignore_time = ignoreMinTime(publisher_key);
   if (duration == 0) {
     ignore_time = false;
@@ -253,44 +289,38 @@ void Publisher::SaveVisitInternal(const mojom::PublisherStatus status,
   mojom::PublisherInfoPtr panel_info = nullptr;
 
   uint64_t min_visit_time =
-      static_cast<uint64_t>(ledger_->state()->GetPublisherMinVisitTime());
+      static_cast<uint64_t>(engine_->state()->GetPublisherMinVisitTime());
 
-  // for new visits that are excluded or are not long enough or ac is off
-  bool min_duration_new = duration < min_visit_time && !ignore_time;
   bool min_duration_ok = duration > min_visit_time || ignore_time;
 
-  if ((new_publisher || updated_publisher) &&
-      (excluded || !ledger_->state()->GetAutoContributeEnabled() ||
-       min_duration_new || !is_verified)) {
+  if (new_publisher || updated_publisher) {
     panel_info = publisher_info->Clone();
 
-    auto publisher_info_saved_callback =
-        std::bind(&Publisher::OnPublisherInfoSaved, this, _1);
-
-    ledger_->database()->SavePublisherInfo(std::move(publisher_info),
-                                           publisher_info_saved_callback);
+    engine_->database()->SavePublisherInfo(
+        std::move(publisher_info),
+        base::BindOnce(&Publisher::OnPublisherInfoSaved,
+                       weak_factory_.GetWeakPtr()));
   } else if (!excluded && min_duration_ok && is_verified) {
     if (first_visit) {
       publisher_info->visits += 1;
     }
     publisher_info->duration += duration;
     publisher_info->score += concaveScore(duration);
-    publisher_info->reconcile_stamp = ledger_->state()->GetReconcileStamp();
+    publisher_info->reconcile_stamp = engine_->state()->GetReconcileStamp();
 
     // Activity queries expect the publisher to exist in the `publisher_info`
     // table. Save the publisher info if it does not already exist.
     if (new_publisher) {
-      ledger_->database()->SavePublisherInfo(publisher_info->Clone(),
-                                             [](mojom::Result) {});
+      engine_->database()->SavePublisherInfo(publisher_info->Clone(),
+                                             base::DoNothing());
     }
 
     panel_info = publisher_info->Clone();
 
-    auto publisher_info_saved_callback =
-        std::bind(&Publisher::OnPublisherInfoSaved, this, _1);
-
-    ledger_->database()->SaveActivityInfo(std::move(publisher_info),
-                                          publisher_info_saved_callback);
+    engine_->database()->SaveActivityInfo(
+        std::move(publisher_info),
+        base::BindOnce(&Publisher::OnPublisherInfoSaved,
+                       weak_factory_.GetWeakPtr()));
   }
 
   if (panel_info) {
@@ -299,11 +329,11 @@ void Publisher::SaveVisitInternal(const mojom::PublisherStatus status,
     }
 
     auto callback_info = panel_info->Clone();
-    callback(mojom::Result::LEDGER_OK, std::move(callback_info));
+    std::move(callback).Run(mojom::Result::OK, std::move(callback_info));
 
     if (window_id > 0) {
-      OnPanelPublisherInfo(mojom::Result::LEDGER_OK, std::move(panel_info),
-                           window_id, visit_data);
+      OnPanelPublisherInfo(window_id, visit_data, mojom::Result::OK,
+                           std::move(panel_info));
     }
   }
 }
@@ -313,40 +343,41 @@ void Publisher::onFetchFavIcon(const std::string& publisher_key,
                                bool success,
                                const std::string& favicon_url) {
   if (!success || favicon_url.empty()) {
-    BLOG(1, "Corrupted favicon file");
+    engine_->Log(FROM_HERE) << "Corrupted favicon file";
     return;
   }
 
-  ledger_->database()->GetPublisherInfo(
-      publisher_key, std::bind(&Publisher::onFetchFavIconDBResponse, this, _1,
-                               _2, favicon_url, window_id));
+  engine_->database()->GetPublisherInfo(
+      publisher_key,
+      base::BindOnce(&Publisher::onFetchFavIconDBResponse,
+                     weak_factory_.GetWeakPtr(), favicon_url, window_id));
 }
 
-void Publisher::onFetchFavIconDBResponse(mojom::Result result,
-                                         mojom::PublisherInfoPtr info,
-                                         const std::string& favicon_url,
-                                         uint64_t window_id) {
-  if (result != mojom::Result::LEDGER_OK || favicon_url.empty()) {
-    BLOG(1, "Missing or corrupted favicon file");
+void Publisher::onFetchFavIconDBResponse(const std::string& favicon_url,
+                                         uint64_t window_id,
+                                         mojom::Result result,
+                                         mojom::PublisherInfoPtr info) {
+  if (result != mojom::Result::OK || favicon_url.empty()) {
+    engine_->Log(FROM_HERE) << "Missing or corrupted favicon file";
     return;
   }
 
   info->favicon_url = favicon_url;
 
-  auto callback = std::bind(&Publisher::OnPublisherInfoSaved, this, _1);
-
-  ledger_->database()->SavePublisherInfo(info->Clone(), callback);
+  engine_->database()->SavePublisherInfo(
+      info->Clone(), base::BindOnce(&Publisher::OnPublisherInfoSaved,
+                                    weak_factory_.GetWeakPtr()));
 
   if (window_id > 0) {
     mojom::VisitData visit_data;
-    OnPanelPublisherInfo(mojom::Result::LEDGER_OK, std::move(info), window_id,
-                         visit_data);
+    OnPanelPublisherInfo(window_id, visit_data, mojom::Result::OK,
+                         std::move(info));
   }
 }
 
 void Publisher::OnPublisherInfoSaved(const mojom::Result result) {
-  if (result != mojom::Result::LEDGER_OK) {
-    BLOG(0, "Publisher info was not saved!");
+  if (result != mojom::Result::OK) {
+    engine_->LogError(FROM_HERE) << "Publisher info was not saved";
     return;
   }
 
@@ -356,63 +387,55 @@ void Publisher::OnPublisherInfoSaved(const mojom::Result result) {
 void Publisher::SetPublisherExclude(const std::string& publisher_id,
                                     const mojom::PublisherExclude& exclude,
                                     ResultCallback callback) {
-  auto get_publisher_info_callback =
-      base::BindOnce(&Publisher::OnSetPublisherExclude, base::Unretained(this),
-                     std::move(callback), exclude);
-
-  ledger_->database()->GetPublisherInfo(
+  engine_->database()->GetPublisherInfo(
       publisher_id,
-      [callback = std::make_shared<decltype(get_publisher_info_callback)>(
-           std::move(get_publisher_info_callback))](
-          mojom::Result result, mojom::PublisherInfoPtr publisher_info) {
-        std::move(*callback).Run(result, std::move(publisher_info));
-      });
+      base::BindOnce(&Publisher::OnSetPublisherExclude,
+                     weak_factory_.GetWeakPtr(), std::move(callback), exclude));
 }
 
 void Publisher::OnSetPublisherExclude(ResultCallback callback,
                                       mojom::PublisherExclude exclude,
                                       mojom::Result result,
                                       mojom::PublisherInfoPtr publisher_info) {
-  if (result != mojom::Result::LEDGER_OK &&
-      result != mojom::Result::NOT_FOUND) {
-    BLOG(0, "Publisher exclude status not saved");
+  if (result != mojom::Result::OK && result != mojom::Result::NOT_FOUND) {
+    engine_->LogError(FROM_HERE) << "Publisher exclude status not saved";
     std::move(callback).Run(result);
     return;
   }
 
   if (!publisher_info) {
-    BLOG(0, "Publisher is null");
-    std::move(callback).Run(mojom::Result::LEDGER_ERROR);
+    engine_->LogError(FROM_HERE) << "Publisher is null";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
   if (publisher_info->excluded == exclude) {
-    std::move(callback).Run(mojom::Result::LEDGER_OK);
+    std::move(callback).Run(mojom::Result::OK);
     return;
   }
 
   publisher_info->excluded = exclude;
 
-  auto save_callback = std::bind(&Publisher::OnPublisherInfoSaved, this, _1);
-  ledger_->database()->SavePublisherInfo(publisher_info->Clone(),
-                                         save_callback);
+  engine_->database()->SavePublisherInfo(
+      publisher_info->Clone(), base::BindOnce(&Publisher::OnPublisherInfoSaved,
+                                              weak_factory_.GetWeakPtr()));
   if (exclude == mojom::PublisherExclude::EXCLUDED) {
-    ledger_->database()->DeleteActivityInfo(publisher_info->id,
-                                            [](const mojom::Result _) {});
+    engine_->database()->DeleteActivityInfo(publisher_info->id,
+                                            base::DoNothing());
   }
-  std::move(callback).Run(mojom::Result::LEDGER_OK);
+  std::move(callback).Run(mojom::Result::OK);
 }
 
 void Publisher::OnRestorePublishers(mojom::Result result,
                                     ResultCallback callback) {
-  if (result != mojom::Result::LEDGER_OK) {
-    BLOG(0, "Could not restore publishers.");
+  if (result != mojom::Result::OK) {
+    engine_->LogError(FROM_HERE) << "Could not restore publishers.";
     std::move(callback).Run(result);
     return;
   }
 
   SynopsisNormalizer();
-  std::move(callback).Run(mojom::Result::LEDGER_OK);
+  std::move(callback).Run(mojom::Result::OK);
 }
 
 void Publisher::NormalizeContributeWinners(
@@ -427,7 +450,7 @@ void Publisher::synopsisNormalizerInternal(
     const std::vector<mojom::PublisherInfoPtr>* list,
     uint32_t /* next_record */) {
   if (list->empty()) {
-    BLOG(1, "Publisher list is empty");
+    engine_->Log(FROM_HERE) << "Publisher list is empty";
     return;
   }
 
@@ -496,11 +519,12 @@ void Publisher::synopsisNormalizerInternal(
 void Publisher::SynopsisNormalizer() {
   auto filter =
       CreateActivityFilter("", mojom::ExcludeFilter::FILTER_ALL_EXCEPT_EXCLUDED,
-                           true, ledger_->state()->GetReconcileStamp(), false,
-                           ledger_->state()->GetPublisherMinVisits());
-  ledger_->database()->GetActivityInfoList(
+                           true, engine_->state()->GetReconcileStamp(), false,
+                           engine_->state()->GetPublisherMinVisits());
+  engine_->database()->GetActivityInfoList(
       0, 0, std::move(filter),
-      std::bind(&Publisher::SynopsisNormalizerCallback, this, _1));
+      base::BindOnce(&Publisher::SynopsisNormalizerCallback,
+                     weak_factory_.GetWeakPtr()));
 }
 
 void Publisher::SynopsisNormalizerCallback(
@@ -512,12 +536,8 @@ void Publisher::SynopsisNormalizerCallback(
     save_list.push_back(item.Clone());
   }
 
-  ledger_->database()->NormalizeActivityInfoList(std::move(save_list),
-                                                 [](const mojom::Result) {});
-}
-
-bool Publisher::IsVerified(mojom::PublisherStatus status) {
-  return status != mojom::PublisherStatus::NOT_VERIFIED;
+  engine_->database()->NormalizeActivityInfoList(std::move(save_list),
+                                                 base::DoNothing());
 }
 
 void Publisher::GetPublisherActivityFromUrl(uint64_t windowId,
@@ -527,14 +547,12 @@ void Publisher::GetPublisherActivityFromUrl(uint64_t windowId,
     return;
   }
 
-  const bool is_media = visit_data->domain == YOUTUBE_DOMAIN ||
-                        visit_data->domain == GITHUB_DOMAIN;
+  const bool is_media = !base::FeatureList::IsEnabled(
+                            features::kPlatformCreatorDetectionFeature) &&
+                        visit_data->domain == YOUTUBE_DOMAIN;
 
   if (is_media && visit_data->path != "" && visit_data->path != "/") {
     std::string type = YOUTUBE_MEDIA_TYPE;
-    if (visit_data->domain == GITHUB_DOMAIN) {
-      type = GITHUB_MEDIA_TYPE;
-    }
 
     if (!visit_data->url.empty()) {
       visit_data->url.pop_back();
@@ -542,20 +560,21 @@ void Publisher::GetPublisherActivityFromUrl(uint64_t windowId,
 
     visit_data->url += visit_data->path;
 
-    ledger_->media()->GetMediaActivityFromUrl(windowId, std::move(visit_data),
+    engine_->media()->GetMediaActivityFromUrl(windowId, std::move(visit_data),
                                               type, publisher_blob);
     return;
   }
 
   auto filter = CreateActivityFilter(
       visit_data->domain, mojom::ExcludeFilter::FILTER_ALL, false,
-      ledger_->state()->GetReconcileStamp(), true, false);
+      engine_->state()->GetReconcileStamp(), true, false);
 
   visit_data->favicon_url = "";
 
-  ledger_->database()->GetPanelPublisherInfo(
-      std::move(filter), std::bind(&Publisher::OnPanelPublisherInfo, this, _1,
-                                   _2, windowId, *visit_data));
+  engine_->database()->GetPanelPublisherInfo(
+      std::move(filter),
+      base::BindOnce(&Publisher::OnPanelPublisherInfo,
+                     weak_factory_.GetWeakPtr(), windowId, *visit_data));
 }
 
 void Publisher::OnSaveVisitInternal(mojom::Result result,
@@ -563,27 +582,24 @@ void Publisher::OnSaveVisitInternal(mojom::Result result,
   // TODO(nejczdovc): handle if needed
 }
 
-void Publisher::OnPanelPublisherInfo(mojom::Result result,
-                                     mojom::PublisherInfoPtr info,
-                                     uint64_t windowId,
-                                     const mojom::VisitData& visit_data) {
-  if (result == mojom::Result::LEDGER_OK) {
-    ledger_->client()->OnPanelPublisherInfo(result, std::move(info), windowId);
+void Publisher::OnPanelPublisherInfo(uint64_t windowId,
+                                     const mojom::VisitData& visit_data,
+                                     mojom::Result result,
+                                     mojom::PublisherInfoPtr info) {
+  if (result == mojom::Result::OK) {
+    engine_->client()->OnPanelPublisherInfo(result, std::move(info), windowId);
     return;
   }
 
   if (result == mojom::Result::NOT_FOUND && !visit_data.domain.empty()) {
-    auto callback = std::bind(&Publisher::OnSaveVisitInternal, this, _1, _2);
-
-    SaveVisit(visit_data.domain, visit_data, 0, true, windowId, callback);
+    SaveVisit(visit_data.domain, visit_data, 0, true, windowId,
+              base::BindOnce(&Publisher::OnSaveVisitInternal,
+                             weak_factory_.GetWeakPtr()));
   }
 }
 
 void Publisher::GetPublisherBanner(const std::string& publisher_key,
                                    GetPublisherBannerCallback callback) {
-  const auto banner_callback = std::bind(&Publisher::OnGetPublisherBanner, this,
-                                         _1, publisher_key, callback);
-
   // NOTE: We do not attempt to search the prefix list before getting
   // the publisher data because if the prefix list was not properly
   // loaded then the user would not see the correct banner information
@@ -591,12 +607,15 @@ void Publisher::GetPublisherBanner(const std::string& publisher_key,
   // requested this information by interacting with the UI, we should
   // make a best effort to return correct and updated information even
   // if the prefix list is incorrect.
-  GetServerPublisherInfo(publisher_key, banner_callback);
+  GetServerPublisherInfo(
+      publisher_key, base::BindOnce(&Publisher::OnGetPublisherBanner,
+                                    weak_factory_.GetWeakPtr(), publisher_key,
+                                    std::move(callback)));
 }
 
-void Publisher::OnGetPublisherBanner(mojom::ServerPublisherInfoPtr info,
-                                     const std::string& publisher_key,
-                                     GetPublisherBannerCallback callback) {
+void Publisher::OnGetPublisherBanner(const std::string& publisher_key,
+                                     GetPublisherBannerCallback callback,
+                                     mojom::ServerPublisherInfoPtr info) {
   auto banner = mojom::PublisherBanner::New();
 
   if (info) {
@@ -609,11 +628,10 @@ void Publisher::OnGetPublisherBanner(mojom::ServerPublisherInfoPtr info,
 
   banner->publisher_key = publisher_key;
 
-  const auto publisher_callback =
-      std::bind(&Publisher::OnGetPublisherBannerPublisher, this, callback,
-                *banner, _1, _2);
-
-  ledger_->database()->GetPublisherInfo(publisher_key, publisher_callback);
+  engine_->database()->GetPublisherInfo(
+      publisher_key,
+      base::BindOnce(&Publisher::OnGetPublisherBannerPublisher,
+                     weak_factory_.GetWeakPtr(), std::move(callback), *banner));
 }
 
 void Publisher::OnGetPublisherBannerPublisher(
@@ -623,9 +641,9 @@ void Publisher::OnGetPublisherBannerPublisher(
     mojom::PublisherInfoPtr publisher_info) {
   auto new_banner = mojom::PublisherBanner::New(banner);
 
-  if (!publisher_info || result != mojom::Result::LEDGER_OK) {
-    BLOG(0, "Publisher info not found");
-    callback(std::move(new_banner));
+  if (!publisher_info || result != mojom::Result::OK) {
+    engine_->LogError(FROM_HERE) << "Publisher info not found";
+    std::move(callback).Run(std::move(new_banner));
     return;
   }
 
@@ -636,126 +654,101 @@ void Publisher::OnGetPublisherBannerPublisher(
     new_banner->logo = publisher_info->favicon_url;
   }
 
-  callback(std::move(new_banner));
+  std::move(callback).Run(std::move(new_banner));
 }
 
 void Publisher::GetServerPublisherInfo(
     const std::string& publisher_key,
-    database::GetServerPublisherInfoCallback callback) {
+    GetServerPublisherInfoCallback callback) {
   GetServerPublisherInfo(publisher_key, false, std::move(callback));
 }
 
 void Publisher::GetServerPublisherInfo(
     const std::string& publisher_key,
     bool use_prefix_list,
-    database::GetServerPublisherInfoCallback callback) {
-  ledger_->database()->GetServerPublisherInfo(
-      publisher_key, std::bind(&Publisher::OnServerPublisherInfoLoaded, this,
-                               _1, publisher_key, use_prefix_list, callback));
+    GetServerPublisherInfoCallback callback) {
+  engine_->database()->GetServerPublisherInfo(
+      publisher_key, base::BindOnce(&Publisher::OnServerPublisherInfoLoaded,
+                                    weak_factory_.GetWeakPtr(), publisher_key,
+                                    use_prefix_list, std::move(callback)));
 }
 
 void Publisher::OnServerPublisherInfoLoaded(
-    mojom::ServerPublisherInfoPtr server_info,
     const std::string& publisher_key,
     bool use_prefix_list,
-    database::GetServerPublisherInfoCallback callback) {
+    GetServerPublisherInfoCallback callback,
+    mojom::ServerPublisherInfoPtr server_info) {
   if (!server_info && use_prefix_list) {
     // If we don't have a record in the database for this publisher, search the
     // prefix list. If the prefix list indicates that the publisher is likely
     // registered, then fetch the publisher data.
-    ledger_->database()->SearchPublisherPrefixList(
-        publisher_key, [this, publisher_key, callback](bool publisher_exists) {
-          if (publisher_exists) {
-            FetchServerPublisherInfo(
-                publisher_key, [callback](mojom::ServerPublisherInfoPtr info) {
-                  callback(std::move(info));
-                });
-          } else {
-            callback(nullptr);
-          }
-        });
+    engine_->database()->SearchPublisherPrefixList(
+        publisher_key,
+        base::BindOnce(&Publisher::OnSearchPrefixListForGetServerPublisherInfo,
+                       weak_factory_.GetWeakPtr(), publisher_key,
+                       std::move(callback)));
     return;
   }
 
   if (ShouldFetchServerPublisherInfo(server_info.get())) {
-    // Store the current server publisher info so that if fetching fails
+    // Pass the current server publisher info so that if fetching fails
     // we can execute the callback with the last known valid data.
-    auto shared_info =
-        std::make_shared<mojom::ServerPublisherInfoPtr>(std::move(server_info));
-
     FetchServerPublisherInfo(
         publisher_key,
-        [shared_info, callback](mojom::ServerPublisherInfoPtr info) {
-          callback(std::move(info ? info : *shared_info));
-        });
+        base::BindOnce(
+            [](GetServerPublisherInfoCallback callback,
+               mojom::ServerPublisherInfoPtr stored_info,
+               mojom::ServerPublisherInfoPtr info) {
+              std::move(callback).Run(std::move(info ? info : stored_info));
+            },
+            std::move(callback), std::move(server_info)));
     return;
   }
 
-  callback(std::move(server_info));
+  std::move(callback).Run(std::move(server_info));
 }
 
-void Publisher::UpdateMediaDuration(const uint64_t window_id,
-                                    const std::string& publisher_key,
-                                    const uint64_t duration,
-                                    const bool first_visit) {
-  BLOG(1, "Media duration: " << duration);
-  ledger_->database()->GetPublisherInfo(
-      publisher_key,
-      std::bind(&Publisher::OnGetPublisherInfoForUpdateMediaDuration, this, _1,
-                _2, window_id, duration, first_visit));
-}
-
-void Publisher::OnGetPublisherInfoForUpdateMediaDuration(
-    mojom::Result result,
-    mojom::PublisherInfoPtr info,
-    const uint64_t window_id,
-    const uint64_t duration,
-    const bool first_visit) {
-  if (result != mojom::Result::LEDGER_OK) {
-    BLOG(0, "Failed to retrieve publisher info while updating media duration");
-    return;
+void Publisher::OnSearchPrefixListForGetServerPublisherInfo(
+    const std::string& publisher_key,
+    GetServerPublisherInfoCallback callback,
+    bool publisher_exists) {
+  if (publisher_exists) {
+    FetchServerPublisherInfo(publisher_key, std::move(callback));
+  } else {
+    std::move(callback).Run(nullptr);
   }
-
-  mojom::VisitData visit_data;
-  visit_data.name = info->name;
-  visit_data.url = info->url;
-  visit_data.provider = info->provider;
-  visit_data.favicon_url = info->favicon_url;
-
-  SaveVisit(info->id, visit_data, duration, first_visit, 0,
-            [](mojom::Result, mojom::PublisherInfoPtr) {});
 }
 
 void Publisher::GetPublisherPanelInfo(const std::string& publisher_key,
                                       GetPublisherPanelInfoCallback callback) {
   auto filter = CreateActivityFilter(
       publisher_key, mojom::ExcludeFilter::FILTER_ALL, false,
-      ledger_->state()->GetReconcileStamp(), true, false);
+      engine_->state()->GetReconcileStamp(), true, false);
 
-  ledger_->database()->GetPanelPublisherInfo(
+  engine_->database()->GetPanelPublisherInfo(
       std::move(filter),
-      std::bind(&Publisher::OnGetPanelPublisherInfo, this, _1, _2, callback));
+      base::BindOnce(&Publisher::OnGetPanelPublisherInfo,
+                     weak_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-void Publisher::OnGetPanelPublisherInfo(
-    const mojom::Result result,
-    mojom::PublisherInfoPtr info,
-    GetPublisherPanelInfoCallback callback) {
-  if (result != mojom::Result::LEDGER_OK) {
-    BLOG(0, "Failed to retrieve panel publisher info");
-    callback(result, nullptr);
+void Publisher::OnGetPanelPublisherInfo(GetPublisherPanelInfoCallback callback,
+                                        const mojom::Result result,
+                                        mojom::PublisherInfoPtr info) {
+  if (result != mojom::Result::OK) {
+    engine_->LogError(FROM_HERE) << "Failed to retrieve panel publisher info";
+    std::move(callback).Run(result, nullptr);
     return;
   }
 
-  callback(result, std::move(info));
+  std::move(callback).Run(result, std::move(info));
 }
 
 void Publisher::SavePublisherInfo(uint64_t window_id,
                                   mojom::PublisherInfoPtr publisher_info,
-                                  LegacyResultCallback callback) {
+                                  ResultCallback callback) {
   if (!publisher_info || publisher_info->id.empty()) {
-    BLOG(0, "Publisher key is missing for url");
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->LogError(FROM_HERE) << "Publisher key is missing for url";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
@@ -767,19 +760,19 @@ void Publisher::SavePublisherInfo(uint64_t window_id,
     visit_data.favicon_url = publisher_info->favicon_url;
   }
 
-  auto banner_callback =
-      std::bind(&Publisher::OnGetPublisherBannerForSavePublisherInfo, this, _1,
-                window_id, publisher_info->id, visit_data, callback);
-
-  GetPublisherBanner(publisher_info->id, banner_callback);
+  GetPublisherBanner(
+      publisher_info->id,
+      base::BindOnce(&Publisher::OnGetPublisherBannerForSavePublisherInfo,
+                     weak_factory_.GetWeakPtr(), window_id, publisher_info->id,
+                     visit_data, std::move(callback)));
 }
 
 void Publisher::OnGetPublisherBannerForSavePublisherInfo(
-    mojom::PublisherBannerPtr banner,
     uint64_t window_id,
     const std::string& publisher_key,
     const mojom::VisitData& visit_data,
-    LegacyResultCallback callback) {
+    ResultCallback callback,
+    mojom::PublisherBannerPtr banner) {
   mojom::VisitData new_visit_data = visit_data;
 
   if (banner && !banner->logo.empty()) {
@@ -790,9 +783,15 @@ void Publisher::OnGetPublisherBannerForSavePublisherInfo(
   }
 
   SaveVisit(publisher_key, new_visit_data, 0, true, window_id,
-            [callback](auto result, mojom::PublisherInfoPtr publisher_info) {
-              callback(result);
-            });
+            base::BindOnce(&Publisher::OnSaveVisitForSavePublisherInfo,
+                           weak_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void Publisher::OnSaveVisitForSavePublisherInfo(
+    ResultCallback callback,
+    mojom::Result result,
+    mojom::PublisherInfoPtr publisher_info) {
+  std::move(callback).Run(result);
 }
 
 // static

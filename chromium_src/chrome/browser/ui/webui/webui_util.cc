@@ -22,19 +22,15 @@ bool IsChromeUntrustedDataSource(content::WebUIDataSource* source) {
       base::StrCat(
           {content::kChromeUIUntrustedScheme, url::kStandardSchemeSeparator}));
 
-  return base::StartsWith(source->GetSource(),
-                          *kChromeUntrustedSourceNamePrefix,
-                          base::CompareCase::SENSITIVE);
+  return source->GetSource().starts_with(*kChromeUntrustedSourceNamePrefix);
 }
 
 constexpr char kBraveCSP[] =
-    "script-src chrome://resources "
-    "chrome://test "
+    "script-src chrome://resources chrome://webui-test "
     "'self';";
 
 constexpr char kBraveUntrustedCSP[] =
     "script-src chrome-untrusted://resources "
-    "chrome://test "
     "'self';";
 }  // namespace
 

@@ -5,6 +5,7 @@
 
 package org.chromium.chrome.browser.brave_news;
 
+import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
@@ -26,6 +27,7 @@ import org.chromium.chrome.browser.brave_news.models.FeedItemCard;
 import org.chromium.chrome.browser.brave_news.models.FeedItemsCard;
 import org.chromium.chrome.browser.preferences.BravePrefServiceBridge;
 import org.chromium.chrome.browser.settings.BraveNewsPreferencesDataListener;
+import org.chromium.chrome.browser.settings.BraveNewsPreferencesV2;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,7 +55,6 @@ public class BraveNewsUtils {
         if (items.getFeedItems() != null) {
             for (FeedItemCard itemCard : items.getFeedItems()) {
                 FeedItem item = itemCard.getFeedItem();
-                FeedItemMetadata itemMetaData = new FeedItemMetadata();
                 if (item.which() == FeedItem.Tag.PromotedArticle) {
                     PromotedArticle promotedArticle = item.getPromotedArticle();
                     creativeInstanceId = promotedArticle.creativeInstanceId;
@@ -87,6 +88,7 @@ public class BraveNewsUtils {
 
     // method for logging news object. works by putting Log.d in the desired places of the parsing
     // of the object
+    @SuppressWarnings("UnusedVariable")
     public static void logFeedItem(FeedItemsCard items, String id) {
         if (items != null) {
             if (items.getCardType() == CardType.DISPLAY_AD) {
@@ -126,9 +128,16 @@ public class BraveNewsUtils {
         }
     }
 
-    public static boolean shouldDisplayNews() {
+    public static boolean shouldDisplayNewsFeed() {
         return BravePrefServiceBridge.getInstance().getShowNews()
                 && BravePrefServiceBridge.getInstance().getNewsOptIn();
+    }
+
+    public static boolean shouldDisplayNewsOptin() {
+        return BravePrefServiceBridge.getInstance().getShowNews()
+                && !BravePrefServiceBridge.getInstance().getNewsOptIn()
+                && ContextUtils.getAppSharedPreferences().getBoolean(
+                        BraveNewsPreferencesV2.PREF_SHOW_OPTIN, true);
     }
 
     public static void setChannelIcons() {
@@ -210,11 +219,13 @@ public class BraveNewsUtils {
 
     public static void setFollowingPublisherList() {
         List<Publisher> publisherList = new ArrayList<>();
-        for (Publisher publisher : mGlobalPublisherList) {
-            if (publisher.userEnabledStatus == UserEnabled.ENABLED
-                    || (publisher.type == PublisherType.DIRECT_SOURCE
-                            && publisher.userEnabledStatus != UserEnabled.DISABLED)) {
-                publisherList.add(publisher);
+        if (mGlobalPublisherList != null && mGlobalPublisherList.size() > 0) {
+            for (Publisher publisher : mGlobalPublisherList) {
+                if (publisher.userEnabledStatus == UserEnabled.ENABLED
+                        || (publisher.type == PublisherType.DIRECT_SOURCE
+                                && publisher.userEnabledStatus != UserEnabled.DISABLED)) {
+                    publisherList.add(publisher);
+                }
             }
         }
         mFollowingPublisherList = publisherList;
@@ -235,11 +246,13 @@ public class BraveNewsUtils {
 
     public static void setFollowingChannelList() {
         List<Channel> channelList = new ArrayList<>();
-        for (Channel channel : mChannelList) {
-            List<String> subscribedLocalesList =
-                    new ArrayList<>(Arrays.asList(channel.subscribedLocales));
-            if (subscribedLocalesList.contains(mLocale)) {
-                channelList.add(channel);
+        if (mChannelList != null && mChannelList.size() > 0) {
+            for (Channel channel : mChannelList) {
+                List<String> subscribedLocalesList =
+                        new ArrayList<>(Arrays.asList(channel.subscribedLocales));
+                if (subscribedLocalesList.contains(mLocale)) {
+                    channelList.add(channel);
+                }
             }
         }
         mFollowingChannelList = channelList;
@@ -251,9 +264,11 @@ public class BraveNewsUtils {
 
     public static List<Channel> searchChannel(String search) {
         List<Channel> channelList = new ArrayList<>();
-        for (Channel channel : mChannelList) {
-            if (channel.channelName.toLowerCase(Locale.ROOT).contains(search)) {
-                channelList.add(channel);
+        if (mChannelList != null && mChannelList.size() > 0) {
+            for (Channel channel : mChannelList) {
+                if (channel.channelName.toLowerCase(Locale.ROOT).contains(search)) {
+                    channelList.add(channel);
+                }
             }
         }
         return channelList;
@@ -261,12 +276,14 @@ public class BraveNewsUtils {
 
     public static List<Publisher> searchPublisher(String search) {
         List<Publisher> publisherList = new ArrayList<>();
-        for (Publisher publisher : mGlobalPublisherList) {
-            if (publisher.publisherName.toLowerCase(Locale.ROOT).contains(search)
-                    || publisher.categoryName.toLowerCase(Locale.ROOT).contains(search)
-                    || publisher.feedSource.url.toLowerCase(Locale.ROOT).contains(search)
-                    || publisher.siteUrl.url.toLowerCase(Locale.ROOT).contains(search)) {
-                publisherList.add(publisher);
+        if (mGlobalPublisherList != null && mGlobalPublisherList.size() > 0) {
+            for (Publisher publisher : mGlobalPublisherList) {
+                if (publisher.publisherName.toLowerCase(Locale.ROOT).contains(search)
+                        || publisher.categoryName.toLowerCase(Locale.ROOT).contains(search)
+                        || publisher.feedSource.url.toLowerCase(Locale.ROOT).contains(search)
+                        || publisher.siteUrl.url.toLowerCase(Locale.ROOT).contains(search)) {
+                    publisherList.add(publisher);
+                }
             }
         }
 

@@ -8,7 +8,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/test/bind.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -538,7 +538,7 @@ class HSTSSameDomainPartitionUsesOldFormatBrowserTest
   static bool IsPreTest() {
     const ::testing::TestInfo* const test_info =
         ::testing::UnitTest::GetInstance()->current_test_info();
-    return base::StartsWith(test_info->name(), "PRE_");
+    return std::string_view(test_info->name()).starts_with("PRE_");
   }
 
  private:

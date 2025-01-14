@@ -10,10 +10,10 @@
 #include <string>
 
 #include "base/observer_list.h"
-#include "brave/components/brave_ads/core/ads_client_notifier_observer.h"
 #include "brave/components/brave_ads/core/internal/catalog/catalog_observer.h"
 #include "brave/components/brave_ads/core/internal/catalog/catalog_url_request_delegate.h"
 #include "brave/components/brave_ads/core/internal/database/database_manager_observer.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client_notifier_observer.h"
 
 namespace brave_ads {
 
@@ -29,9 +29,6 @@ class Catalog final : public AdsClientNotifierObserver,
   Catalog(const Catalog&) = delete;
   Catalog& operator=(const Catalog&) = delete;
 
-  Catalog(Catalog&&) noexcept = delete;
-  Catalog& operator=(Catalog&&) noexcept = delete;
-
   ~Catalog() override;
 
   void AddObserver(CatalogObserver* observer);
@@ -46,8 +43,8 @@ class Catalog final : public AdsClientNotifierObserver,
 
   void MaybeFetchCatalog() const;
 
-  void NotifyDidUpdateCatalog(const CatalogInfo& catalog) const;
-  void NotifyFailedToUpdateCatalog() const;
+  void NotifyDidFetchCatalog(const CatalogInfo& catalog) const;
+  void NotifyFailedToFetchCatalog() const;
 
   // AdsClientNotifierObserver:
   void OnNotifyDidInitializeAds() override;

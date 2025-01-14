@@ -1,15 +1,13 @@
 <style include="cr-shared-style settings-shared iron-flex">
-  :root {
-    --brave-primary-hover: #ff977d;
+  :host {
     --selected-background-color: #F8F9FA;
     --table-header-background-color: #E9E9F4;
     --tinted-color: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #FFFFFF 97.4%);
     --text02: #495057;
-    font-family: Poppins;
   }
 
   @media (prefers-color-scheme: dark) {
-    :root {
+    :host {
       --selected-background-color: #222325;
       --table-header-background-color: #3B3E4F;
       --tinted-color: linear-gradient(180deg, rgba(41, 42, 45, 0) 0%, #292a2d 97.4%);
@@ -24,6 +22,7 @@
 
   .label.shields-primary-title {
     font-size: 16px;
+    font-family: Poppins,sans-serif;
     font-weight: 500;
     margin: 24px 0 8px 0;
   }
@@ -86,8 +85,18 @@
     font-weight: 500;
   }
 
-  .show-list-button-box {
+  .list-actions-box {
+    display: flex;
     margin-bottom: 10px;
+    gap: 8px;
+  }
+
+  .update-lists-updated {
+    --leo-button-color: var(--leo-color-systemfeedback-success-text);
+  }
+
+  .update-lists-failed {
+    --leo-button-color: var(--leo-color-systemfeedback-error-text);
   }
 
   .subscribe-url-form {
@@ -173,7 +182,7 @@
           value="{{filterListTitle}}"
         >
           <span id="search-box" slot="inline-suffix">
-            <iron-icon icon="brave_leo:magnifying-glass"></iron-icon>
+            <iron-icon icon="search"></iron-icon>
           </span>
         </cr-input>
         <div class$="filter-list-box expanded-[[hasListExpanded_]]">
@@ -186,11 +195,38 @@
             </div>
           </template>
         </div>
-        <template is="dom-if" if="[[!hasListExpanded_]]">
-          <div class="show-list-button-box">
-            <cr-button on-click="handleShowList_">$i18n{adblockShowFullListsButtonLabel}</cr-button>
+        <div class="list-actions-box">
+          <template is="dom-if" if="[[!hasListExpanded_]]">
+            <div>
+              <cr-button on-click="handleShowList_">$i18n{adblockShowFullListsButtonLabel}</cr-button>
+            </div>
+          </template>
+          <div class$="update-lists-[[listsUpdatingState_]]">
+            <template is="dom-if" if="[[!listsUpdatingState_]]">
+              <cr-button on-click="handleUpdateLists_">
+                <span>$i18n{adblockUpdateListsButtonLabel}</span>
+              </cr-button>
+            </template>
+            <template is="dom-if" if="[[isEqual_(listsUpdatingState_, 'updating')]]">
+              <cr-button on-click="handleUpdateLists_">
+                <leo-progressring slot="prefix-icon"></leo-progressring>
+                <span>$i18n{adblockUpdateListsUpdatingButtonLabel}</span>
+              </cr-button>
+            </template>
+            <template is="dom-if" if="[[isEqual_(listsUpdatingState_, 'updated')]]">
+              <cr-button on-click="handleUpdateLists_">
+                <leo-icon name="check-circle-outline" slot="prefix-icon"></leo-icon>
+                <span>$i18n{adblockUpdateListsUpdatedButtonLabel}</span>
+              </cr-button>
+            </template>
+            <template is="dom-if" if="[[isEqual_(listsUpdatingState_, 'failed')]]">
+              <cr-button on-click="handleUpdateLists_">
+                <leo-icon name="warning-circle-outline" slot="prefix-icon"></leo-icon>
+                <span>$i18n{adblockUpdateListsRetryButtonLabel}</span>
+              </cr-button>
+            </template>
           </div>
-        </template>
+        </div>
     </div>
   </div>
   <div class="settings-box">
@@ -280,6 +316,14 @@
       </template>
     </div>
 </div>
+
+<settings-toggle-button
+  class="cr-row"
+  pref="{{prefs.brave.ad_block.developer_mode}}"
+  label="$i18n{adblockDeveloperModeLabel}"
+  sub-label="$i18n{adblockDeveloperModeDesc}">
+</settings-toggle-button>
+
 <div class="settings-box">
   <div class="flex">
     <div class="label shields-primary-title">
@@ -287,8 +331,20 @@
     </div>
     <div class="label secondary shields-secondary-title" inner-h-t-m-l="[[getStringHtml_('adblockCustomFiltersDesc', 'https://support.brave.com/hc/en-us/articles/6449369961741')]]"></div>
     <adblock-filter-editor
+      prefs="{{prefs}}"
       value="{{customFilters_}}"
       on-save="handleSave_"
     ></adblock-filter-editor>
   </div>
 </div>
+
+<template is="dom-if" if="[[cosmeticFilteringCustomScriptletsEnabled_]]">
+  <div class="settings-box">
+    <div class="flex">
+      <div class="label shields-primary-title">
+        $i18n{adblockCustomSciptletsListLabel}
+      </div>
+      <adblock-scriptlet-list prefs="{{prefs}}"></adblock-scriptlet-list>
+    </div>
+  </div>
+</template>

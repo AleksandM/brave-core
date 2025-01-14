@@ -2,8 +2,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
-import * as BraveNews from '../../../api/brave_news'
-import { BraveNewsControllerRemote } from '../../../api/brave_news'
+import * as BraveNews from '../../../../brave_news/browser/resources/shared/api'
+import { BraveNewsControllerRemote } from '../../../../brave_news/browser/resources/shared/api'
 
 // Generate feed page from real data in devtools:
 // let pids = [
@@ -192,8 +192,10 @@ export const feed: BraveNews.Feed = {
     promotedArticle: undefined,
     deal: undefined,
     article: {
+      isDiscover: true,
       data: {
         categoryName: 'Top News',
+        channels: ['Top News'],
         description: 'Here\'s everything you need to know about the Haunted Hallows event, including how to unlock the Batmobile.',
         image: { imageUrl: { url: 'https://placekitten.com/1360/912' }, paddedImageUrl: undefined },
         publishTime: { internalValue: BigInt('13278618001000000') },
@@ -201,6 +203,7 @@ export const feed: BraveNews.Feed = {
         publisherName: 'Newsweek',
         relativeTimeDescription: '1 hour ago',
         urlHash: '',
+        popScore: 0,
         score: 14.200669212327124,
         title: '\'Rocket League\' Haunted Hallows 2021: Details Revealed and How to Unlock Batmobile Cars',
         url: { url: 'https://www.newsweek.com/rocket-league-haunted-hallows-halloween-2021-batmobile-price-date-1638020' }
@@ -217,8 +220,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Sports',
+                  'channels': ['Sports'],
                   'publishTime': {
                     internalValue: BigInt('13278621116000000')
                   },
@@ -236,6 +241,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'ESPN',
+                  popScore: 0,
                   'score': 10.00343277763486,
                   'relativeTimeDescription': '31 minutes ago'
                 }
@@ -250,8 +256,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Sports',
+                  'channels': ['Sports'],
                   'publishTime': {
                     internalValue: BigInt('13278620426000000')
                   },
@@ -269,6 +277,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'fc5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'ESPN - Football',
+                  popScore: 0,
                   'score': 10.649119373004728,
                   'relativeTimeDescription': '43 minutes ago'
                 }
@@ -283,8 +292,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Technology',
+                  'channels': ['Technology'],
                   'publishTime': {
                     internalValue: BigInt('13278621733000000')
                   },
@@ -302,6 +313,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'The Verge',
+                  popScore: 0,
                   'score': 14.170018256553691,
                   'relativeTimeDescription': '21 minutes ago'
                 }
@@ -311,8 +323,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Science',
+                  'channels': ['Science'],
                   'publishTime': {
                     internalValue: BigInt('13278621699000000')
                   },
@@ -330,6 +344,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Futurity',
+                  popScore: 0,
                   'score': 14.226233174417557,
                   'relativeTimeDescription': '22 minutes ago'
                 }
@@ -346,6 +361,7 @@ export const feed: BraveNews.Feed = {
               promotedArticle: {
                 'data': {
                   'categoryName': 'Brave Partners',
+                  'channels': ['Brave Partners'],
                   'publishTime': {
                     internalValue: BigInt('13278621628000000')
                   },
@@ -363,6 +379,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'a5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'The Motley Fool',
+                  popScore: 0,
                   'score': 14.338672770645763,
                   'relativeTimeDescription': '23 minutes ago'
                 },
@@ -378,8 +395,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Top News',
+                  'channels': ['Top News'],
                   'publishTime': {
                     internalValue: BigInt('13278621613000000')
                   },
@@ -397,6 +416,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'BBC',
+                  popScore: 0,
                   'score': 14.361647694838718,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -406,8 +426,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Top News',
+                  'channels': ['Top News'],
                   'publishTime': {
                     internalValue: BigInt('13278621600000000')
                   },
@@ -425,6 +447,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'd4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Sydney Morning Herald',
+                  popScore: 0,
                   'score': 14.381381289249747,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -434,8 +457,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Top News',
+                  'channels': ['Top News'],
                   'publishTime': {
                     internalValue: BigInt('13278621533000000')
                   },
@@ -453,6 +478,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'eb4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Daily Caller',
+                  popScore: 0,
                   'score': 14.479957341206271,
                   'relativeTimeDescription': '24 minutes ago'
                 }
@@ -467,8 +493,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Business',
+                  'channels': ['Business'],
                   'publishTime': {
                     internalValue: BigInt('13278621684000000')
                   },
@@ -486,6 +514,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'eb4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'CNBC',
+                  popScore: 0,
                   'score': 14.250519019150758,
                   'relativeTimeDescription': '22 minutes ago'
                 }
@@ -500,8 +529,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Cars',
+                  'channels': ['Cars'],
                   'publishTime': {
                     internalValue: BigInt('13278621683000000')
                   },
@@ -519,6 +550,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'eb4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Carscoops',
+                  popScore: 0,
                   'score': 14.252130607208834,
                   'relativeTimeDescription': '22 minutes ago'
                 }
@@ -533,8 +565,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Home',
+                  'channels': ['Home'],
                   'publishTime': {
                     internalValue: BigInt('13278621634000000')
                   },
@@ -552,6 +586,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'eb4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Design Milk',
+                  popScore: 0,
                   'score': 14.329404416919667,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -561,8 +596,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Entertainment',
+                  'channels': ['Entertainment'],
                   'publishTime': {
                     internalValue: BigInt('13278621632000000')
                   },
@@ -580,6 +617,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'fc5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Deadline',
+                  popScore: 0,
                   'score': 14.332498680036917,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -594,8 +632,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Entertainment',
+                  'channels': ['Entertainment'],
                   'publishTime': {
                     internalValue: BigInt('13278621625000000')
                   },
@@ -613,6 +653,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'c5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'IndieWire',
+                  popScore: 0,
                   'score': 14.343289731415563,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -622,8 +663,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Entertainment',
+                  'channels': ['Entertainment'],
                   'publishTime': {
                     internalValue: BigInt('13278621617000000')
                   },
@@ -641,6 +684,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'a5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'TVLine',
+                  popScore: 0,
                   'score': 14.355544195642704,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -659,8 +703,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Science',
+                  'channels': ['Science'],
                   'publishTime': {
                     internalValue: BigInt('13278621608000000')
                   },
@@ -678,6 +724,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'c5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Phys.org',
+                  popScore: 0,
                   'score': 14.369246557105962,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -692,8 +739,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Sports',
+                  'channels': ['Sports'],
                   'publishTime': {
                     internalValue: BigInt('13278621606000000')
                   },
@@ -711,6 +760,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'd4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Bleacher Report',
+                  popScore: 0,
                   'score': 14.372285656733615,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -725,8 +775,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Entertainment',
+                  'channels': ['Entertainment'],
                   'publishTime': {
                     internalValue: BigInt('13278621605000000')
                   },
@@ -744,6 +796,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'b4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Hollywood Life',
+                  popScore: 0,
                   'score': 14.373802033258967,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -753,8 +806,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Entertainment',
+                  'channels': ['Entertainment'],
                   'publishTime': {
                     internalValue: BigInt('13278618574000000')
                   },
@@ -772,6 +827,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'd4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Hollywood Life',
+                  popScore: 0,
                   'score': 67.03023810006357,
                   'relativeTimeDescription': '1 hour ago'
                 }
@@ -781,8 +837,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Entertainment',
+                  'channels': ['Entertainment'],
                   'publishTime': {
                     internalValue: BigInt('13278617426000000')
                   },
@@ -800,6 +858,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'c5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Hollywood Life',
+                  popScore: 0,
                   'score': 137.80582500043627,
                   'relativeTimeDescription': '2 hours ago'
                 }
@@ -814,8 +873,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Technology',
+                  'channels': ['Technology'],
                   'publishTime': {
                     internalValue: BigInt('13278621600000000')
                   },
@@ -833,6 +894,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Windows Central',
+                  popScore: 0,
                   'score': 14.381363717462444,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -842,8 +904,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Technology',
+                  'channels': ['Technology'],
                   'publishTime': {
                     internalValue: BigInt('13278621600000000')
                   },
@@ -861,6 +925,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Android Central',
+                  popScore: 0,
                   'score': 14.381366799582283,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -875,8 +940,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Technology',
+                  'channels': ['Technology'],
                   'publishTime': {
                     internalValue: BigInt('13278621600000000')
                   },
@@ -894,6 +961,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'c5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Lifehacker',
+                  popScore: 0,
                   'score': 14.38136972344708,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -910,6 +978,7 @@ export const feed: BraveNews.Feed = {
               deal: {
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13258305902000000')
                   },
@@ -927,6 +996,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Offers',
+                  popScore: 0,
                   'score': 33.65394030598059,
                   'relativeTimeDescription': '235 days ago'
                 },
@@ -939,6 +1009,7 @@ export const feed: BraveNews.Feed = {
               deal: {
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13258305902000000')
                   },
@@ -956,6 +1027,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'c5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Offers',
+                  popScore: 0,
                   'score': 67.3078806123441,
                   'relativeTimeDescription': '235 days ago'
                 },
@@ -968,6 +1040,7 @@ export const feed: BraveNews.Feed = {
               deal: {
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13258305902000000')
                   },
@@ -985,6 +1058,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'd4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Offers',
+                  popScore: 0,
                   'score': 134.6157612254411,
                   'relativeTimeDescription': '235 days ago'
                 },
@@ -1000,8 +1074,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Top News',
+                  'channels': ['Top News'],
                   'publishTime': {
                     internalValue: BigInt('13278609481000000')
                   },
@@ -1019,6 +1095,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'The Washington Times',
+                  popScore: 0,
                   'score': 304.21157985954886,
                   'relativeTimeDescription': '4 hours ago'
                 }
@@ -1033,8 +1110,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Health',
+                  'channels': ['Health'],
                   'publishTime': {
                     internalValue: BigInt('13278602700000000')
                   },
@@ -1052,6 +1131,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'b4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Men\'s Health',
+                  popScore: 0,
                   'score': 81223.05671641101,
                   'relativeTimeDescription': '6 hours ago'
                 }
@@ -1061,8 +1141,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Entertainment',
+                  'channels': ['Entertainment'],
                   'publishTime': {
                     internalValue: BigInt('13278618011000000')
                   },
@@ -1080,6 +1162,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Us Weekly',
+                  popScore: 0,
                   'score': 544.0267160210122,
                   'relativeTimeDescription': '1 hour ago'
                 }
@@ -1098,8 +1181,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Sports',
+                  'channels': ['Sports'],
                   'publishTime': {
                     internalValue: BigInt('13278621600000000')
                   },
@@ -1117,6 +1202,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'eb4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Goal.com',
+                  popScore: 0,
                   'score': 14.381372591543293,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -1131,8 +1217,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Culture',
+                  'channels': ['Culture'],
                   'publishTime': {
                     internalValue: BigInt('13278621600000000')
                   },
@@ -1150,6 +1238,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'The Root',
+                  popScore: 0,
                   'score': 14.381375498821068,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -1164,8 +1253,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Business',
+                  'channels': ['Business'],
                   'publishTime': {
                     internalValue: BigInt('13278621593000000')
                   },
@@ -1183,6 +1274,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'fc5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Seeking Alpha',
+                  popScore: 0,
                   'score': 14.391950109691049,
                   'relativeTimeDescription': '23 minutes ago'
                 }
@@ -1192,8 +1284,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Sports',
+                  'channels': ['Sports'],
                   'publishTime': {
                     internalValue: BigInt('13278621564000000')
                   },
@@ -1211,6 +1305,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'd4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'The Athletic',
+                  popScore: 0,
                   'score': 14.434964041654474,
                   'relativeTimeDescription': '24 minutes ago'
                 }
@@ -1227,6 +1322,7 @@ export const feed: BraveNews.Feed = {
               promotedArticle: {
                 'data': {
                   'categoryName': 'Brave Partners',
+                  'channels': ['Brave Partners'],
                   'publishTime': {
                     internalValue: BigInt('13278528021000000')
                   },
@@ -1244,6 +1340,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'b4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Ahrefs',
+                  popScore: 0,
                   'score': 22.921395422138495,
                   'relativeTimeDescription': '1 day ago'
                 },
@@ -1259,8 +1356,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13276800071000000')
                   },
@@ -1278,6 +1377,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'b4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Blog',
+                  popScore: 0,
                   'score': 28.831838413657156,
                   'relativeTimeDescription': '21 days ago'
                 }
@@ -1287,8 +1387,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13276723068000000')
                   },
@@ -1306,6 +1408,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Blog',
+                  popScore: 0,
                   'score': 57.82917689204489,
                   'relativeTimeDescription': '22 days ago'
                 }
@@ -1315,8 +1418,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13276712102000000')
                   },
@@ -1334,6 +1439,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Blog',
+                  popScore: 0,
                   'score': 115.70439692971131,
                   'relativeTimeDescription': '22 days ago'
                 }
@@ -1348,8 +1454,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Entertainment',
+                  'channels': ['Entertainment'],
                   'publishTime': {
                     internalValue: BigInt('13278621540000000')
                   },
@@ -1367,6 +1475,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'd4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'The A.V. Club',
+                  popScore: 0,
                   'score': 14.469881193573206,
                   'relativeTimeDescription': '24 minutes ago'
                 }
@@ -1381,8 +1490,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Business',
+                  'channels': ['Business'],
                   'publishTime': {
                     internalValue: BigInt('13278621540000000')
                   },
@@ -1400,6 +1511,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'a5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'WSJ - Markets',
+                  popScore: 0,
                   'score': 14.469883937507502,
                   'relativeTimeDescription': '24 minutes ago'
                 }
@@ -1414,8 +1526,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Top News',
+                  'channels': ['Top News'],
                   'publishTime': {
                     internalValue: BigInt('13278621508000000')
                   },
@@ -1433,6 +1547,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'The Daily Beast',
+                  popScore: 0,
                   'score': 14.515511304097387,
                   'relativeTimeDescription': '25 minutes ago'
                 }
@@ -1442,8 +1557,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Health',
+                  'channels': ['Health'],
                   'publishTime': {
                     internalValue: BigInt('13278621506000000')
                   },
@@ -1461,6 +1578,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'a5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'SELF',
+                  popScore: 0,
                   'score': 14.518330759046432,
                   'relativeTimeDescription': '25 minutes ago'
                 }
@@ -1475,8 +1593,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Business',
+                  'channels': ['Business'],
                   'publishTime': {
                     internalValue: BigInt('13278621467000000')
                   },
@@ -1494,6 +1614,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'b4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Business Insider',
+                  popScore: 0,
                   'score': 14.572489911501611,
                   'relativeTimeDescription': '25 minutes ago'
                 }
@@ -1503,8 +1624,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Top News',
+                  'channels': ['Top News'],
                   'publishTime': {
                     internalValue: BigInt('13278621435000000')
                   },
@@ -1522,6 +1645,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'fc5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Newsweek',
+                  popScore: 0,
                   'score': 14.615857594582533,
                   'relativeTimeDescription': '26 minutes ago'
                 }
@@ -1540,8 +1664,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Technology',
+                  'channels': ['Technology'],
                   'publishTime': {
                     internalValue: BigInt('13278621421000000')
                   },
@@ -1559,6 +1685,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'a5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'GSMArena',
+                  popScore: 0,
                   'score': 14.634541104175572,
                   'relativeTimeDescription': '26 minutes ago'
                 }
@@ -1573,8 +1700,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Business',
+                  'channels': ['Business'],
                   'publishTime': {
                     internalValue: BigInt('13278621420000000')
                   },
@@ -1592,6 +1721,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'MarketWatch',
+                  popScore: 0,
                   'score': 14.635871140907735,
                   'relativeTimeDescription': '26 minutes ago'
                 }
@@ -1606,8 +1736,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Culture',
+                  'channels': ['Culture'],
                   'publishTime': {
                     internalValue: BigInt('13278621400000000')
                   },
@@ -1625,6 +1757,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'eb4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'VICE',
+                  popScore: 0,
                   'score': 14.662245395018518,
                   'relativeTimeDescription': '27 minutes ago'
                 }
@@ -1634,8 +1767,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Culture',
+                  'channels': ['Culture'],
                   'publishTime': {
                     internalValue: BigInt('13278620323000000')
                   },
@@ -1653,6 +1788,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'c5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'VICE',
+                  popScore: 0,
                   'score': 31.45969721478307,
                   'relativeTimeDescription': '45 minutes ago'
                 }
@@ -1662,8 +1798,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Culture',
+                  'channels': ['Culture'],
                   'publishTime': {
                     internalValue: BigInt('13278620305000000')
                   },
@@ -1681,6 +1819,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'VICE',
+                  popScore: 0,
                   'score': 62.9745088197745,
                   'relativeTimeDescription': '45 minutes ago'
                 }
@@ -1695,8 +1834,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Sports',
+                  'channels': ['Sports'],
                   'publishTime': {
                     internalValue: BigInt('13278621373000000')
                   },
@@ -1714,6 +1855,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'eb4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'ESPN - Cricket',
+                  popScore: 0,
                   'score': 14.697300142885872,
                   'relativeTimeDescription': '27 minutes ago'
                 }
@@ -1723,8 +1865,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Top News',
+                  'channels': ['Top News'],
                   'publishTime': {
                     internalValue: BigInt('13278621361000000')
                   },
@@ -1742,6 +1886,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'c5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Daily Mail',
+                  popScore: 0,
                   'score': 14.712686451514855,
                   'relativeTimeDescription': '27 minutes ago'
                 }
@@ -1756,8 +1901,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Technology',
+                  'channels': ['Technology'],
                   'publishTime': {
                     internalValue: BigInt('13278621350000000')
                   },
@@ -1775,6 +1922,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'a5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'VentureBeat',
+                  popScore: 0,
                   'score': 14.726687401901625,
                   'relativeTimeDescription': '27 minutes ago'
                 }
@@ -1791,6 +1939,7 @@ export const feed: BraveNews.Feed = {
               deal: {
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13256920996000000')
                   },
@@ -1808,6 +1957,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Offers',
+                  popScore: 0,
                   'score': 270.2865946654164,
                   'relativeTimeDescription': '251 days ago'
                 },
@@ -1820,6 +1970,7 @@ export const feed: BraveNews.Feed = {
               deal: {
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13256920996000000')
                   },
@@ -1837,6 +1988,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'fc5eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Offers',
+                  popScore: 0,
                   'score': 540.5731893340486,
                   'relativeTimeDescription': '251 days ago'
                 },
@@ -1849,6 +2001,7 @@ export const feed: BraveNews.Feed = {
               deal: {
                 'data': {
                   'categoryName': 'Brave',
+                  'channels': ['Brave'],
                   'publishTime': {
                     internalValue: BigInt('13256920996000000')
                   },
@@ -1866,6 +2019,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'b4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Brave Offers',
+                  popScore: 0,
                   'score': 1081.146378673966,
                   'relativeTimeDescription': '251 days ago'
                 },
@@ -1881,8 +2035,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Cars',
+                  'channels': ['Cars'],
                   'publishTime': {
                     internalValue: BigInt('13278542934000000')
                   },
@@ -1900,6 +2056,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Electrek',
+                  popScore: 0,
                   'score': 23121.416404237974,
                   'relativeTimeDescription': '22 hours ago'
                 }
@@ -1914,8 +2071,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Business',
+                  'channels': ['Business'],
                   'publishTime': {
                     internalValue: BigInt('13278518400000000')
                   },
@@ -1933,6 +2092,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': '4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'Harvard Business Review',
+                  popScore: 0,
                   'score': 5917.313882859709,
                   'relativeTimeDescription': '1 day ago'
                 }
@@ -1942,8 +2102,10 @@ export const feed: BraveNews.Feed = {
               promotedArticle: undefined,
               deal: undefined,
               article: {
+                isDiscover: true,
                 'data': {
                   'categoryName': 'Top News',
+                  'channels': ['Top News'],
                   'publishTime': {
                     internalValue: BigInt('13278596700000000')
                   },
@@ -1961,6 +2123,7 @@ export const feed: BraveNews.Feed = {
                   },
                   'publisherId': 'eb4eece347713f329f156cd0204cf9b12629f1dc8f4ea3c1b67984cfbfd66cdca5',
                   'publisherName': 'WSJ',
+                  popScore: 0,
                   'score': 325.5895923286794,
                   'relativeTimeDescription': '7 hours ago'
                 }
@@ -1974,19 +2137,19 @@ export const feed: BraveNews.Feed = {
 }
 
 export const mockBraveNewsController: Partial<BraveNewsControllerRemote> = {
-  async getLocale () {
+  async getLocale() {
     return { locale: 'en-US' }
   },
 
-  async getFeed () {
+  async getFeed() {
     return { feed }
   },
 
-  async getPublishers () {
+  async getPublishers() {
     return { publishers }
   },
 
-  async getChannels () {
+  async getChannels() {
     const channelNames = Object.values(publishers).reduce((prev, next) => {
       for (const locale of next.locales) {
         for (const channel of locale.channels) {
@@ -2002,19 +2165,19 @@ export const mockBraveNewsController: Partial<BraveNewsControllerRemote> = {
     }
   },
 
-  async setChannelSubscribed (channelId, subscribed) {
+  async setChannelSubscribed(channelId, subscribed) {
     return { updated: { ...(await mockBraveNewsController.getChannels!())[channelId], subscribed } }
   },
 
-  async findFeeds () {
+  async findFeeds() {
     return { results: [] }
   },
 
-  async subscribeToNewDirectFeed () {
+  async subscribeToNewDirectFeed() {
     return { isValidFeed: false, isDuplicate: false, publishers: await mockBraveNewsController.getChannels!() }
   },
 
-  async setPublisherPref (publisherId, newStatus) {
+  async setPublisherPref(publisherId, newStatus) {
     publishers[publisherId].userEnabledStatus = newStatus
     return {
       newStatus

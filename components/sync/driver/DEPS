@@ -1,5 +1,0 @@
-include_rules = [
-  "+brave/components/constants",
-  "+brave/components/sync/test",
-  "+services/network/public",
-]

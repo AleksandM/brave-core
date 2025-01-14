@@ -8,11 +8,7 @@
 #include "base/strings/string_number_conversions.h"
 #include "crypto/sha2.h"
 
-namespace brave_rewards::internal {
-namespace publisher {
-
-const size_t kMinPrefixSize = 4;
-const size_t kMaxPrefixSize = 32;
+namespace brave_rewards::internal::publisher {
 
 std::string GetHashPrefixRaw(const std::string& publisher_key,
                              size_t prefix_size) {
@@ -29,5 +25,4 @@ std::string GetHashPrefixInHex(const std::string& publisher_key,
   return base::HexEncode(raw.data(), raw.size());
 }
 
-}  // namespace publisher
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::publisher

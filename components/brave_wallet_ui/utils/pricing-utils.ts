@@ -4,23 +4,22 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 // Types/constants
+import { SKIP_PRICE_LOOKUP_COINGECKO_ID } from '../common/constants/magics'
 import {
   SpotPriceRegistry,
-  BraveWallet
+  BraveWallet,
+  externalWalletProviders,
+  SupportedTestNetworks
 } from '../constants/types'
 
 // Utils
 import Amount from './amount'
-import { getPriceIdForToken } from './api-utils'
 
 export const getTokenPriceFromRegistry = (
   spotPriceRegistry: SpotPriceRegistry,
   token: Pick<
     BraveWallet.BlockchainToken,
-    | 'symbol'
-    | 'contractAddress'
-    | 'chainId'
-    | 'coingeckoId'
+    'symbol' | 'contractAddress' | 'chainId' | 'coingeckoId' | 'isShielded'
   >
 ): BraveWallet.AssetPrice | undefined => {
   return spotPriceRegistry[getPriceIdForToken(token)]
@@ -30,16 +29,20 @@ export const getTokenPriceAmountFromRegistry = (
   spotPriceRegistry: SpotPriceRegistry,
   token: Pick<
     BraveWallet.BlockchainToken,
-    'symbol' | 'contractAddress' | 'chainId' | 'coingeckoId'
+    'symbol' | 'contractAddress' | 'chainId' | 'coingeckoId' | 'isShielded'
   >
 ) => {
   const value = getTokenPriceFromRegistry(spotPriceRegistry, token)
   return value ? new Amount(value.price) : Amount.zero()
 }
 
-export const computeFiatAmount = ({ spotPriceRegistry, value, token }: {
-  spotPriceRegistry?: SpotPriceRegistry,
-  value: string,
+export const computeFiatAmount = ({
+  spotPriceRegistry,
+  value,
+  token
+}: {
+  spotPriceRegistry?: SpotPriceRegistry
+  value: string
   token: Pick<
     BraveWallet.BlockchainToken,
     | 'symbol'
@@ -48,8 +51,13 @@ export const computeFiatAmount = ({ spotPriceRegistry, value, token }: {
     | 'chainId'
     | 'coin'
     | 'decimals'
+    | 'isShielded'
   >
 }): Amount => {
+  if (!spotPriceRegistry && value === '0') {
+    return Amount.zero()
+  }
+
   if (!spotPriceRegistry || !value) {
     return Amount.empty()
   }
@@ -64,10 +72,13 @@ export const computeFiatAmount = ({ spotPriceRegistry, value, token }: {
     .times(price.price)
 }
 
-export const computeFiatAmountToAssetValue = (
-  { spotPriceRegistry, value, token }: {
-  spotPriceRegistry?: SpotPriceRegistry,
-  value: string,
+export const computeFiatAmountToAssetValue = ({
+  spotPriceRegistry,
+  value,
+  token
+}: {
+  spotPriceRegistry?: SpotPriceRegistry
+  value: string
   token: Pick<
     BraveWallet.BlockchainToken,
     | 'symbol'
@@ -76,6 +87,7 @@ export const computeFiatAmountToAssetValue = (
     | 'chainId'
     | 'coin'
     | 'decimals'
+    | 'isShielded'
   >
 }): Amount => {
   if (!spotPriceRegistry || !value) {
@@ -88,4 +100,30 @@ export const computeFiatAmountToAssetValue = (
   }
 
   return new Amount(value).div(priceInfo.price).times(1)
+}
+
+export const getPriceIdForToken = (
+  token: Pick<
+    BraveWallet.BlockchainToken,
+    'contractAddress' | 'symbol' | 'coingeckoId' | 'chainId' | 'isShielded'
+  >
+) => {
+  if (token?.coingeckoId) {
+    return token.coingeckoId.toLowerCase()
+  }
+
+  // Skip price of testnet tokens
+  if (SupportedTestNetworks.includes(token.chainId)) {
+    return SKIP_PRICE_LOOKUP_COINGECKO_ID
+  }
+
+  const isEthereumNetwork = token.chainId === BraveWallet.MAINNET_CHAIN_ID
+  if (
+    (isEthereumNetwork || externalWalletProviders.includes(token.chainId)) &&
+    token.contractAddress
+  ) {
+    return token.contractAddress.toLowerCase()
+  }
+
+  return token.symbol.toLowerCase()
 }

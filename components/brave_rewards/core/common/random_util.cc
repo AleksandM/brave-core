@@ -8,11 +8,13 @@
 #include "base/base64url.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "crypto/random.h"
 #include "crypto/sha2.h"
 
 namespace {
+
+constexpr size_t kLengthHexString = 32;
 
 std::string EncodeStringForPKCE(const std::string& data) {
   std::string encoded_data;
@@ -27,17 +29,11 @@ std::string EncodeStringForPKCE(const std::string& data) {
 
 }  // namespace
 
-namespace brave_rewards::internal {
-namespace util {
+namespace brave_rewards::internal::util {
 
 std::string GenerateRandomHexString() {
-  if (is_testing) {
-    return "123456789";
-  }
-
-  const size_t kLength = 32;
-  uint8_t bytes[kLength];
-  crypto::RandBytes(bytes, sizeof(bytes));
+  uint8_t bytes[kLengthHexString];
+  crypto::RandBytes(bytes);
   return base::HexEncode(bytes, sizeof(bytes));
 }
 
@@ -49,5 +45,4 @@ std::string GeneratePKCECodeChallenge(const std::string& code_verifier) {
   return EncodeStringForPKCE(crypto::SHA256HashString(code_verifier));
 }
 
-}  // namespace util
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::util

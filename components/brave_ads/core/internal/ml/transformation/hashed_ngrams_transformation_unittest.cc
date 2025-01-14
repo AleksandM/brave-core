@@ -5,7 +5,7 @@
 
 #include "brave/components/brave_ads/core/internal/ml/transformation/hashed_ngrams_transformation.h"
 
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
 #include "brave/components/brave_ads/core/internal/ml/data/text_data.h"
 #include "brave/components/brave_ads/core/internal/ml/data/vector_data.h"
 
@@ -13,7 +13,21 @@
 
 namespace brave_ads::ml {
 
-class BraveAdsHashedNGramsTransformationTest : public UnitTestBase {};
+class BraveAdsHashedNGramsTransformationTest : public test::TestBase {};
+
+TEST_F(BraveAdsHashedNGramsTransformationTest, WrongInputDataTest) {
+  // Arrange
+  const std::unique_ptr<Data> vector_data =
+      std::make_unique<VectorData>(std::vector<float>(1.0F));
+
+  const HashedNGramsTransformation hashed_ngrams;
+
+  // Act
+  const std::unique_ptr<Data> output_data = hashed_ngrams.Apply(vector_data);
+
+  // Assert
+  EXPECT_FALSE(output_data.get());
+}
 
 TEST_F(BraveAdsHashedNGramsTransformationTest, HashingTest) {
   // Arrange
@@ -26,18 +40,16 @@ TEST_F(BraveAdsHashedNGramsTransformationTest, HashingTest) {
 
   // Act
   const std::unique_ptr<Data> hashed_data = hashed_ngrams.Apply(text_data);
-
   ASSERT_EQ(hashed_data->GetType(), DataType::kVector);
 
   const VectorData* const hashed_vector_data =
       static_cast<VectorData*>(hashed_data.get());
-
-  // Assert
-  // 10000 is the default size
   ASSERT_EQ(kDefaultBucketCount, hashed_vector_data->GetDimensionCount());
 
-  // Hashes for [t, i, n, y, ti, in, ny, tin, iny, tiny] -- 10 in total
-  EXPECT_EQ(10U, hashed_vector_data->GetData().size());
+  // Assert
+  EXPECT_THAT(hashed_vector_data->GetData(),
+              ::testing::SizeIs(10));  // Hashes for [t, i, n, y, ti, in, ny,
+                                       // tin, iny, tiny] -- 10 in total
 }
 
 TEST_F(BraveAdsHashedNGramsTransformationTest, CustomHashingTest) {
@@ -47,20 +59,20 @@ TEST_F(BraveAdsHashedNGramsTransformationTest, CustomHashingTest) {
   const std::unique_ptr<Data> text_data =
       std::make_unique<TextData>(kTestString);
 
-  const HashedNGramsTransformation hashed_ngrams(kHashBucketCount,
-                                                 std::vector<int>{1, 2, 3});
+  const HashedNGramsTransformation hashed_ngrams(
+      kHashBucketCount, std::vector<uint32_t>{1, 2, 3});
 
   // Act
   const std::unique_ptr<Data> hashed_data = hashed_ngrams.Apply(text_data);
-
   ASSERT_EQ(DataType::kVector, hashed_data->GetType());
 
   const VectorData* const hashed_vector_data =
       static_cast<VectorData*>(hashed_data.get());
+  ASSERT_EQ(kHashBucketCount, hashed_vector_data->GetDimensionCount());
 
   // Assert
-  ASSERT_EQ(kHashBucketCount, hashed_vector_data->GetDimensionCount());
-  EXPECT_EQ(kHashBucketCount, hashed_vector_data->GetData().size());
+  EXPECT_THAT(hashed_vector_data->GetData(),
+              ::testing::SizeIs(kHashBucketCount));
 }
 
 }  // namespace brave_ads::ml

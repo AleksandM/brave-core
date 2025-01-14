@@ -8,11 +8,11 @@
 
 #include <string>
 
-#include "base/functional/callback_forward.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom-forward.h"
-#include "brave/components/brave_ads/core/ads_client_callback.h"
+#include "base/functional/callback.h"
 #include "brave/components/brave_ads/core/internal/creatives/creative_ad_info.h"
 #include "brave/components/brave_ads/core/internal/database/database_table_interface.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom-forward.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client_callback.h"
 
 namespace brave_ads::database::table {
 
@@ -23,8 +23,8 @@ using GetCreativeAdCallback =
 
 class CreativeAds final : public TableInterface {
  public:
-  void InsertOrUpdate(mojom::DBTransactionInfo* transaction,
-                      const CreativeAdList& creative_ads);
+  void Insert(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
+              const CreativeAdList& creative_ads);
 
   void Delete(ResultCallback callback) const;
 
@@ -33,12 +33,15 @@ class CreativeAds final : public TableInterface {
 
   std::string GetTableName() const override;
 
-  void Create(mojom::DBTransactionInfo* transaction) override;
-  void Migrate(mojom::DBTransactionInfo* transaction, int to_version) override;
+  void Create(const mojom::DBTransactionInfoPtr& mojom_db_transaction) override;
+  void Migrate(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
+               int to_version) override;
 
  private:
-  std::string BuildInsertOrUpdateSql(mojom::DBCommandInfo* command,
-                                     const CreativeAdList& creative_ads) const;
+  void MigrateToV45(const mojom::DBTransactionInfoPtr& mojom_db_transaction);
+
+  std::string BuildInsertSql(const mojom::DBActionInfoPtr& mojom_db_action,
+                             const CreativeAdList& creative_ads) const;
 };
 
 }  // namespace brave_ads::database::table

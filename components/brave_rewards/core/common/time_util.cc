@@ -6,10 +6,10 @@
 #include "brave/components/brave_rewards/core/common/time_util.h"
 
 #include <algorithm>
-#include "brave_base/random.h"
 
-namespace brave_rewards::internal {
-namespace util {
+#include "brave/vendor/brave_base/random.h"
+
+namespace brave_rewards::internal::util {
 
 mojom::ActivityMonth GetCurrentMonth() {
   base::Time now = base::Time::Now();
@@ -34,7 +34,7 @@ uint32_t GetYear(const base::Time& time) {
 }
 
 uint64_t GetCurrentTimeStamp() {
-  return static_cast<uint64_t>(base::Time::Now().ToDoubleT());
+  return static_cast<uint64_t>(base::Time::Now().InSecondsFSinceUnixEpoch());
 }
 
 base::TimeDelta GetRandomizedDelay(base::TimeDelta delay) {
@@ -49,5 +49,4 @@ base::TimeDelta GetRandomizedDelayWithBackoff(base::TimeDelta delay,
   return GetRandomizedDelay(std::min(delay, max_delay));
 }
 
-}  // namespace util
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::util

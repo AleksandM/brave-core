@@ -6,12 +6,12 @@
 #include "brave/browser/ui/brave_icon_with_badge_image_source.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 #include "base/strings/utf_string_conversions.h"
 #include "cc/paint/paint_flags.h"
 #include "chrome/grit/theme_resources.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/gfx/canvas.h"
@@ -33,9 +33,6 @@ constexpr int kMaxIncrementAttempts = 5;
 }  // namespace
 
 namespace brave {
-
-const SkColor kBadgeNotificationBG = SkColorSetRGB(0xfb, 0x54, 0x2b);
-const SkColor kBadgeTextColor = SK_ColorWHITE;
 
 BraveIconWithBadgeImageSource::BraveIconWithBadgeImageSource(
     const gfx::Size& size,
@@ -193,16 +190,16 @@ gfx::Rect BraveIconWithBadgeImageSource::GetIconAreaRect() const {
   return gfx::Rect(size());
 }
 
-absl::optional<int> BraveIconWithBadgeImageSource::GetCustomGraphicSize() {
+std::optional<int> BraveIconWithBadgeImageSource::GetCustomGraphicSize() {
   return content_image_size_;
 }
 
-absl::optional<int> BraveIconWithBadgeImageSource::GetCustomGraphicXOffset() {
+std::optional<int> BraveIconWithBadgeImageSource::GetCustomGraphicXOffset() {
   return std::floor(
       (image_left_margin_extra_ + size().width() - content_image_size_) / 2.0);
 }
 
-absl::optional<int> BraveIconWithBadgeImageSource::GetCustomGraphicYOffset() {
+std::optional<int> BraveIconWithBadgeImageSource::GetCustomGraphicYOffset() {
   return std::floor((size().height() - content_image_size_) / 2.0);
 }
 

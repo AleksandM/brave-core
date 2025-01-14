@@ -9,7 +9,9 @@
 #include <vector>
 
 #define GetAccountsInCookieJar GetAccountsInCookieJar_Unused
+#define PrepareForAddingNewAccount PrepareForAddingNewAccount_Unused
 #include "src/components/signin/public/identity_manager/identity_manager.cc"
+#undef PrepareForAddingNewAccount
 #undef GetAccountsInCookieJar
 
 namespace signin {
@@ -17,8 +19,10 @@ namespace signin {
 AccountsInCookieJarInfo IdentityManager::GetAccountsInCookieJar() const {
   // accounts_in_cookie_jar_info.accounts_are_fresh must be false,
   // see `SyncServiceImpl::OnEngineInitialized`
-  return AccountsInCookieJarInfo(false, std::vector<gaia::ListedAccount>(),
+  return AccountsInCookieJarInfo(/*accounts_are_fresh=*/false,
                                  std::vector<gaia::ListedAccount>());
 }
+
+void IdentityManager::PrepareForAddingNewAccount() {}
 
 }  // namespace signin

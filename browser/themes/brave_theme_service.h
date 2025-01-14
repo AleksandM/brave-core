@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include "base/gtest_prod_util.h"
 #include "chrome/browser/themes/theme_service.h"
 
 namespace extensions {
@@ -20,6 +21,9 @@ class BraveThemeService : public ThemeService {
  public:
   explicit BraveThemeService(Profile* profile, const ThemeHelper& theme_helper);
   ~BraveThemeService() override;
+
+  // ThemeService:
+  bool GetIsGrayscale() const override;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(BraveThemeEventRouterBrowserTest, ThemeChangeTest);

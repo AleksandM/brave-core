@@ -5,13 +5,16 @@
 
 #include "brave/components/brave_ads/core/internal/creatives/segments_database_table.h"
 
+#include <cstddef>
 #include <utility>
 
 #include "base/check.h"
+#include "base/location.h"
 #include "base/strings/string_util.h"
-#include "brave/components/brave_ads/core/internal/common/database/database_bind_util.h"
+#include "brave/components/brave_ads/core/internal/common/database/database_column_util.h"
 #include "brave/components/brave_ads/core/internal/common/database/database_table_util.h"
 #include "brave/components/brave_ads/core/internal/common/database/database_transaction_util.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads::database::table {
 
@@ -19,84 +22,75 @@ namespace {
 
 constexpr char kTableName[] = "segments";
 
-size_t BindParameters(mojom::DBCommandInfo* command,
-                      const CreativeAdList& creative_ads) {
-  CHECK(command);
+size_t BindColumns(const mojom::DBActionInfoPtr& mojom_db_action,
+                   const CreativeAdList& creative_ads) {
+  CHECK(mojom_db_action);
+  CHECK(!creative_ads.empty());
 
-  size_t count = 0;
+  size_t row_count = 0;
 
   int index = 0;
   for (const auto& creative_ad : creative_ads) {
-    BindString(command, index++, creative_ad.creative_set_id);
-    BindString(command, index++, base::ToLowerASCII(creative_ad.segment));
+    BindColumnString(mojom_db_action, index++, creative_ad.creative_set_id);
+    BindColumnString(mojom_db_action, index++, creative_ad.segment);
 
-    count++;
+    ++row_count;
   }
 
-  return count;
-}
-
-void MigrateToV29(mojom::DBTransactionInfo* transaction) {
-  CHECK(transaction);
-
-  DropTable(transaction, "segments");
-
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::EXECUTE;
-  command->sql =
-      "CREATE TABLE segments (creative_set_id TEXT NOT NULL, segment TEXT NOT "
-      "NULL, PRIMARY KEY (creative_set_id, segment), UNIQUE(creative_set_id, "
-      "segment) ON CONFLICT REPLACE);";
-  transaction->commands.push_back(std::move(command));
+  return row_count;
 }
 
 }  // namespace
 
-void Segments::InsertOrUpdate(mojom::DBTransactionInfo* transaction,
-                              const CreativeAdList& creative_ads) {
-  CHECK(transaction);
+void Segments::Insert(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
+                      const CreativeAdList& creative_ads) {
+  CHECK(mojom_db_transaction);
 
   if (creative_ads.empty()) {
     return;
   }
 
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::RUN;
-  command->sql = BuildInsertOrUpdateSql(&*command, creative_ads);
-  transaction->commands.push_back(std::move(command));
+  mojom::DBActionInfoPtr mojom_db_action = mojom::DBActionInfo::New();
+  mojom_db_action->type = mojom::DBActionInfo::Type::kRunStatement;
+  mojom_db_action->sql = BuildInsertSql(mojom_db_action, creative_ads);
+  mojom_db_transaction->actions.push_back(std::move(mojom_db_action));
 }
 
 void Segments::Delete(ResultCallback callback) const {
-  mojom::DBTransactionInfoPtr transaction = mojom::DBTransactionInfo::New();
+  mojom::DBTransactionInfoPtr mojom_db_transaction =
+      mojom::DBTransactionInfo::New();
 
-  DeleteTable(&*transaction, GetTableName());
+  DeleteTable(mojom_db_transaction, GetTableName());
 
-  RunTransaction(std::move(transaction), std::move(callback));
+  RunDBTransaction(FROM_HERE, std::move(mojom_db_transaction),
+                   std::move(callback));
 }
 
 std::string Segments::GetTableName() const {
   return kTableName;
 }
 
-void Segments::Create(mojom::DBTransactionInfo* transaction) {
-  CHECK(transaction);
+void Segments::Create(const mojom::DBTransactionInfoPtr& mojom_db_transaction) {
+  CHECK(mojom_db_transaction);
 
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::EXECUTE;
-  command->sql =
-      "CREATE TABLE segments (creative_set_id TEXT NOT NULL, "
-      "segment TEXT NOT NULL, PRIMARY KEY (creative_set_id, segment), "
-      "UNIQUE(creative_set_id, segment) ON CONFLICT REPLACE);";
-  transaction->commands.push_back(std::move(command));
+  Execute(mojom_db_transaction, R"(
+      CREATE TABLE segments (
+        creative_set_id TEXT NOT NULL,
+        segment TEXT NOT NULL,
+        PRIMARY KEY (
+          creative_set_id,
+          segment
+        ) ON CONFLICT REPLACE
+      );)");
 }
 
-void Segments::Migrate(mojom::DBTransactionInfo* transaction,
-                       const int to_version) {
-  CHECK(transaction);
+void Segments::Migrate(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
+                       int to_version) {
+  CHECK(mojom_db_transaction);
 
   switch (to_version) {
-    case 29: {
-      MigrateToV29(transaction);
+    case 45: {
+      MigrateToV45(mojom_db_transaction);
       break;
     }
   }
@@ -104,17 +98,32 @@ void Segments::Migrate(mojom::DBTransactionInfo* transaction,
 
 ///////////////////////////////////////////////////////////////////////////////
 
-std::string Segments::BuildInsertOrUpdateSql(
-    mojom::DBCommandInfo* command,
-    const CreativeAdList& creative_ads) const {
-  CHECK(command);
+void Segments::MigrateToV45(
+    const mojom::DBTransactionInfoPtr& mojom_db_transaction) {
+  CHECK(mojom_db_transaction);
 
-  const size_t binded_parameters_count = BindParameters(command, creative_ads);
+  // We can safely recreate the table because it will be repopulated after
+  // downloading the catalog.
+  DropTable(mojom_db_transaction, GetTableName());
+  Create(mojom_db_transaction);
+}
+
+std::string Segments::BuildInsertSql(
+    const mojom::DBActionInfoPtr& mojom_db_action,
+    const CreativeAdList& creative_ads) const {
+  CHECK(mojom_db_action);
+  CHECK(!creative_ads.empty());
+
+  const size_t row_count = BindColumns(mojom_db_action, creative_ads);
 
   return base::ReplaceStringPlaceholders(
-      "INSERT OR REPLACE INTO $1 (creative_set_id, segment) VALUES $2;",
-      {GetTableName(), BuildBindingParameterPlaceholders(
-                           /*parameters_count*/ 2, binded_parameters_count)},
+      R"(
+          INSERT INTO $1 (
+            creative_set_id,
+            segment
+          ) VALUES $2;)",
+      {GetTableName(),
+       BuildBindColumnPlaceholders(/*column_count=*/2, row_count)},
       nullptr);
 }
 

@@ -15,15 +15,14 @@
 #include "third_party/boringssl/src/include/openssl/digest.h"
 #include "third_party/boringssl/src/include/openssl/hkdf.h"
 
-namespace brave_sync {
-namespace crypto {
+namespace brave_sync::crypto {
 
 std::vector<uint8_t> GetSeed(size_t size) {
   if (size < DEFAULT_SEED_SIZE) {
     size = DEFAULT_SEED_SIZE;
   }
   std::vector<uint8_t> bytes(size);
-  ::crypto::RandBytes(&bytes[0], bytes.size());
+  ::crypto::RandBytes(bytes);
   return bytes;
 }
 
@@ -133,11 +132,9 @@ std::string PassphraseFromBytes32(const std::vector<uint8_t>& bytes) {
   DCHECK_EQ(bytes.size(), (size_t)DEFAULT_SEED_SIZE);
   char* words = nullptr;
   std::string passphrase;
-  if (bip39_mnemonic_from_bytes(nullptr, bytes.data(), bytes.size(), &words) !=
-      WALLY_OK) {
-    CHECK(false) << "bip39_mnemonic_from_bytes failed";
-    return passphrase;
-  }
+  CHECK_EQ(
+      bip39_mnemonic_from_bytes(nullptr, bytes.data(), bytes.size(), &words),
+      WALLY_OK);
   passphrase = words;
   wally_free_string(words);
 
@@ -162,5 +159,4 @@ bool IsPassphraseValid(const std::string& passphrase) {
   return PassphraseToBytes32(passphrase, &bytes);
 }
 
-}  // namespace crypto
-}  // namespace brave_sync
+}  // namespace brave_sync::crypto

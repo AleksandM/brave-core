@@ -3,29 +3,17 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
-// @ts-nocheck TODO(petemill): Define types and remove ts-nocheck
-
-import '../brave_icons.html.js'
-
 import {RegisterPolymerTemplateModifications, RegisterStyleOverride} from 'chrome://resources/brave/polymer_overriding.js'
 import {html} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js'
 
 import {loadTimeData} from '../i18n_setup.js'
 import 'chrome://resources/brave/leo.bundle.js'
 
-// This maps a Chromium icon name to the leo-icon to replace it with.
-const iconConversions = {
-  'cr:security': 'lock',
-  'cr:search': 'search',
-  'settings:palette': 'appearance',
-  'settings:assignment': 'list-checks',
-  'settings:language': 'product-translate',
-  'settings:build': 'settings',
-  'settings:restore': 'backward',
-  'cr:file-download': 'download'
-}
-
-function createMenuElement(title, href, iconName, pageVisibilitySection) {
+function createMenuElement(
+  title: string,
+  href: string,
+  iconName: string,
+  pageVisibilitySection: string) {
   const menuEl = document.createElement('a')
   if (pageVisibilitySection) {
     menuEl.setAttribute('hidden', `[[!pageVisibility.${pageVisibilitySection}]]`)
@@ -34,18 +22,20 @@ function createMenuElement(title, href, iconName, pageVisibilitySection) {
   menuEl.setAttribute('role', 'menuitem')
   menuEl.setAttribute('class', 'cr-nav-menu-item')
 
-  const icon = document.createElement('leo-icon')
-  icon.setAttribute('name', iconName)
+  const icon = document.createElement('cr-icon')
+  icon.setAttribute('icon', iconName)
   menuEl.appendChild(icon)
 
   const text = document.createTextNode(title)
   menuEl.appendChild(text)
-  const paperRippleChild = document.createElement('paper-ripple')
-  menuEl.appendChild(paperRippleChild)
+  const crRippleChild = document.createElement('cr-ripple')
+  menuEl.appendChild(crRippleChild)
   return menuEl
 }
 
-function getMenuElement(templateContent, href) {
+function getMenuElement(
+  templateContent: HTMLTemplateElement,
+  href: string) {
   let menuEl = templateContent.querySelector(`a[href="${href}"]`)
   if (!menuEl) {
     // Search templates
@@ -56,7 +46,7 @@ function getMenuElement(templateContent, href) {
         return menuEl
       }
     }
-    console.error(`[Brave Settings Overrides] Could not find menu item '${href}'`)
+    console.error(`[Settings] Could not find menu item '${href}'`)
   }
   return menuEl
 }
@@ -66,18 +56,18 @@ RegisterStyleOverride(
   html`
     <style>
       :host {
-        --brave-settings-menu-margin-v: 30px;
-        --brave-settings-menu-padding: 30px;
-        --settings-nav-item-color: #424242 !important;
+        --brave-settings-menu-margin-v: 24px;
+        --brave-settings-menu-padding: 24px;
+        --settings-nav-item-color: var(--leo-color-text-primary) !important;
         position: sticky;
         top: var(--brave-settings-menu-margin-v);
-        margin: 0 var(--brave-settings-menu-margin) !important;
+        margin: 0 !important;
         max-height: calc(100vh - 56px - (var(--brave-settings-menu-margin-v) * 2) - (var(--brave-settings-menu-padding) * 2));
         min-width: 172px;
+        max-width: 250px;
         border-radius: 6px;
-        background-color: #fff;
         overflow-y: auto;
-        padding: 30px !important;
+        padding: 24px !important;
       }
 
       .cr-nav-menu-item {
@@ -86,6 +76,10 @@ RegisterStyleOverride(
         border-start-end-radius: 0px !important;
         box-sizing: content-box !important;
         overflow: visible !important;
+
+        --iron-icon-width: 20px;
+        --iron-icon-height: 20px;
+        --iron-icon-fill-color: currentColor;
       }
 
       .cr-nav-menu-item:hover {
@@ -93,27 +87,26 @@ RegisterStyleOverride(
       }
 
       .cr-nav-menu-item[selected] {
-        --leo-icon-color: var(--leo-gradient-icons-active);
+        --iron-icon-fill-color: var(--leo-color-icon-interactive);
 
-        color: var(--cr-link-color) !important;
+        color: var(--leo-color-text-interactive) !important;
         background: transparent !important;
       }
 
-      .cr-nav-menu-item paper-ripple {
+      .cr-nav-menu-item cr-ripple {
         display: none !important;
       }
 
       @media (prefers-color-scheme: dark) {
         :host {
-          --settings-nav-item-color: #F4F4F4 !important;
+          --settings-nav-item-color: var(--leo-color-text-primary) !important;
           border-color: transparent !important;
-          background-color: #161719;
         }
       }
 
       a[href] {
-        font-weight: 400 !important;
-        margin: 0 20px 20px 0 !important;
+        font-weight: 500 !important;
+        margin: 0 20px 24px 0 !important;
         margin-inline-start: 0 !important;
         margin-inline-end: 0 !important;
         padding-bottom: 0 !important;
@@ -128,22 +121,21 @@ RegisterStyleOverride(
         border-radius: 6px !important;
       }
 
-      a[href].iron-selected {
+      a[href].selected {
         color: #DB2F04;
-        font-weight: 400 !important;
       }
 
-      a:hover, iron-icon:hover {
-        color: #444DD0 !important;
+      a:hover, cr-icon:hover {
+        color: var(--leo-color-icon-interactive) !important;
       }
 
-      iron-icon, leo-icon {
+      cr-icon, leo-icon {
         margin-inline-end: 14px !important;
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
       }
 
-      a[href].iron-selected::before {
+      a[href].selected::before {
         content: "";
         position: absolute;
         top: 50%;
@@ -152,17 +144,18 @@ RegisterStyleOverride(
         display: block;
         height: 32px;
         width: 4px;
-        background: linear-gradient(96.98deg, #E51D00 0%, #E5007B 78.13%);
+        background: var(--leo-color-text-interactive);
         border-radius: 0px 2px 2px 0px;
       }
 
       @media (prefers-color-scheme: dark) {
-        a[href].iron-selected {
+        a[href].selected {
           color: #FB5930;
         }
 
-        a:hover, iron-icon:hover {
-          color: #A6ABE9 !important;
+        a:hover, cr-icon:hover {
+          --iron-icon-fill-color: var(--leo-color-icon-interactive) !important;
+          color: var(--leo-color-icon-interactive) !important;
         }
       }
 
@@ -178,7 +171,7 @@ RegisterStyleOverride(
         border: none !important;
       }
 
-      #advancedButton > iron-icon {
+      #advancedButton > cr-icon {
         margin-inline-end: 0 !important;
       }
 
@@ -191,17 +184,21 @@ RegisterStyleOverride(
         margin-bottom: 20px !important;
       }
 
+      #autofill {
+        margin-top: 20px !important;
+      }
+
       #about-menu {
         display: flex;
         flex-direction: row;
         align-items: flex-start;
         justify-content: flex-start;
-        color: #c5c5d3 !important;
+        color: var(--leo-color-text-tertiary) !important;
         margin: 16px 0 0 0 !important;
       }
       .brave-about-graphic {
         flex: 0;
-        flex-basis: 30%;
+        flex-basis: var(--leo-spacing-3xl);
         display: flex;
         align-items: center;
         justify-content: flex-start;
@@ -217,26 +214,8 @@ RegisterStyleOverride(
   `
 )
 
-RegisterStyleOverride('iron-icon', html`
- <style>
-    :host-context(.cr-nav-menu-item) svg {
-      fill: url(#selectedGradient);
-    }
- </style>`)
-
 RegisterPolymerTemplateModifications({
   'settings-menu': (templateContent) => {
-    // Add title
-    const titleEl = document.createElement('h1')
-    titleEl.id = 'settingsHeader'
-    titleEl.textContent = loadTimeData.getString('settings')
-    const menuEl = templateContent.querySelector('#menu')
-    if (!menuEl) {
-      console.error('[Brave Settings Overrides] Could not find menu element to add title after')
-    } else {
-      menuEl.insertAdjacentElement('afterbegin', titleEl)
-    }
-
     // Hide performance menu. We moved it under system menu instead.
     const performanceEl = getMenuElement(templateContent, '/performance')
     if (performanceEl) {
@@ -244,26 +223,30 @@ RegisterPolymerTemplateModifications({
     }
 
     // Add 'Get Started' item
-    const peopleEl = getMenuElement(templateContent, '/people')
     const getStartedEl = createMenuElement(
       loadTimeData.getString('braveGetStartedTitle'),
       '/getStarted',
       'rocket',
       'getStarted'
     )
-    peopleEl.insertAdjacentElement('afterend', getStartedEl)
-    // Move Appearance item
-    const appearanceBrowserEl = getMenuElement(templateContent, '/appearance')
-    getStartedEl.insertAdjacentElement('afterend', appearanceBrowserEl)
+    const peopleEl = getMenuElement(templateContent, '/people')
+    if (peopleEl) {
+      peopleEl.insertAdjacentElement('afterend', getStartedEl)
+    }
 
-    // Add New Tab item
-    const newTabEl = createMenuElement(
-      loadTimeData.getString('braveNewTab'),
-      '/newTab',
-      'window-tab-new',
-      'newTab'
+    // Move Appearance item
+    const contentEl = createMenuElement(
+      loadTimeData.getString('contentSettingsContentSection'),
+      '/braveContent',
+      'window-content',
+      'content',
     )
-    appearanceBrowserEl.insertAdjacentElement('afterend', newTabEl)
+    const appearanceBrowserEl = getMenuElement(templateContent, '/appearance')
+    if (appearanceBrowserEl && contentEl) {
+      getStartedEl.insertAdjacentElement('afterend', appearanceBrowserEl)
+      appearanceBrowserEl.insertAdjacentElement('afterend', contentEl)
+    }
+
     // Add Shields item
     const shieldsEl = createMenuElement(
       loadTimeData.getString('braveShieldsTitle'),
@@ -271,34 +254,34 @@ RegisterPolymerTemplateModifications({
       'shield-done',
       'shields',
     )
-    newTabEl.insertAdjacentElement('afterend', shieldsEl)
-    // Add Rewards item
-    const isBraveRewardsSupported = loadTimeData.getBoolean('isBraveRewardsSupported')
-    let rewardsEl = undefined
-    if (isBraveRewardsSupported) {
-      rewardsEl = createMenuElement(
-        loadTimeData.getString('braveRewards'),
-        '/rewards',
-        'product-bat-outline',
-        'rewards',
-      )
-      shieldsEl.insertAdjacentElement('afterend', rewardsEl)
-    }
-    // Add Embed Blocking item
-    const embedEl = createMenuElement(
-      loadTimeData.getString('socialBlocking'),
-      '/socialBlocking',
-      'thumb-down',
-      'socialBlocking',
-    )
-    if (isBraveRewardsSupported) {
-      rewardsEl.insertAdjacentElement('afterend', embedEl)
-    } else {
-      shieldsEl.insertAdjacentElement('afterend', embedEl)
-    }
-    // Add privacy
+    contentEl.insertAdjacentElement('afterend', shieldsEl)
+
+    // Add privacy item
     const privacyEl = getMenuElement(templateContent, '/privacy')
-    embedEl.insertAdjacentElement('afterend', privacyEl)
+    if (privacyEl && shieldsEl) {
+      shieldsEl.insertAdjacentElement('afterend', privacyEl)
+    }
+
+    // Add web3 item
+    const web3El = createMenuElement(
+      loadTimeData.getString('braveWeb3'),
+      '/web3',
+      'product-brave-wallet',
+      'wallet',
+    )
+    if (privacyEl && web3El) {
+      privacyEl.insertAdjacentElement('afterend', web3El)
+    }
+
+    // Add leo item
+    const leoAssistantEl = createMenuElement(
+      loadTimeData.getString('leoAssistant'),
+      '/leo-ai',
+      'product-brave-leo',
+      'leoAssistant',
+    )
+    web3El.insertAdjacentElement('afterend', leoAssistantEl)
+
     // Add Sync item
     const syncEl = createMenuElement(
       loadTimeData.getString('braveSync'),
@@ -306,10 +289,14 @@ RegisterPolymerTemplateModifications({
       'product-sync',
       'braveSync',
     )
-    privacyEl.insertAdjacentElement('afterend', syncEl)
-    // Move search item
+    leoAssistantEl.insertAdjacentElement('afterend', syncEl)
+
+    // Add search item
     const searchEl = getMenuElement(templateContent, '/search')
-    syncEl.insertAdjacentElement('afterend', searchEl)
+    if (searchEl && syncEl) {
+      syncEl.insertAdjacentElement('afterend', searchEl)
+    }
+
     // Add Extensions item
     const extensionEl = createMenuElement(
       loadTimeData.getString('braveDefaultExtensions'),
@@ -317,44 +304,32 @@ RegisterPolymerTemplateModifications({
       'browser-extensions',
       'extensions',
     )
-    searchEl.insertAdjacentElement('afterend', extensionEl)
-
-
-    const web3El = createMenuElement(
-      loadTimeData.getString('braveWeb3'),
-      '/web3',
-      'product-brave-wallet',
-      'wallet',
-    )
-
-    extensionEl.insertAdjacentElement('afterend', web3El)
+    if (extensionEl && searchEl) {
+      searchEl.insertAdjacentElement('afterend', extensionEl)
+    }
 
     // Move autofill to advanced
     const autofillEl = getMenuElement(templateContent, '/autofill')
     const languagesEl = getMenuElement(templateContent, '/languages')
-    languagesEl.insertAdjacentElement('beforebegin', autofillEl)
-    // Move HelpTips after downloads
-    const helpTipsEl = createMenuElement(
-      loadTimeData.getString('braveHelpTips'),
-      '/braveHelpTips',
-      'help-outline',
-      'braveHelpTips',
-    )
-    const downloadsEl = getMenuElement(templateContent, '/downloads')
-    downloadsEl.insertAdjacentElement('afterend', helpTipsEl)
+    if (autofillEl && languagesEl) {
+      languagesEl.insertAdjacentElement('beforebegin', autofillEl)
+    }
     // Allow Accessibility to be removed :-(
     const a11yEl = getMenuElement(templateContent, '/accessibility')
-    a11yEl.setAttribute('hidden', '[[!pageVisibility.a11y]')
+    if (a11yEl) {
+      a11yEl.setAttribute('hidden', '[[!pageVisibility.a11y]')
+    }
     // Remove extensions link
     const extensionsLinkEl = templateContent.querySelector('#extensionsLink')
     if (!extensionsLinkEl) {
-      console.error('[Brave Settings Overrides] Could not find extensionsLinkEl to remove')
+      console.error('[Settings] Could not find extensionsLinkEl to remove')
+      return
     }
     extensionsLinkEl.remove()
     // Add version number to 'about' link
     const aboutEl = templateContent.querySelector('#about-menu')
     if (!aboutEl) {
-      console.error('[Brave Settings Overrides] Could not find about-menu element')
+      console.error('[Settings] Could not find about-menu element')
       return
     }
     const parent = aboutEl.parentNode
@@ -363,12 +338,16 @@ RegisterPolymerTemplateModifications({
     const newAboutEl = document.createElement('a')
     newAboutEl.setAttribute('href', '/help')
     newAboutEl.setAttribute('id', aboutEl.id)
+    newAboutEl.setAttribute('role', 'menuitem')
 
     const graphicsEl = document.createElement('div')
     graphicsEl.setAttribute('class', 'brave-about-graphic')
 
-    const icon = document.createElement('leo-icon')
-    icon.setAttribute('name', 'product-brave-color')
+    // Use per-channel logo image.
+    const icon = document.createElement('img')
+    icon.setAttribute('srcset', 'chrome://theme/current-channel-logo@1x, chrome://theme/current-channel-logo@2x 2x')
+    icon.setAttribute('width', '20px')
+    icon.setAttribute('height', '20px')
 
     const metaEl = document.createElement('div')
     metaEl.setAttribute('class', 'brave-about-meta')
@@ -380,20 +359,6 @@ RegisterPolymerTemplateModifications({
     const versionEl = document.createElement('span')
     versionEl.setAttribute('class', 'brave-about-item brave-about-menu-version')
     versionEl.textContent = `v ${loadTimeData.getString('braveProductVersion')}`
-
-    for (const icon of templateContent.querySelectorAll('iron-icon')) {
-      const name = icon.getAttribute('icon')
-      const converted = iconConversions[name]
-      if (!icon) {
-        console.error("Couldn't find leo icon for", name)
-        continue
-      }
-
-      const leoIcon = document.createElement('leo-icon')
-      leoIcon.setAttribute('name', converted)
-      icon.insertAdjacentElement('beforebegin', leoIcon)
-      icon.remove()
-    }
 
     parent.appendChild(newAboutEl)
     newAboutEl.appendChild(graphicsEl)

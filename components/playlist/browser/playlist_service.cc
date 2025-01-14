@@ -1,3 +1,4 @@
+
 /* Copyright (c) 2021 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -8,20 +9,20 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/check_is_test.h"
 #include "base/containers/flat_set.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
-#include "base/json/json_reader.h"
-#include "base/json/json_writer.h"
+#include "base/functional/callback_helpers.h"
 #include "base/json/values_util.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_split.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
-#include "base/token.h"
+#include "brave/components/playlist/browser/media_detector_component_manager.h"
+#include "brave/components/playlist/browser/playlist_background_web_contentses.h"
 #include "brave/components/playlist/browser/playlist_constants.h"
-#include "brave/components/playlist/browser/playlist_data_source.h"
+#include "brave/components/playlist/browser/playlist_tab_helper.h"
 #include "brave/components/playlist/browser/pref_names.h"
 #include "brave/components/playlist/browser/type_converter.h"
 #include "brave/components/playlist/common/features.h"
@@ -29,7 +30,9 @@
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/user_prefs/user_prefs.h"
 #include "content/public/browser/browser_context.h"
+#include "content/public/browser/web_contents.h"
 #include "net/base/filename_util.h"
+#include "url/gurl.h"
 
 namespace playlist {
 namespace {
@@ -46,8 +49,9 @@ std::vector<base::FilePath> GetOrphanedPaths(
   std::vector<base::FilePath> orphaned_paths;
   base::FileEnumerator dirs(base_dir, false, base::FileEnumerator::DIRECTORIES);
   for (base::FilePath name = dirs.Next(); !name.empty(); name = dirs.Next()) {
-    if (ids.find(name.BaseName().AsUTF8Unsafe()) == ids.end())
+    if (ids.find(name.BaseName().AsUTF8Unsafe()) == ids.end()) {
       orphaned_paths.push_back(name);
+    }
   }
   return orphaned_paths;
 }
@@ -63,19 +67,25 @@ PlaylistService::PlaylistService(content::BrowserContext* context,
       base_dir_(context->GetPath().Append(kBaseDirName)),
       playlist_p3a_(local_state, browser_first_run_time),
       prefs_(user_prefs::UserPrefs::Get(context)) {
-  content::URLDataSource::Add(context,
-                              std::make_unique<PlaylistDataSource>(this));
+  CHECK(base::FeatureList::IsEnabled(features::kPlaylist));
+
   media_file_download_manager_ =
       std::make_unique<PlaylistMediaFileDownloadManager>(context, this);
   thumbnail_downloader_ =
       std::make_unique<PlaylistThumbnailDownloader>(context, this);
-  download_request_manager_ =
-      std::make_unique<PlaylistDownloadRequestManager>(context, manager);
+  background_web_contentses_ =
+      std::make_unique<PlaylistBackgroundWebContentses>(context, this);
+  playlist_streaming_ = std::make_unique<PlaylistStreaming>(context);
+  media_detector_component_manager_ = manager;
+
+  enabled_pref_.Init(kPlaylistEnabledPref, prefs_.get(),
+                     base::BindRepeating(&PlaylistService::OnEnabledPrefChanged,
+                                         weak_factory_.GetWeakPtr()));
 
   // This is for cleaning up malformed items during development. Once we
   // release Playlist feature officially, we should migrate items
   // instead of deleting them.
-  CleanUpMalformedPlaylistItems();
+  MigratePlaylistValues();
 
   CleanUpOrphanedPlaylistItemDirs();
 }
@@ -84,11 +94,11 @@ PlaylistService::~PlaylistService() = default;
 
 void PlaylistService::Shutdown() {
   observers_.Clear();
-  download_request_manager_.reset();
+  background_web_contentses_.reset();
   media_file_download_manager_.reset();
   thumbnail_downloader_.reset();
-  download_request_manager_.reset();
   task_runner_.reset();
+  playlist_streaming_.reset();
 #if BUILDFLAG(IS_ANDROID)
   receivers_.Clear();
 #endif  // BUILDFLAG(IS_ANDROID)
@@ -97,26 +107,32 @@ void PlaylistService::Shutdown() {
 void PlaylistService::AddMediaFilesFromContentsToPlaylist(
     const std::string& playlist_id,
     content::WebContents* contents,
-    bool cache) {
+    bool cache,
+    base::OnceCallback<void(std::vector<mojom::PlaylistItemPtr>)> callback) {
+  CHECK(*enabled_pref_) << "Playlist pref must be enabled";
+
   DCHECK(contents);
-  if (!contents->GetPrimaryMainFrame())
+  if (!contents->GetPrimaryMainFrame()) {
     return;
+  }
 
   VLOG(2) << __func__
           << " download media from WebContents to playlist: " << playlist_id;
 
-  PlaylistDownloadRequestManager::Request request;
-  if (ShouldGetMediaFromBackgroundWebContents(contents)) {
-    request.url_or_contents = contents->GetVisibleURL().spec();
-  } else {
-    request.url_or_contents = contents->GetWeakPtr();
+  auto* tab_helper = PlaylistTabHelper::FromWebContents(contents);
+  CHECK(tab_helper);
+  const auto& found_items = tab_helper->found_items();
+  if (found_items.empty()) {
+    if (callback) {
+      return std::move(callback).Run({});
+    }
+    return;
   }
 
-  request.callback = base::BindOnce(
-      &PlaylistService::AddMediaFilesFromItems, weak_factory_.GetWeakPtr(),
-      playlist_id.empty() ? GetDefaultSaveTargetListID() : playlist_id, cache,
-      base::NullCallback());
-  download_request_manager_->GetMediaFilesFromPage(std::move(request));
+  std::vector<mojom::PlaylistItemPtr> items;
+  base::ranges::transform(found_items, std::back_inserter(items),
+                          &mojom::PlaylistItemPtr::Clone);
+  AddMediaFiles(std::move(items), playlist_id, cache, std::move(callback));
 }
 
 bool PlaylistService::AddItemsToPlaylist(
@@ -152,6 +168,13 @@ bool PlaylistService::AddItemsToPlaylist(
   }
 
   playlists_update->Set(playlist_id, ConvertPlaylistToValue(playlist));
+
+  for (auto& observer : observers_) {
+    for (const auto& item_id : item_ids) {
+      observer->OnItemAddedToList(playlist_id, item_id);
+    }
+  }
+
   return true;
 }
 
@@ -186,8 +209,9 @@ bool PlaylistService::RemoveItemFromPlaylist(const PlaylistId& playlist_id,
         target_playlist->items,
         [&item_id](const auto& item) { return item->id == *item_id; });
     // Consider this as success since the item is already removed.
-    if (it == target_playlist->items.end())
+    if (it == target_playlist->items.end()) {
       return true;
+    }
 
     target_playlist->items.erase(it, it + 1);
     playlists_update->Set(target_playlist_id,
@@ -196,63 +220,71 @@ bool PlaylistService::RemoveItemFromPlaylist(const PlaylistId& playlist_id,
 
   // Try to remove |playlist_id| from item->parents or delete the this item
   // if there's no other parent playlist.
-  GetPlaylistItem(
-      *item_id,
-      base::BindOnce(
-          [](PlaylistService* service, const std::string& playlist_id,
-             bool delete_item, mojom::PlaylistItemPtr item) {
-            if (delete_item && item->parents.size() == 1) {
-              DCHECK_EQ(item->parents.front(), playlist_id);
-              service->DeletePlaylistItemData(item->id);
-              return;
-            }
+  auto item = GetPlaylistItem(*item_id);
+  if (delete_item && item->parents.size() == 1) {
+    DCHECK_EQ(item->parents.front(), *playlist_id);
+    DeletePlaylistItemData(item->id);
+    return true;
+  }
 
-            // There're other playlists referencing this. Don't delete item
-            // and update the item's parent playlists data.
-            auto iter = base::ranges::find(item->parents, playlist_id);
-            DCHECK(iter != item->parents.end());
-            item->parents.erase(iter);
-            service->UpdatePlaylistItemValue(
-                item->id, base::Value(ConvertPlaylistItemToValue(item)));
-          },
-          this, *playlist_id, delete_item));
-
+  // There're other playlists referencing this. Don't delete item
+  // and update the item's parent playlists data.
+  auto iter = base::ranges::find(item->parents, *playlist_id);
+  DCHECK(iter != item->parents.end());
+  item->parents.erase(iter);
+  UpdatePlaylistItemValue(item->id,
+                          base::Value(ConvertPlaylistItemToValue(item)));
+  for (auto& observer : observers_) {
+    observer->OnItemRemovedFromList(*playlist_id, item->id);
+  }
   return true;
 }
 
-void PlaylistService::ReorderItemFromPlaylist(const std::string& playlist_id,
-                                              const std::string& item_id,
-                                              int16_t position) {
+void PlaylistService::ReorderItemFromPlaylist(
+    const std::string& playlist_id,
+    const std::string& item_id,
+    int16_t position,
+    ReorderItemFromPlaylistCallback callback) {
   VLOG(2) << __func__ << " " << playlist_id << " " << item_id;
 
   DCHECK(!item_id.empty());
 
-  ScopedDictPrefUpdate playlists_update(prefs_, kPlaylistsPref);
   auto target_playlist_id =
       playlist_id.empty() ? kDefaultPlaylistID : playlist_id;
-  base::Value::Dict* playlist_value =
-      playlists_update->FindDict(target_playlist_id);
-  DCHECK(playlist_value) << " Playlist " << playlist_id << " not found";
 
-  auto target_playlist = ConvertValueToPlaylist(
-      *playlist_value, prefs_->GetDict(kPlaylistItemsPref));
-  DCHECK_GT(target_playlist->items.size(), static_cast<size_t>(position));
-  auto it = base::ranges::find_if(
-      target_playlist->items,
-      [&item_id](const auto& item) { return item->id == item_id; });
-  DCHECK(it != target_playlist->items.end());
+  {
+    ScopedDictPrefUpdate playlists_update(prefs_, kPlaylistsPref);
+    base::Value::Dict* playlist_value =
+        playlists_update->FindDict(target_playlist_id);
+    DCHECK(playlist_value) << " Playlist " << playlist_id << " not found";
 
-  auto old_position = std::distance(target_playlist->items.begin(), it);
-  if (old_position == position)
-    return;
+    auto target_playlist = ConvertValueToPlaylist(
+        *playlist_value, prefs_->GetDict(kPlaylistItemsPref));
+    DCHECK_GT(target_playlist->items.size(), static_cast<size_t>(position));
+    auto it = base::ranges::find_if(
+        target_playlist->items,
+        [&item_id](const auto& item) { return item->id == item_id; });
+    DCHECK(it != target_playlist->items.end());
 
-  if (old_position < position) {
-    std::rotate(it, it + 1, target_playlist->items.begin() + position + 1);
-  } else {
-    std::rotate(target_playlist->items.begin() + position, it, it + 1);
+    auto old_position = std::distance(target_playlist->items.begin(), it);
+    if (old_position == position) {
+      return;
+    }
+
+    if (old_position < position) {
+      std::rotate(it, it + 1, target_playlist->items.begin() + position + 1);
+    } else {
+      std::rotate(target_playlist->items.begin() + position, it, it + 1);
+    }
+    playlists_update->Set(target_playlist_id,
+                          ConvertPlaylistToValue(target_playlist));
   }
-  playlists_update->Set(target_playlist_id,
-                        ConvertPlaylistToValue(target_playlist));
+
+  for (auto& observer : observers_) {
+    observer->OnPlaylistUpdated(GetPlaylist(target_playlist_id));
+  }
+
+  std::move(callback).Run(true);
 }
 
 bool PlaylistService::MoveItem(const PlaylistId& from,
@@ -321,6 +353,9 @@ void PlaylistService::AddMediaFilesFromItems(
   base::ranges::transform(filtered_items, std::back_inserter(ids),
                           [](const auto& item) { return item->id; });
   AddItemsToPlaylist(target_playlist_id, ids);
+  base::ranges::for_each(filtered_items, [&target_playlist_id](auto& item) {
+    item->parents.push_back(target_playlist_id);
+  });
 
   if (callback) {
     std::move(callback).Run(std::move(filtered_items));
@@ -332,25 +367,6 @@ void PlaylistService::NotifyPlaylistChanged(mojom::PlaylistEvent playlist_event,
   VLOG(2) << __func__ << ": params=" << playlist_event;
   for (auto& observer : observers_) {
     observer->OnEvent(playlist_event, playlist_id);
-  }
-}
-
-void PlaylistService::NotifyMediaFilesUpdated(
-    const GURL& url,
-    std::vector<mojom::PlaylistItemPtr> items) {
-  if (items.empty()) {
-    return;
-  }
-
-  DVLOG(2) << __FUNCTION__ << " Media files from " << url.spec()
-           << " were updated: count =>" << items.size();
-
-  for (auto& observer : observers_) {
-    std::vector<mojom::PlaylistItemPtr> cloned_items;
-    base::ranges::transform(
-        items, std::back_inserter(cloned_items),
-        [](const auto& item_ptr) { return item_ptr->Clone(); });
-    observer->OnMediaFilesUpdated(url, std::move(cloned_items));
   }
 }
 
@@ -376,6 +392,10 @@ void PlaylistService::DownloadMediaFile(const mojom::PlaylistItemPtr& item,
       update_media_src_and_retry_on_fail, std::move(callback));
 
   media_file_download_manager_->DownloadMediaFile(std::move(job));
+
+  for (auto& observer : observers_) {
+    observer->OnMediaFileDownloadScheduled(item->id);
+  }
 }
 
 base::FilePath PlaylistService::GetPlaylistItemDirPath(
@@ -383,63 +403,17 @@ base::FilePath PlaylistService::GetPlaylistItemDirPath(
   return base_dir_.AppendASCII(id);
 }
 
-void PlaylistService::ConfigureWebPrefsForBackgroundWebContents(
-    content::WebContents* web_contents,
-    blink::web_pref::WebPreferences* web_prefs) {
-  download_request_manager_->ConfigureWebPrefsForBackgroundWebContents(
-      web_contents, web_prefs);
-}
-
 base::WeakPtr<PlaylistService> PlaylistService::GetWeakPtr() {
   return weak_factory_.GetWeakPtr();
 }
 
-void PlaylistService::FindMediaFilesFromContents(
-    content::WebContents* contents,
-    FindMediaFilesFromContentsCallback callback) {
-  DCHECK(contents);
-
-  PlaylistDownloadRequestManager::Request request;
-  auto current_url = contents->GetVisibleURL();
-  if (ShouldGetMediaFromBackgroundWebContents(contents)) {
-    request.url_or_contents = current_url.spec();
-  } else {
-    request.url_or_contents = contents->GetWeakPtr();
-  }
-
-  request.callback = base::BindOnce(std::move(callback), current_url);
-  download_request_manager_->GetMediaFilesFromPage(std::move(request));
-}
-
 void PlaylistService::GetAllPlaylists(GetAllPlaylistsCallback callback) {
-  std::vector<mojom::PlaylistPtr> playlists;
-  const auto& items_dict = prefs_->GetDict(kPlaylistItemsPref);
-  for (const auto [id, playlist_value] : prefs_->GetDict(kPlaylistsPref)) {
-    DCHECK(playlist_value.is_dict());
-    playlists.push_back(
-        ConvertValueToPlaylist(playlist_value.GetDict(), items_dict));
-  }
-
-  std::move(callback).Run(std::move(playlists));
-
-  playlist_p3a_.ReportNewUsage();
+  std::move(callback).Run(GetAllPlaylists());
 }
 
 void PlaylistService::GetPlaylist(const std::string& id,
                                   GetPlaylistCallback callback) {
-  const auto& playlists = prefs_->GetDict(kPlaylistsPref);
-  if (!playlists.contains(id)) {
-    LOG(ERROR) << __func__ << " playlist with id<" << id << "> not found";
-    std::move(callback).Run({});
-    return;
-  }
-  auto* playlist_dict = playlists.FindDict(id);
-  DCHECK(playlist_dict);
-
-  const auto& items_dict = prefs_->GetDict(kPlaylistItemsPref);
-  std::move(callback).Run(ConvertValueToPlaylist(*playlist_dict, items_dict));
-
-  playlist_p3a_.ReportNewUsage();
+  std::move(callback).Run(GetPlaylist(id));
 }
 
 void PlaylistService::GetAllPlaylistItems(
@@ -471,62 +445,106 @@ mojom::PlaylistItemPtr PlaylistService::GetPlaylistItem(const std::string& id) {
   return ConvertValueToPlaylistItem(*item_value);
 }
 
+mojom::PlaylistPtr PlaylistService::GetPlaylist(const std::string& id) {
+  const auto& playlists = prefs_->GetDict(kPlaylistsPref);
+  if (!playlists.contains(id)) {
+    LOG(ERROR) << __func__ << " playlist with id<" << id << "> not found";
+    return {};
+  }
+  playlist_p3a_.ReportNewUsage();
+
+  auto* playlist_dict = playlists.FindDict(id);
+  DCHECK(playlist_dict);
+
+  const auto& items_dict = prefs_->GetDict(kPlaylistItemsPref);
+  return ConvertValueToPlaylist(*playlist_dict, items_dict);
+}
+
+std::vector<mojom::PlaylistPtr> PlaylistService::GetAllPlaylists() {
+  std::vector<mojom::PlaylistPtr> playlists;
+  const auto& playlists_dict = prefs_->GetDict(kPlaylistsPref);
+  const auto& items_dict = prefs_->GetDict(kPlaylistItemsPref);
+
+  for (const auto& id : prefs_->GetList(kPlaylistOrderPref)) {
+    auto* playlist_value = playlists_dict.Find(id.GetString());
+    DCHECK(playlist_value->is_dict());
+    playlists.push_back(
+        ConvertValueToPlaylist(playlist_value->GetDict(), items_dict));
+  }
+
+  playlist_p3a_.ReportNewUsage();
+
+  return playlists;
+}
+
 bool PlaylistService::HasPlaylistItem(const std::string& id) const {
   return prefs_->GetDict(kPlaylistItemsPref).FindDict(id);
 }
 
-void PlaylistService::AddMediaFilesFromPageToPlaylist(
-    const std::string& playlist_id,
-    const GURL& url,
-    bool can_cache) {
-  VLOG(2) << __func__ << " " << playlist_id << " " << url;
-  PlaylistDownloadRequestManager::Request request;
-  request.url_or_contents = url.spec();
-  request.callback = base::BindOnce(
-      &PlaylistService::AddMediaFilesFromItems, weak_factory_.GetWeakPtr(),
-      playlist_id.empty() ? GetDefaultSaveTargetListID() : playlist_id,
-      /* cache= */ can_cache &&
-          prefs_->GetBoolean(playlist::kPlaylistCacheByDefault),
-      base::NullCallback()),
-  download_request_manager_->GetMediaFilesFromPage(std::move(request));
+const std::string& PlaylistService::GetMediaSourceAPISuppressorScript() const {
+  return media_detector_component_manager_->GetMediaSourceAPISuppressorScript();
+}
+
+std::string PlaylistService::GetMediaDetectorScript(const GURL& url) const {
+  return media_detector_component_manager_->GetMediaDetectorScript(url);
+}
+
+void PlaylistService::SetUpForTesting() const {
+  media_detector_component_manager_->SetUseLocalScript();
 }
 
 void PlaylistService::AddMediaFilesFromActiveTabToPlaylist(
     const std::string& playlist_id,
-    bool can_cache) {
-  DCHECK(delegate_);
-
-  auto* contents = delegate_->GetActiveWebContents();
-  if (!contents)
-    return;
-
-  AddMediaFilesFromContentsToPlaylist(
-      playlist_id, contents,
-      /* cache= */ can_cache && prefs_->GetBoolean(kPlaylistCacheByDefault));
-}
-
-void PlaylistService::FindMediaFilesFromActiveTab(
-    FindMediaFilesFromActiveTabCallback callback) {
+    bool can_cache,
+    AddMediaFilesFromActiveTabToPlaylistCallback callback) {
   DCHECK(delegate_);
 
   auto* contents = delegate_->GetActiveWebContents();
   if (!contents) {
-    std::move(callback).Run({}, {});
     return;
   }
 
-  FindMediaFilesFromContents(contents, std::move(callback));
+  AddMediaFilesFromContentsToPlaylist(
+      playlist_id, contents,
+      /* cache= */ can_cache && prefs_->GetBoolean(kPlaylistCacheByDefault),
+      std::move(callback));
+}
+
+void PlaylistService::FindMediaFilesFromActiveTab() {
+  auto* web_contents = delegate_->GetActiveWebContents();
+  if (!web_contents) {
+    return;
+  }
+
+  auto* tab_helper = PlaylistTabHelper::FromWebContents(web_contents);
+  CHECK(tab_helper);
+
+  const auto url = web_contents->GetLastCommittedURL();
+
+  for (auto& observer : observers_) {
+    std::vector<mojom::PlaylistItemPtr> cloned_items;
+    base::ranges::transform(tab_helper->found_items(),
+                            std::back_inserter(cloned_items),
+                            &mojom::PlaylistItemPtr::Clone);
+    observer->OnMediaFilesUpdated(url, std::move(cloned_items));
+  }
 }
 
 void PlaylistService::AddMediaFiles(std::vector<mojom::PlaylistItemPtr> items,
                                     const std::string& playlist_id,
                                     bool can_cache,
                                     AddMediaFilesCallback callback) {
-  AddMediaFilesFromItems(
-      playlist_id,
-      /* cache= */ can_cache &&
-          prefs_->GetBoolean(playlist::kPlaylistCacheByDefault),
-      std::move(callback), std::move(items));
+  auto add_media_files_from_items = base::IgnoreArgs<GURL>(base::BindOnce(
+      &PlaylistService::AddMediaFilesFromItems, GetWeakPtr(), playlist_id,
+      can_cache && prefs_->GetBoolean(playlist::kPlaylistCacheByDefault),
+      std::move(callback)));
+
+  if (items.size() == 1 && items[0]->is_blob_from_media_source) {
+    background_web_contentses_->Add(items[0]->page_source,
+                                    std::move(add_media_files_from_items));
+  } else {
+    std::move(add_media_files_from_items).Run(GURL(), std::move(items));
+  }
 }
 
 void PlaylistService::RemoveItemFromPlaylist(const std::string& playlist_id,
@@ -546,6 +564,36 @@ void PlaylistService::UpdateItem(mojom::PlaylistItemPtr item) {
   UpdatePlaylistItemValue(item->id,
                           base::Value(ConvertPlaylistItemToValue(item)));
   NotifyPlaylistChanged(mojom::PlaylistEvent::kItemUpdated, item->id);
+  for (auto& observer : observers_) {
+    observer->OnItemUpdated(item.Clone());
+  }
+}
+
+void PlaylistService::UpdateItemLastPlayedPosition(
+    const std::string& id,
+    int32_t last_played_position) {
+  if (!HasPlaylistItem(id)) {
+    return;
+  }
+
+  auto item = GetPlaylistItem(id);
+  item->last_played_position = last_played_position;
+  UpdateItem(std::move(item));
+}
+
+void PlaylistService::UpdateItemHlsMediaFilePath(
+    const std::string& id,
+    const std::string& hls_media_file_path,
+    int64_t updated_file_size) {
+  if (!HasPlaylistItem(id)) {
+    return;
+  }
+
+  auto item = GetPlaylistItem(id);
+  item->hls_media_path = GURL(base::StrCat(
+      {url::kFileScheme, url::kStandardSchemeSeparator, hls_media_file_path}));
+  item->media_file_bytes = updated_file_size;
+  UpdateItem(std::move(item));
 }
 
 void PlaylistService::CreatePlaylist(mojom::PlaylistPtr playlist,
@@ -554,8 +602,14 @@ void PlaylistService::CreatePlaylist(mojom::PlaylistPtr playlist,
     playlist->id = base::Token::CreateRandom().ToString();
   } while (playlist->id == kDefaultPlaylistID);
 
-  ScopedDictPrefUpdate playlists_update(prefs_, kPlaylistsPref);
-  playlists_update->Set(playlist->id.value(), ConvertPlaylistToValue(playlist));
+  {
+    ScopedDictPrefUpdate playlists_update(prefs_, kPlaylistsPref);
+    playlists_update->Set(playlist->id.value(),
+                          ConvertPlaylistToValue(playlist));
+
+    ScopedListPrefUpdate playlists_order_update(prefs_, kPlaylistOrderPref);
+    playlists_order_update->Append(playlist->id.value());
+  }
 
   NotifyPlaylistChanged(mojom::PlaylistEvent::kListCreated,
                         playlist->id.value());
@@ -563,9 +617,31 @@ void PlaylistService::CreatePlaylist(mojom::PlaylistPtr playlist,
   std::move(callback).Run(playlist.Clone());
 }
 
-content::WebContents* PlaylistService::GetBackgroundWebContentsForTesting() {
-  return download_request_manager_
-      ->GetBackgroundWebContentsForTesting();  // IN-TEST
+void PlaylistService::ReorderPlaylist(const std::string& playlist_id,
+                                      int16_t position,
+                                      ReorderPlaylistCallback callback) {
+  {
+    ScopedListPrefUpdate playlist_order_update(prefs_, kPlaylistOrderPref);
+    auto it = base::ranges::find(*playlist_order_update, playlist_id);
+    if (it == playlist_order_update->end()) {
+      std::move(callback).Run(false);
+      return;
+    }
+
+    auto old_position = std::distance(playlist_order_update->begin(), it);
+    if (old_position == position) {
+      std::move(callback).Run(true);
+      return;
+    }
+
+    if (old_position < position) {
+      std::rotate(it, it + 1, playlist_order_update->begin() + position + 1);
+    } else {
+      std::rotate(playlist_order_update->begin() + position, it, it + 1);
+    }
+  }
+
+  std::move(callback).Run(true);
 }
 
 std::string PlaylistService::GetDefaultSaveTargetListID() {
@@ -626,16 +702,6 @@ void PlaylistService::CreatePlaylistItem(const mojom::PlaylistItemPtr& item,
   playlist_p3a_.ReportNewUsage();
 }
 
-bool PlaylistService::ShouldGetMediaFromBackgroundWebContents(
-    content::WebContents* contents) const {
-  if (base::FeatureList::IsEnabled(features::kPlaylistFakeUA)) {
-    return true;
-  }
-
-  return download_request_manager_->media_detector_component_manager()
-      ->ShouldHideMediaSrcAPI(contents->GetVisibleURL());
-}
-
 void PlaylistService::OnPlaylistItemDirCreated(
     mojom::PlaylistItemPtr item,
     base::OnceCallback<void(mojom::PlaylistItemPtr, bool)> callback,
@@ -661,6 +727,19 @@ void PlaylistService::DownloadThumbnail(const mojom::PlaylistItemPtr& item) {
       GetPlaylistItemDirPath(item->id).Append(kThumbnailFileName));
 }
 
+void PlaylistService::SanitizeImage(
+    std::unique_ptr<std::string> image,
+    base::OnceCallback<void(scoped_refptr<base::RefCountedBytes>)> callback) {
+  if (!delegate_) {
+    CHECK_IS_TEST();
+    std::move(callback).Run(
+        new base::RefCountedBytes(base::as_byte_span(*image)));
+    return;
+  }
+
+  delegate_->SanitizeImage(std::move(image), std::move(callback));
+}
+
 void PlaylistService::OnThumbnailDownloaded(const std::string& id,
                                             const base::FilePath& path) {
   DCHECK(IsValidPlaylistItem(id));
@@ -681,8 +760,9 @@ void PlaylistService::OnThumbnailDownloaded(const std::string& id,
 }
 
 void PlaylistService::RemovePlaylist(const std::string& playlist_id) {
-  if (playlist_id == kDefaultPlaylistID)
+  if (playlist_id == kDefaultPlaylistID) {
     return;
+  }
 
   DCHECK(!playlist_id.empty());
 
@@ -703,6 +783,9 @@ void PlaylistService::RemovePlaylist(const std::string& playlist_id) {
     }
 
     playlists_update->Remove(playlist_id);
+
+    ScopedListPrefUpdate playlists_order_update(prefs_, kPlaylistOrderPref);
+    playlists_order_update->EraseValue(base::Value(playlist_id));
   }
 
   NotifyPlaylistChanged(mojom::PlaylistEvent::kListRemoved, playlist_id);
@@ -712,6 +795,7 @@ void PlaylistService::ResetAll() {
   // Resets all on-going downloads
   thumbnail_downloader_->CancelAllDownloadRequests();
   media_file_download_manager_->CancelAllDownloadRequests();
+  playlist_streaming_->ClearAllQueries();
 
   // Resets preference ---------------------------------------------------------
   prefs_->ClearPref(kPlaylistCacheByDefault);
@@ -721,13 +805,15 @@ void PlaylistService::ResetAll() {
   prefs_->ClearPref(kPlaylistItemsPref);
   for (const auto& item : items) {
     for (auto& observer : observers_) {
-      observer->OnItemDeleted(item->id);
+      observer->OnItemLocalDataDeleted(item->id);
     }
   }
 
   prefs_->ClearPref(kPlaylistsPref);
+  prefs_->ClearPref(kPlaylistOrderPref);
 
-  // Removes data on disk ------------------------------------------------------
+  // Removes data on disk
+  // ------------------------------------------------------
   GetTaskRunner()->PostTask(FROM_HERE,
                             base::GetDeletePathRecursivelyCallback(base_dir_));
 }
@@ -754,6 +840,8 @@ void PlaylistService::RecoverLocalDataForItem(
     const std::string& id,
     bool update_media_src_before_recovery,
     RecoverLocalDataForItemCallback callback) {
+  CHECK(*enabled_pref_) << "Playlist pref must be enabled";
+
   const auto* item_value = prefs_->GetDict(kPlaylistItemsPref).FindDict(id);
   if (!item_value) {
     LOG(ERROR) << __func__ << ": Invalid playlist id for recovery: " << id;
@@ -806,13 +894,20 @@ void PlaylistService::RecoverLocalDataForItem(
         mojom::PlaylistItemPtr new_item =
             service->GetPlaylistItem(old_item->id);
         DCHECK(new_item);
-        DCHECK(!new_item->cached);
         DCHECK_EQ(new_item->media_source, old_item->media_source);
         DCHECK_EQ(new_item->media_path, old_item->media_path);
+        const bool was_cached = new_item->cached;
+        if (was_cached)
+          new_item->cached = false;
         new_item->media_source = found_items.front()->media_source;
-        new_item->media_path = new_item->media_path;
+        new_item->media_path = new_item->media_source;
         service->UpdatePlaylistItemValue(
             new_item->id, base::Value(ConvertPlaylistItemToValue(new_item)));
+
+        if (was_cached) {
+          service->NotifyPlaylistChanged(
+              mojom::PlaylistEvent::kItemLocalDataRemoved, new_item->id);
+        }
 
         service->RecoverLocalDataForItemImpl(
             std::move(new_item),
@@ -820,11 +915,9 @@ void PlaylistService::RecoverLocalDataForItem(
       },
       weak_factory_.GetWeakPtr(), item->Clone(), std::move(callback));
 
-  PlaylistDownloadRequestManager::Request request;
-  DCHECK(!item->page_source.spec().empty());
-  request.url_or_contents = item->page_source.spec();
-  request.callback = std::move(update_media_src_and_recover);
-  download_request_manager_->GetMediaFilesFromPage(std::move(request));
+  background_web_contentses_->Add(
+      item->page_source,
+      base::IgnoreArgs<GURL>(std::move(update_media_src_and_recover)));
 }
 
 void PlaylistService::RemoveLocalDataForItemsInPlaylist(
@@ -847,7 +940,7 @@ void PlaylistService::DeletePlaylistItemData(const std::string& id) {
   RemovePlaylistItemValue(id);
   NotifyPlaylistChanged(mojom::PlaylistEvent::kItemDeleted, id);
   for (auto& observer : observers_) {
-    observer->OnItemDeleted(id);
+    observer->OnItemLocalDataDeleted(id);
   }
 
   // TODO(simonhong): Delete after getting cancel complete message from all
@@ -927,13 +1020,15 @@ void PlaylistService::RecoverLocalDataForItemImpl(
 void PlaylistService::RemoveLocalDataForItemImpl(
     const mojom::PlaylistItemPtr& item) {
   DCHECK(item);
-  if (!item->cached)
+  if (!item->cached) {
     return;
+  }
 
   base::FilePath media_path;
   CHECK(net::FileURLToFilePath(item->media_path, &media_path));
 
   item->cached = false;
+  item->media_file_bytes = 0;
   DCHECK(item->media_source.is_valid()) << "media_source should be valid";
   item->media_path = item->media_source;
   UpdatePlaylistItemValue(item->id,
@@ -949,17 +1044,22 @@ void PlaylistService::OnMediaFileDownloadFinished(
     bool update_media_src_and_retry_on_fail,
     DownloadMediaFileCallback callback,
     mojom::PlaylistItemPtr item,
-    const std::string& media_file_path) {
+    const base::expected<
+        PlaylistMediaFileDownloadManager::DownloadResult,
+        PlaylistMediaFileDownloadManager::DownloadFailureReason>& result) {
   DCHECK(item);
-  DCHECK(IsValidPlaylistItem(item->id));
+  if (!IsValidPlaylistItem(item->id)) {
+    // As this callback is async, the item could have been removed.
+    return;
+  }
 
-  VLOG(2) << __func__ << ": " << item->id << " result path" << media_file_path;
-
-  if (media_file_path.empty() && update_media_src_and_retry_on_fail) {
+  if (!result.has_value() &&
+      result.error() !=
+          PlaylistMediaFileDownloadManager::DownloadFailureReason::kCanceled &&
+      update_media_src_and_retry_on_fail) {
     VLOG(2) << __func__ << ": downloading " << item->id << " from "
             << item->media_source.spec()
             << " failed. Try updating media src and download";
-
     base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
         FROM_HERE, base::BindOnce(&PlaylistService::RecoverLocalDataForItem,
                                   weak_factory_.GetWeakPtr(), item->id,
@@ -968,20 +1068,47 @@ void PlaylistService::OnMediaFileDownloadFinished(
     return;
   }
 
+  auto media_file_path =
+      result.has_value() ? result.value().media_file_path : std::string();
+  auto received_bytes = result.has_value() ? result.value().received_bytes : 0;
+
+  VLOG(2) << __func__ << ": " << item->id << " result path" << media_file_path;
+
   // The item's other data could have been updated.
-  auto new_item = GetPlaylistItem(item->id);
-  new_item->cached = !media_file_path.empty();
-  if (new_item->cached) {
-    new_item->media_path = GURL("file://" + media_file_path);
+  item = GetPlaylistItem(item->id);
+
+  item->cached = !media_file_path.empty();
+  if (item->cached) {
+    item->media_path = GURL("file://" + media_file_path);
+    if (received_bytes) {
+      item->media_file_bytes = received_bytes;
+    }
   }
-  UpdatePlaylistItemValue(new_item->id,
-                          base::Value(ConvertPlaylistItemToValue(new_item)));
-  NotifyPlaylistChanged(new_item->cached ? mojom::PlaylistEvent::kItemCached
-                                         : mojom::PlaylistEvent::kItemAborted,
-                        new_item->id);
+  UpdatePlaylistItemValue(item->id,
+                          base::Value(ConvertPlaylistItemToValue(item)));
+  NotifyPlaylistChanged(item->cached ? mojom::PlaylistEvent::kItemCached
+                                     : mojom::PlaylistEvent::kItemAborted,
+                        item->id);
+  if (item->cached) {
+    for (auto& observer : observers_) {
+      observer->OnItemCached(item.Clone());
+    }
+  }
 
   if (callback) {
-    std::move(callback).Run(new_item.Clone());
+    std::move(callback).Run(item.Clone());
+  }
+}
+
+void PlaylistService::OnEnabledPrefChanged() {
+  if (!*enabled_pref_) {
+    background_web_contentses_->Reset();
+    thumbnail_downloader_->CancelAllDownloadRequests();
+    media_file_download_manager_->CancelAllDownloadRequests();
+  }
+
+  if (delegate_) {
+    delegate_->EnabledStateChanged(*enabled_pref_);
   }
 }
 
@@ -998,19 +1125,19 @@ void PlaylistService::AddObserver(
   observers_.Add(std::move(observer));
 }
 
-void PlaylistService::OnMediaUpdatedFromContents(
-    content::WebContents* contents) {
-  if (download_request_manager_->background_contents() != contents) {
+void PlaylistService::OnMediaDetected(
+    GURL url,
+    std::vector<mojom::PlaylistItemPtr> items) {
+  if (!*enabled_pref_) {
     return;
   }
 
-  // Try getting media files that are added dynamically after we've tried.
-  PlaylistDownloadRequestManager::Request request;
-  request.url_or_contents = contents->GetWeakPtr();
-  request.callback =
-      base::BindOnce(&PlaylistService::NotifyMediaFilesUpdated,
-                     weak_factory_.GetWeakPtr(), contents->GetVisibleURL());
-  download_request_manager_->GetMediaFilesFromPage(std::move(request));
+  for (auto& observer : observers_) {
+    std::vector<mojom::PlaylistItemPtr> cloned_items;
+    base::ranges::transform(items, std::back_inserter(cloned_items),
+                            &mojom::PlaylistItemPtr::Clone);
+    observer->OnMediaFilesUpdated(url, std::move(cloned_items));
+  }
 }
 
 void PlaylistService::OnMediaFileDownloadProgressed(
@@ -1042,7 +1169,7 @@ base::FilePath PlaylistService::GetMediaPathForPlaylistItemItem(
 }
 
 void PlaylistService::OnGetOrphanedPaths(
-    const std::vector<base::FilePath> orphaned_paths) {
+    const std::vector<base::FilePath>& orphaned_paths) {
   if (orphaned_paths.empty()) {
     VLOG(2) << __func__ << ": No orphaned playlist";
     return;
@@ -1055,18 +1182,11 @@ void PlaylistService::OnGetOrphanedPaths(
   }
 }
 
-void PlaylistService::CleanUpMalformedPlaylistItems() {
-  if (base::ranges::none_of(prefs_->GetDict(kPlaylistItemsPref),
-                            /* has_malformed_data = */ [](const auto& pair) {
-                              auto* dict = pair.second.GetIfDict();
-                              DCHECK(dict);
-                              return IsItemValueMalformed(*dict);
-                            })) {
-    return;
-  }
-
-  for (const auto* pref_key : {kPlaylistsPref, kPlaylistItemsPref})
-    prefs_->ClearPref(pref_key);
+void PlaylistService::MigratePlaylistValues() {
+  // Migration code here should be gone after a few versions
+  base::Value::List order = prefs_->GetList(kPlaylistOrderPref).Clone();
+  MigratePlaylistOrder(prefs_->GetDict(kPlaylistsPref), order);
+  prefs_->SetList(kPlaylistOrderPref, std::move(order));
 }
 
 void PlaylistService::CleanUpOrphanedPlaylistItemDirs() {
@@ -1097,6 +1217,13 @@ bool PlaylistService::GetThumbnailPath(const std::string& id,
     return false;
   }
   return true;
+}
+
+void PlaylistService::DownloadThumbnail(
+    const GURL& url,
+    base::OnceCallback<void(gfx::Image)> callback) {
+  thumbnail_downloader_->DownloadThumbnail(url.spec(), url,
+                                           std::move(callback));
 }
 
 bool PlaylistService::GetMediaPath(const std::string& id,
@@ -1141,6 +1268,58 @@ base::SequencedTaskRunner* PlaylistService::GetTaskRunner() {
          base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN});
   }
   return task_runner_.get();
+}
+
+void PlaylistService::RequestStreamingQuery(
+    const std::string& query_id,
+    const std::string& url,
+    const std::string& method,
+    mojo::PendingRemote<mojom::PlaylistStreamingObserver> streaming_observer) {
+  if (streaming_observer_.is_bound()) {
+    streaming_observer_.reset();
+  }
+
+  streaming_observer_.Bind(std::move(streaming_observer));
+  mojo::Remote<mojom::PlaylistStreamingObserver> observer;
+  observer.Bind(std::move(streaming_observer));
+  playlist_streaming_->RequestStreamingQuery(
+      query_id, url, method,
+      base::BindOnce(&PlaylistService::OnResponseStarted,
+                     weak_factory_.GetWeakPtr()),
+      base::BindRepeating(&PlaylistService::OnDataReceived,
+                          weak_factory_.GetWeakPtr()),
+      base::BindOnce(&PlaylistService::OnDataComplete,
+                     weak_factory_.GetWeakPtr()));
+}
+
+void PlaylistService::ClearAllQueries() {
+  playlist_streaming_->ClearAllQueries();
+}
+
+void PlaylistService::CancelQuery(const std::string& query_id) {
+  playlist_streaming_->CancelQuery(query_id);
+}
+
+void PlaylistService::OnResponseStarted(const std::string& url,
+                                        const int64_t content_length) {
+  streaming_observer_->OnResponseStarted(url, content_length);
+}
+
+void PlaylistService::OnDataReceived(api_request_helper::ValueOrError result) {
+  if (!result.has_value()) {
+    return;
+  }
+
+  std::vector<uint8_t> data_received(result.value().GetString().begin(),
+                                     result.value().GetString().end());
+  streaming_observer_->OnDataReceived(data_received);
+}
+
+void PlaylistService::OnDataComplete(
+    api_request_helper::APIRequestResult result) {
+  if (result.Is2XXResponseCode()) {
+    streaming_observer_->OnDataCompleted();
+  }
 }
 
 }  // namespace playlist

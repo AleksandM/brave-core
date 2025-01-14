@@ -5,6 +5,7 @@
 
 #include "brave/browser/renderer_context_menu/brave_mock_render_view_context_menu.h"
 
+#include <iomanip>
 #include <string>
 
 #include "base/strings/string_number_conversions.h"
@@ -223,9 +224,7 @@ void BraveMockRenderViewContextMenu::AddSpellCheckServiceItem(bool is_checked) {
 void BraveMockRenderViewContextMenu::AddAccessibilityLabelsServiceItem(
     bool is_checked) {}
 
-void BraveMockRenderViewContextMenu::AddPdfOcrMenuItem(bool is_checked) {}
-
-content::RenderViewHost* BraveMockRenderViewContextMenu::GetRenderViewHost()
+content::RenderFrameHost* BraveMockRenderViewContextMenu::GetRenderFrameHost()
     const {
   return nullptr;
 }

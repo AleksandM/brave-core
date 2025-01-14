@@ -3,7 +3,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "components/content_settings/core/browser/host_content_settings_map.h"
+
 #include "base/containers/contains.h"
+#include "base/containers/fixed_flat_set.h"
+#include "brave/components/content_settings/core/browser/remote_list_provider.h"
 #include "build/build_config.h"
 #include "components/content_settings/core/browser/content_settings_utils.h"
 #include "components/content_settings/core/common/content_settings_types.h"
@@ -26,16 +30,16 @@ bool IsMorePermissive_BraveImpl(ContentSettingsType content_type,
   // We must be careful to not break this, otherwise
   // ProcessIncognitoInheritanceBehavior() will return `initial_setting` which
   // is usually ASK and incorrect for OffTheRecord profiles.
-  const ContentSettingsType kOffTheRecordAwareTypes[] = {
-      ContentSettingsType::NOTIFICATIONS,
-      ContentSettingsType::PROTECTED_MEDIA_IDENTIFIER,
-      ContentSettingsType::IDLE_DETECTION,
-      ContentSettingsType::BRAVE_HTTPS_UPGRADE,
-  };
+  static constexpr auto kOffTheRecordAwareTypes =
+      base::MakeFixedFlatSet<ContentSettingsType>({
+          ContentSettingsType::NOTIFICATIONS,
+          ContentSettingsType::PROTECTED_MEDIA_IDENTIFIER,
+          ContentSettingsType::IDLE_DETECTION,
+          ContentSettingsType::BRAVE_HTTPS_UPGRADE,
+      });
 
   const bool is_more_permissive = IsMorePermissive(setting, initial_setting);
-  if (is_more_permissive ||
-      base::Contains(kOffTheRecordAwareTypes, content_type) ||
+  if (is_more_permissive || kOffTheRecordAwareTypes.contains(content_type) ||
       base::FeatureList::IsEnabled(kAllowIncognitoPermissionInheritance)) {
     return is_more_permissive;
   }

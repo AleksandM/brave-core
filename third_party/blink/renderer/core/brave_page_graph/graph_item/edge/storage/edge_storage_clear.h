@@ -11,14 +11,15 @@
 
 namespace brave_page_graph {
 
-class NodeScript;
+class NodeActor;
 class NodeStorage;
 
 class EdgeStorageClear final : public EdgeStorage {
  public:
   EdgeStorageClear(GraphItemContext* context,
-                   NodeScript* out_node,
-                   NodeStorage* in_node);
+                   NodeActor* out_node,
+                   NodeStorage* in_node,
+                   const FrameId& frame_id);
   ~EdgeStorageClear() override;
 
   ItemName GetItemName() const override;

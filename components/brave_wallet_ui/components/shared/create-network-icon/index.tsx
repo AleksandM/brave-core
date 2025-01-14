@@ -4,115 +4,157 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import * as React from 'react'
-import { create } from 'ethereum-blockies'
+
+// Types
+import {
+  externalWalletProviderFromString //
+} from '../../../../brave_rewards/resources/shared/lib/external_wallet'
 
 // Constants
 import { BraveWallet, SupportedTestNetworks } from '../../../constants/types'
 
 // Utils
-import { stripERC20TokenImageURL, isRemoteImageURL, isValidIconExtension } from '../../../utils/string-utils'
+import {
+  stripERC20TokenImageURL,
+  isRemoteImageURL,
+  isValidIconExtension,
+  isComponentInStorybook
+} from '../../../utils/string-utils'
+import {
+  getRewardsProviderIcon,
+  getIsRewardsNetwork
+} from '../../../utils/rewards_utils'
 
 // Styled components
-import { IconWrapper, Placeholder, NetworkIcon } from './style'
+import { IconWrapper, Placeholder, NetworkIcon, IconSize } from './style'
 
 // Options
 import { getNetworkLogo } from '../../../options/asset-options'
 
+// Hooks
+import { useNetworkOrb } from '../../../common/hooks/use-orb'
+
+type SimpleNetwork = Pick<
+  BraveWallet.NetworkInfo,
+  'iconUrls' | 'chainId' | 'symbol' | 'chainName'
+>
+
 interface Props {
-  network?: BraveWallet.NetworkInfo
+  network?: SimpleNetwork | null
   marginRight?: number
-  size?: 'big' | 'small'
+  size?: IconSize
 }
 
-export const CreateNetworkIcon = ({
-  network,
-  marginRight,
-  size
-}: Props) => {
-  // memos
-  const networkImageURL = React.useMemo(() => {
-    return stripERC20TokenImageURL(network?.iconUrls[0])
-  }, [network?.iconUrls[0]])
+const isStorybook = isComponentInStorybook()
 
-  const isRemoteURL = React.useMemo(() => {
-    return isRemoteImageURL(networkImageURL)
-  }, [networkImageURL])
+export const CreateNetworkIcon = ({ network, marginRight, size }: Props) => {
+  // exit early if no network
+  if (!network) {
+    return (
+      <NetworkPlaceholderIcon
+        marginRight={marginRight}
+        network={network}
+        size={size}
+      />
+    )
+  }
 
-  const isDataURL = React.useMemo(() => {
-    return network?.iconUrls[0]?.startsWith('chrome://erc-token-images/')
-  }, [network?.iconUrls[0]])
+  // Computed
+  const isRewardsNetwork = getIsRewardsNetwork(network)
 
-  const isStorybook = React.useMemo(() => {
-    return network?.iconUrls[0]?.startsWith('static/media/components/brave_wallet_ui/')
-  }, [network?.iconUrls[0]])
+  const externalProvider = isRewardsNetwork
+    ? externalWalletProviderFromString(network.chainId)
+    : null
 
-  const networkLogo = React.useMemo(() => {
-    return network ? getNetworkLogo(network.chainId, network.symbol) : ''
-  }, [network])
+  const networkLogo = isRewardsNetwork
+    ? getRewardsProviderIcon(externalProvider)
+    : getNetworkLogo(network.chainId, network.symbol)
 
-  const isValidIcon = React.useMemo(() => {
-    if (!network) {
-      return false
-    }
+  const isTestnet = SupportedTestNetworks.includes(network.chainId)
 
-    if (isRemoteURL || isDataURL) {
-      const url = new URL(network?.iconUrls[0])
-      return isValidIconExtension(url.pathname)
-    }
-
-    if (isStorybook) {
-      return true
-    }
-    return false
-  }, [isRemoteURL, isDataURL, networkImageURL])
-
-  const needsPlaceholder = React.useMemo(() => {
-    return networkLogo === '' && (networkImageURL === '' || !isValidIcon)
-  }, [networkLogo, networkImageURL, isValidIcon])
-
-  const orb = React.useMemo(() => {
-    if (needsPlaceholder && network) {
-      return create({ seed: network.chainName, size: 8, scale: 16 }).toDataURL()
-    }
-  }, [network, needsPlaceholder])
-
-  const remoteImage = React.useMemo(() => {
-    if (isRemoteURL) {
-      return `chrome://image?${networkImageURL}`
-    }
-    return ''
-  }, [networkImageURL])
-
-  // render
-  if (needsPlaceholder) {
+  // simple render
+  if (networkLogo) {
     return (
       <IconWrapper
         marginRight={marginRight ?? 0}
-        isTestnet={false}
+        isTestnet={isTestnet}
+        size={size}
+        externalProvider={externalProvider}
       >
-        <Placeholder orb={orb} />
+        <NetworkIcon
+          size={size}
+          icon={networkLogo}
+          isExternalProvider={!!externalProvider}
+        />
       </IconWrapper>
+    )
+  }
+
+  // complex compute + render
+  const networkIcon = network.iconUrls[0]
+  const isSandboxUrl = networkIcon?.startsWith('chrome://erc-token-images/')
+  const networkImageURL = isSandboxUrl
+    ? stripERC20TokenImageURL(networkIcon)
+    : networkIcon
+
+  const isRemoteURL = isRemoteImageURL(networkImageURL)
+
+  // needs placeholder
+  if (
+    !networkImageURL ||
+    !isStorybook ||
+    (isRemoteURL || isSandboxUrl
+      ? !isValidIconExtension(new URL(networkIcon).pathname)
+      : true)
+  ) {
+    return (
+      <NetworkPlaceholderIcon
+        marginRight={marginRight}
+        network={network}
+        size={size}
+      />
     )
   }
 
   return (
     <IconWrapper
       marginRight={marginRight ?? 0}
-      isTestnet={network ? SupportedTestNetworks.includes(network.chainId) : false}
+      isTestnet={isTestnet}
       size={size}
     >
       <NetworkIcon
         size={size}
-        icon={
-          isStorybook
-            ? network?.iconUrls[0]
-            : networkLogo !== ''
-              ? networkLogo
-              : isRemoteURL ? remoteImage : network?.iconUrls[0]
-        }
+        icon={isRemoteURL ? `chrome://image?${networkImageURL}` : networkIcon}
       />
     </IconWrapper>
   )
 }
 
 export default CreateNetworkIcon
+
+function NetworkPlaceholderIcon({
+  marginRight,
+  network,
+  size
+}: {
+  marginRight: number | undefined
+  network?: SimpleNetwork | null
+  size?: IconSize
+}) {
+  // custom hooks
+  const orb = useNetworkOrb(network)
+
+  // render
+  return (
+    <IconWrapper
+      marginRight={marginRight ?? 0}
+      isTestnet={false}
+      size={size}
+    >
+      <Placeholder
+        size={size}
+        orb={orb}
+      />
+    </IconWrapper>
+  )
+}

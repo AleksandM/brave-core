@@ -5,142 +5,99 @@
 import * as React from 'react'
 import { useDispatch } from 'react-redux'
 import { skipToken } from '@reduxjs/toolkit/query/react'
+import { useHistory } from 'react-router'
 
 // Constants
-import { BraveWallet } from '../../../constants/types'
+import { BraveWallet, TransactionInfoLookup } from '../../../constants/types'
 
 // Utils
-import { getLocale } from '$web-common/locale'
-import {
-  findTransactionToken,
-  getETHSwapTransactionBuyAndSellTokens,
-  getFormattedTransactionTransferredValue,
-  getTransactionErc721TokenId,
-  getTransactionIntent
-} from '../../../utils/tx-utils'
-import { makeNetworkAsset } from '../../../options/asset-options'
+import { getCoinFromTxDataUnion } from '../../../utils/network-utils'
+import { makeTransactionDetailsRoute } from '../../../utils/routes-utils'
 
 // Hooks
-import { useTransactionsNetwork } from '../../../common/hooks/use-transactions-network'
-import { usePendingTransactions } from '../../../common/hooks/use-pending-transaction'
-import { useGetTransactionsQuery } from '../../../common/slices/api.slice'
-import { useUnsafeUISelector } from '../../../common/hooks/use-safe-selector'
-import {
-  useGetCombinedTokensListQuery
-} from '../../../common/slices/api.slice.extra'
+import { useGetTransactionQuery } from '../../../common/slices/api.slice'
 
 // Actions
 import * as WalletPanelActions from '../../../panel/actions/wallet_panel_actions'
 
 // Components
-import { Panel } from '../index'
-import { TransactionSubmittedOrSigned } from './submitted_or_signed'
-import { TransactionComplete } from './complete'
-import { TransactionFailed } from './failed'
+import {
+  TransactionSubmittedOrSigned //
+} from './submitted_or_signed/submitted_or_signed'
+import { TransactionComplete } from './complete/complete'
+import {
+  TransactionFailedOrCanceled //
+} from './failed_or_canceled/failed_or_canceled'
+import {
+  CancelTransaction //
+} from './cancel_transaction/cancel_transaction'
+
+// Styled Components
 import { Loader } from './common/common.style'
 import { Skeleton } from '../../shared/loading-skeleton/styles'
-import { UISelectors } from '../../../common/selectors'
+import { Column } from '../../shared/style'
 
 interface Props {
-  transactionId: string
+  transactionLookup: TransactionInfoLookup
 }
 
-export function TransactionStatus (props: Props) {
-  const { transactionId } = props
-
-  // redux
-  const transactionProviderErrorRegistry = useUnsafeUISelector(
-    UISelectors.transactionProviderErrorRegistry
-  )
+export function TransactionStatus({ transactionLookup }: Props) {
+  // history
+  const history = useHistory()
 
   // queries
-  const { tx } = useGetTransactionsQuery(
-    transactionId
-      ? {
-          address: null,
-          chainId: null,
-          coinType: null
-        }
-      : skipToken,
-    {
-      selectFromResult: (res) => ({
-        isLoading: res.isLoading,
-        tx: res.data?.find((tx) => tx.id === transactionId),
-        error: res.error as string | undefined
-      })
-    }
-  )
+  const { data: tx } = useGetTransactionQuery(transactionLookup ?? skipToken)
 
-  const { data: combinedTokensList } = useGetCombinedTokensListQuery()
+  // State
+  const [showCancelTransaction, setShowCancelTransaction] =
+    React.useState(false)
 
   // hooks
   const dispatch = useDispatch()
-  const transactionNetwork = useTransactionsNetwork(tx)
-  const { transactionsQueueLength } = usePendingTransactions()
-
-  // memos
-  const transactionIntent = React.useMemo(() => {
-    if (!tx) {
-      return ''
-    }
-
-    const token = findTransactionToken(tx, combinedTokensList)
-
-    const { buyAmount, sellAmount, buyToken, sellToken } =
-      getETHSwapTransactionBuyAndSellTokens({
-        tokensList: combinedTokensList,
-        tx,
-        nativeAsset: makeNetworkAsset(transactionNetwork)
-      })
-
-    const { normalizedTransferredValue } =
-      getFormattedTransactionTransferredValue({
-        tx,
-        txNetwork: transactionNetwork,
-        token,
-        sellToken
-      })
-
-    return getTransactionIntent({
-      tx,
-      normalizedTransferredValue,
-      buyAmount,
-      buyToken,
-      erc721TokenId: getTransactionErc721TokenId(tx),
-      sellAmount,
-      sellToken,
-      token,
-      transactionNetwork
-    })
-  }, [tx, transactionNetwork, combinedTokensList])
 
   // methods
-  const viewTransactionDetail = React.useCallback(() => {
+  const onClickViewInActivity = React.useCallback(() => {
     if (!tx?.id) {
       return
     }
-    dispatch(WalletPanelActions.setSelectedTransactionId(tx.id))
-    dispatch(WalletPanelActions.navigateTo('transactionDetails'))
-  }, [tx?.id])
+    dispatch(
+      WalletPanelActions.setSelectedTransactionId({
+        chainId: tx.chainId,
+        coin: getCoinFromTxDataUnion(tx.txDataUnion),
+        id: tx.id
+      })
+    )
+    dispatch(WalletPanelActions.navigateToMain())
+    history.push(makeTransactionDetailsRoute(tx.id))
+  }, [dispatch, history, tx])
+
   const onClose = () =>
     dispatch(WalletPanelActions.setSelectedTransactionId(undefined))
-  const completePrimaryCTAText =
-    transactionsQueueLength === 0
-      ? getLocale('braveWalletButtonClose')
-      : getLocale('braveWalletButtonNext')
 
   // render
   if (!tx) {
     return <Skeleton />
   }
 
-  if (tx.txStatus === BraveWallet.TransactionStatus.Submitted ||
-      tx.txStatus === BraveWallet.TransactionStatus.Signed) {
+  if (showCancelTransaction) {
+    return (
+      <CancelTransaction
+        onBack={() => setShowCancelTransaction(false)}
+        transaction={tx}
+      />
+    )
+  }
+
+  if (
+    tx.txStatus === BraveWallet.TransactionStatus.Submitted ||
+    tx.txStatus === BraveWallet.TransactionStatus.Signed
+  ) {
     return (
       <TransactionSubmittedOrSigned
-        headerTitle={transactionIntent}
         transaction={tx}
         onClose={onClose}
+        onShowCancelTransaction={() => setShowCancelTransaction(true)}
+        onClickViewInActivity={onClickViewInActivity}
       />
     )
   }
@@ -148,35 +105,31 @@ export function TransactionStatus (props: Props) {
   if (tx.txStatus === BraveWallet.TransactionStatus.Confirmed) {
     return (
       <TransactionComplete
-        headerTitle={transactionIntent}
-        description={getLocale('braveWalletTransactionCompleteDescription')}
-        isPrimaryCTADisabled={false}
+        transaction={tx}
         onClose={onClose}
-        onClickSecondaryCTA={viewTransactionDetail}
-        onClickPrimaryCTA={onClose}
-        primaryCTAText={completePrimaryCTAText}
+        onClickViewInActivity={onClickViewInActivity}
       />
     )
   }
 
-  if (tx.txStatus === BraveWallet.TransactionStatus.Error) {
-    const providerError = transactionProviderErrorRegistry[tx.id]
-    const errorDetailContent = providerError && `${providerError.code}: ${providerError.message}`
+  if (
+    tx.txStatus === BraveWallet.TransactionStatus.Error ||
+    tx.txStatus === BraveWallet.TransactionStatus.Dropped
+  ) {
     return (
-      <TransactionFailed
-        headerTitle={transactionIntent}
-        isPrimaryCTADisabled={false}
-        errorDetailTitle={getLocale('braveWalletTransactionFailedModalSubtitle')}
-        errorDetailContent={errorDetailContent}
+      <TransactionFailedOrCanceled
+        transaction={tx}
         onClose={onClose}
-        onClickPrimaryCTA={onClose}
       />
     )
   }
 
   return (
-    <Panel navAction={onClose} title={transactionIntent} headerStyle='slim'>
+    <Column
+      fullHeight={true}
+      fullWidth={true}
+    >
       <Loader />
-    </Panel>
+    </Column>
   )
 }

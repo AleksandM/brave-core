@@ -29,7 +29,6 @@ import { AssetIcon } from '../../style'
 
 interface Props {
   selectedAsset: BraveWallet.BlockchainToken
-  selectedAssetNetwork: BraveWallet.NetworkInfo
   onClose: () => void
   onHideAsset: () => void
 }
@@ -37,30 +36,31 @@ interface Props {
 const AssetIconWithPlaceholder = withPlaceholderIcon(AssetIcon, { size: 'big' })
 
 export const HideTokenModal = (props: Props) => {
-  const {
-    selectedAsset,
-    selectedAssetNetwork,
-    onClose,
-    onHideAsset
-  } = props
+  const { selectedAsset, onClose, onHideAsset } = props
 
   return (
-  <PopupModal
-    onClose={onClose}
-    title={getLocale('braveWalletHideTokenModalTitle')}
-    width={hideTokenModalWidth}
-  >
-    <StyledWrapper>
-      <IconWrapper>
-        <AssetIconWithPlaceholder asset={selectedAsset} network={selectedAssetNetwork} />
-      </IconWrapper>
-      <TokenSymbol>{selectedAsset.symbol}</TokenSymbol>
-      <Instructions>{getLocale('braveWalletMakeTokenVisibleInstructions')}</Instructions>
-      <ButtonRow>
-        <CancelButton onClick={onClose}>{getLocale('braveWalletCancelHidingToken')}</CancelButton>
-        <OkButton onClick={onHideAsset}>{getLocale('braveWalletConfirmHidingToken')}</OkButton>
-      </ButtonRow>
-    </StyledWrapper>
-  </PopupModal>
+    <PopupModal
+      onClose={onClose}
+      title={getLocale('braveWalletHideTokenModalTitle')}
+      width={hideTokenModalWidth}
+    >
+      <StyledWrapper>
+        <IconWrapper>
+          <AssetIconWithPlaceholder asset={selectedAsset} />
+        </IconWrapper>
+        <TokenSymbol>{selectedAsset.symbol}</TokenSymbol>
+        <Instructions>
+          {getLocale('braveWalletMakeTokenVisibleInstructions')}
+        </Instructions>
+        <ButtonRow>
+          <CancelButton onClick={onClose}>
+            {getLocale('braveWalletCancelHidingToken')}
+          </CancelButton>
+          <OkButton onClick={onHideAsset}>
+            {getLocale('braveWalletConfirmHidingToken')}
+          </OkButton>
+        </ButtonRow>
+      </StyledWrapper>
+    </PopupModal>
   )
 }

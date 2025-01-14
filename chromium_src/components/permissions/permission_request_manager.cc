@@ -7,13 +7,19 @@
 
 #include "base/containers/contains.h"
 #include "brave/components/brave_wallet/browser/permission_utils.h"
+
+#define BRAVE_PERMISSION_REQUEST_MANAGER_GET_REQUESTING_ORIGIN \
+  if (!ShouldBeGrouppedInRequests(request))
+
 #include "src/components/permissions/permission_request_manager.cc"
+#undef BRAVE_PERMISSION_REQUEST_MANAGER_GET_REQUESTING_ORIGIN
+
 #include "url/origin.h"
 
 namespace permissions {
 
 bool PermissionRequestManager::ShouldGroupRequests(PermissionRequest* a,
-                                                   PermissionRequest* b) {
+                                                   PermissionRequest* b) const {
   url::Origin origin_a;
   url::Origin origin_b;
   if (a->request_type() == RequestType::kBraveEthereum ||
@@ -33,6 +39,17 @@ bool PermissionRequestManager::ShouldGroupRequests(PermissionRequest* a,
   return ::permissions::ShouldGroupRequests(a, b);
 }
 
+bool PermissionRequestManager::ShouldBeGrouppedInRequests(
+    PermissionRequest* a) const {
+  // Called from PermissionRequestManager::GetRequestingOrigin when DCHECK IS ON
+  // to adjust the check for grouped requests. |requests_| is cheked by the
+  // caller to not be empty.
+  if (requests_[0] == a) {
+    return true;
+  }
+  return ShouldGroupRequests(requests_[0], a);
+}
+
 // Accept/Deny/Cancel each sub-request, total size of all passed in requests
 // should be equal to current requests_size because we will finalizing all
 // current requests in the end. The request callbacks will be called in FIFO
@@ -48,19 +65,13 @@ void PermissionRequestManager::AcceptDenyCancel(
   DCHECK((accepted_requests.size() + denied_requests.size() +
           cancelled_requests.size()) == requests_.size());
 
-  // We need to process requests in reverse order because
-  // PermissionRequestQueue impelementation of Push and Pop are paired with
-  // base::circular_dequeue's (push_back, pop_back) and (push_front, pop_front)
-  // Once pending_permission_requests_ is popped to the vector request_, the
-  // order is fixed because the reorder takes place in
-  // pending_permission_requests_.
-  for (auto it = requests_.crbegin(); it != requests_.crend(); ++it) {
-    if (base::Contains(accepted_requests, *it)) {
-      PermissionGrantedIncludingDuplicates(*it, /*is_one_time=*/false);
-    } else if (base::Contains(denied_requests, *it)) {
-      PermissionDeniedIncludingDuplicates(*it);
+  for (const auto& request : requests_) {
+    if (base::Contains(accepted_requests, request)) {
+      PermissionGrantedIncludingDuplicates(request, /*is_one_time=*/false);
+    } else if (base::Contains(denied_requests, request)) {
+      PermissionDeniedIncludingDuplicates(request);
     } else {
-      CancelledIncludingDuplicates(*it);
+      CancelledIncludingDuplicates(request);
     }
   }
 
@@ -77,7 +88,7 @@ void PermissionRequestManager::AcceptDenyCancel(
   } else if (!denied_requests.empty()) {
     action = PermissionAction::DENIED;
   }
-  FinalizeCurrentRequests(action);
+  CurrentRequestsDecided(action);
 }
 
 }  // namespace permissions

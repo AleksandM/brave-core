@@ -7,9 +7,12 @@ package org.chromium.chrome.browser.toolbar.bottom;
 
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.ObservableSupplierImpl;
-import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
+import org.chromium.base.supplier.Supplier;
+import org.chromium.chrome.browser.browser_controls.BottomControlsStacker;
+import org.chromium.chrome.browser.browser_controls.BrowserStateBrowserControlsVisibilityDelegate;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
 import org.chromium.chrome.browser.tab.TabObscuringHandler;
+import org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeController;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyModel;
 
@@ -17,7 +20,7 @@ class BraveBottomControlsMediator extends BottomControlsMediator {
     // To delete in bytecode, members from parent class will be used instead.
     private int mBottomControlsHeight;
     private PropertyModel mModel;
-    private BrowserControlsSizer mBrowserControlsSizer;
+    private BottomControlsStacker mBottomControlsStacker;
 
     // Own members.
     private ObservableSupplierImpl<Boolean> mTabGroupUiVisibleSupplier =
@@ -27,12 +30,28 @@ class BraveBottomControlsMediator extends BottomControlsMediator {
     private int mBottomControlsHeightSingle;
     private int mBottomControlsHeightDouble;
 
-    BraveBottomControlsMediator(WindowAndroid windowAndroid, PropertyModel model,
-            BrowserControlsSizer controlsSizer, FullscreenManager fullscreenManager,
-            TabObscuringHandler tabObscuringHandler, int bottomControlsHeight,
-            ObservableSupplier<Boolean> overlayPanelVisibilitySupplier) {
-        super(windowAndroid, model, controlsSizer, fullscreenManager, tabObscuringHandler,
-                bottomControlsHeight, overlayPanelVisibilitySupplier);
+    BraveBottomControlsMediator(
+            WindowAndroid windowAndroid,
+            PropertyModel model,
+            BottomControlsStacker controlsStacker,
+            BrowserStateBrowserControlsVisibilityDelegate browserControlsVisibilityDelegate,
+            FullscreenManager fullscreenManager,
+            TabObscuringHandler tabObscuringHandler,
+            int bottomControlsHeight,
+            ObservableSupplier<Boolean> overlayPanelVisibilitySupplier,
+            ObservableSupplier<EdgeToEdgeController> edgeToEdgeControllerSupplier,
+            Supplier<Boolean> readAloudRestoringSupplier) {
+        super(
+                windowAndroid,
+                model,
+                controlsStacker,
+                browserControlsVisibilityDelegate,
+                fullscreenManager,
+                tabObscuringHandler,
+                bottomControlsHeight,
+                overlayPanelVisibilitySupplier,
+                edgeToEdgeControllerSupplier,
+                readAloudRestoringSupplier);
 
         mTabGroupUiVisibleSupplier.set(false);
         mBottomToolbarVisibleSupplier.set(false);
@@ -75,7 +94,8 @@ class BraveBottomControlsMediator extends BottomControlsMediator {
         // This indicates that both controls are visible, but bottom toolbar has already been
         // scrolled down, so we move scroll further for tab groups control.
         if (mBottomControlsHeight == mBottomControlsHeightDouble
-                && mBrowserControlsSizer.getBottomControlOffset() == mBottomControlsHeightSingle) {
+                && mBottomControlsStacker.getBrowserControls().getBottomControlOffset()
+                        == mBottomControlsHeightSingle) {
             mModel.set(BottomControlsProperties.Y_OFFSET, mBottomControlsHeightDouble);
         }
     }

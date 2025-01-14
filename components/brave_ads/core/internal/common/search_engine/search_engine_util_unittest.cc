@@ -5,7 +5,6 @@
 
 #include "brave/components/brave_ads/core/internal/common/search_engine/search_engine_util.h"
 
-#include <string>
 #include <vector>
 
 #include "base/strings/strcat.h"
@@ -19,118 +18,68 @@
 namespace brave_ads {
 
 TEST(BraveAdsSearchEngineUtilTest, IsMultilingualAmazonSearchEngine) {
-  // Arrange
-  const auto domain_extensions = GetAmazonSearchEngineDomainExtensions();
-
-  // Act
-  for (const auto& domain_extension : domain_extensions) {
-    const GURL url =
-        GURL(base::StrCat({"https://www.amazon.", domain_extension, "/"}));
-    EXPECT_TRUE(IsSearchEngine(url));
+  // Act & Assert
+  for (const auto& domain_extension : kAmazonSearchEngineDomainExtensions) {
+    EXPECT_TRUE(IsSearchEngine(
+        GURL(base::StrCat({"https://www.amazon.", domain_extension, "/"}))));
   }
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsNotMultilingualAmazonSearchEngine) {
-  // Arrange
-
-  // Act
+  // Act & Assert
   EXPECT_FALSE(IsSearchEngine(GURL("https://www.amazon.foobar/")));
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsMultilingualGoogleSearchEngine) {
-  // Arrange
-  const auto domain_extensions = GetGoogleSearchEngineDomainExtensions();
-
-  // Act
-  for (const auto& domain_extension : domain_extensions) {
-    const GURL url =
-        GURL(base::StrCat({"https://www.google.", domain_extension, "/"}));
-    EXPECT_TRUE(IsSearchEngine(url));
+  // Act & Assert
+  for (const auto& domain_extension : kGoogleSearchEngineDomainExtensions) {
+    EXPECT_TRUE(IsSearchEngine(
+        GURL(base::StrCat({"https://www.google.", domain_extension, "/"}))));
   }
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsNotMultilingualGoogleSearchEngine) {
-  // Arrange
-
-  // Act
+  // Act & Assert
   EXPECT_FALSE(IsSearchEngine(GURL("https://www.google.foobar/")));
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsMultilingualMojeekSearchEngine) {
-  // Arrange
-  const auto domain_extensions = GetMojeekSearchEngineDomainExtensions();
-
-  // Act
-  for (const auto& domain_extension : domain_extensions) {
-    const GURL url =
-        GURL(base::StrCat({"https://www.mojeek.", domain_extension, "/"}));
-    EXPECT_TRUE(IsSearchEngine(url));
+  // Act & Assert
+  for (const auto& domain_extension : kMojeekSearchEngineDomainExtensions) {
+    EXPECT_TRUE(IsSearchEngine(
+        GURL(base::StrCat({"https://www.mojeek.", domain_extension, "/"}))));
   }
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsNotMultilingualMojeekSearchEngine) {
-  // Arrange
-
-  // Act
+  // Act & Assert
   EXPECT_FALSE(IsSearchEngine(GURL("https://www.mojeek.foobar/")));
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsMultilingualWikipediaSearchEngine) {
-  // Arrange
-  const auto subdomains = GetWikipediaSearchEngineSubdomains();
-
-  // Act
-  for (const auto& subdomain : subdomains) {
-    const GURL url =
-        GURL(base::StrCat({"https://", subdomain, ".wikipedia.org/"}));
-    EXPECT_TRUE(IsSearchEngine(url));
+  // Act & Assert
+  for (const auto& subdomain : kWikipediaSearchEngineSubdomains) {
+    EXPECT_TRUE(IsSearchEngine(
+        GURL(base::StrCat({"https://", subdomain, ".wikipedia.org/"}))));
   }
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsNotMultilingualWikipediaSearchEngine) {
-  // Arrange
-
-  // Act
+  // Act & Assert
   EXPECT_FALSE(IsSearchEngine(GURL("https://foobar.wikipedia.org/")));
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsMultilingualYahooSearchEngine) {
-  // Arrange
-  const auto subdomains = GetYahooSearchEngineSubdomains();
-
-  // Act
-  for (const auto& subdomain : subdomains) {
-    const GURL url =
-        GURL(base::StrCat({"https://", subdomain, ".search.yahoo.com/"}));
-    EXPECT_TRUE(IsSearchEngine(url));
+  // Act & Assert
+  for (const auto& subdomain : kYahooSearchEngineSubdomains) {
+    EXPECT_TRUE(IsSearchEngine(
+        GURL(base::StrCat({"https://", subdomain, ".search.yahoo.com/"}))));
   }
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsNotMultilingualYahooSearchEngine) {
-  // Arrange
-
-  // Act
+  // Act & Assert
   EXPECT_FALSE(IsSearchEngine(GURL("https://foobar.search.yahoo.com/")));
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsMonolingualSearchEngine) {
@@ -164,32 +113,20 @@ TEST(BraveAdsSearchEngineUtilTest, IsMonolingualSearchEngine) {
                                   GURL("https://www.youtube.com/"),
                                   GURL("https://yandex.com/")};
 
-  // Act
+  // Act & Assert
   for (const auto& url : urls) {
     EXPECT_TRUE(IsSearchEngine(url));
   }
-
-  // Assert
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsNotSearchEngine) {
-  // Arrange
-  const GURL url = GURL("https://foobar.com/");
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(IsSearchEngine(url));
+  // Act & Assert
+  EXPECT_FALSE(IsSearchEngine(GURL("https://foobar.com/")));
 }
 
 TEST(BraveAdsSearchEngineUtilTest, IsNotSearchEngineWithInvalidUrl) {
-  // Arrange
-  const GURL url = GURL("INVALID");
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(IsSearchEngine(url));
+  // Act & Assert
+  EXPECT_FALSE(IsSearchEngine(GURL("INVALID")));
 }
 
 }  // namespace brave_ads

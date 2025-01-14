@@ -18,6 +18,11 @@ import App from './containers/App'
 // Utils
 import store from './store'
 import * as webcompatReporterActions from './actions/webcompatreporter_actions'
+import {
+  getDialogArgs,
+  setViewPortChangeListener,
+  ViewPortSizeChangedObject,
+} from './browser_proxy'
 
 let actions: any
 
@@ -31,7 +36,7 @@ function getActions () {
 }
 
 function loadDialogArgs () {
-  const dialogArgsRaw = chrome.getVariableValue('dialogArguments')
+  const dialogArgsRaw = getDialogArgs()
   let dialogArgs
   try {
     dialogArgs = JSON.parse(dialogArgsRaw)
@@ -39,11 +44,20 @@ function loadDialogArgs () {
     console.error('Error parsing incoming dialog args: ', dialogArgsRaw, e)
   }
 
-  getActions().setSiteUrl(dialogArgs.siteUrl)
+  getActions().setDialogArgs(dialogArgs)
+}
+
+function onViewPortSizeChanged(data: ViewPortSizeChangedObject) {
+  const root = document.getElementById('root')
+  if (root) {
+    root.style.maxHeight = `${data.height}px`
+  }
 }
 
 function initialize () {
   loadDialogArgs()
+
+  setViewPortChangeListener(onViewPortSizeChanged)
 
   new Promise(resolve => chrome.braveTheme.getBraveThemeType(resolve))
   .then((themeType: chrome.braveTheme.ThemeType) => {

@@ -9,13 +9,14 @@ import { BraveWallet, UIState } from '../../constants/types'
 import { walletApi } from './api.slice'
 import { SetTransactionProviderErrorType } from '../constants/action_types'
 
-const defaultState: UIState = {
+export const defaultUIState: UIState = {
   selectedPendingTransactionId: undefined,
-  transactionProviderErrorRegistry: {}
+  transactionProviderErrorRegistry: {},
+  isPanel: false
 }
 
 // slice
-export const createUISlice = (initialState: UIState = defaultState) => {
+export const createUISlice = (initialState: UIState = defaultUIState) => {
   return createSlice({
     name: 'ui',
     initialState,
@@ -33,8 +34,7 @@ export const createUISlice = (initialState: UIState = defaultState) => {
       ) => {
         state.transactionProviderErrorRegistry[payload.transactionId] =
           payload.providerError
-      },
-
+      }
     },
     extraReducers: (builder) => {
       builder.addMatcher(

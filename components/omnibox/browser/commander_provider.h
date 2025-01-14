@@ -11,12 +11,19 @@
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observation.h"
 #include "brave/components/commander/browser/commander_frontend_delegate.h"
-#include "brave/components/commander/browser/commander_item_model.h"
 #include "components/omnibox/browser/autocomplete_provider.h"
-#include "components/omnibox/browser/autocomplete_provider_client.h"
-#include "components/omnibox/browser/autocomplete_provider_listener.h"
+
+class AutocompleteProviderClient;
+class AutocompleteProviderListener;
 
 namespace commander {
+
+// Used to distinguish matches for command items from regular
+// AutocompleteMatches. Other match types are defined in an enum, but to avoid
+// patching as much as possible, we're just using this marker in the
+// additional_info lookup to determine whether to show our custom icon.
+inline constexpr char kCommanderMatchMarker[] = "command-match";
+
 class CommanderProvider
     : public AutocompleteProvider,
       public commander::CommanderFrontendDelegate::Observer {

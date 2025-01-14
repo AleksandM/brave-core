@@ -95,7 +95,14 @@ MULTIPROCESS_TEST_MAIN(FastSleepyChildProcess) {
   return 0;
 }
 
-TEST_F(ChildProcessMonitorTest, ChildExit) {
+// Timeout frequently on MacOS arm64, see
+// https://github.com/brave/brave-browser/issues/41749
+#if BUILDFLAG(IS_MAC) && defined(ARCH_CPU_ARM64)
+#define MAYBE_ChildExit DISABLED_ChildExit
+#else
+#define MAYBE_ChildExit ChildExit
+#endif
+TEST_F(ChildProcessMonitorTest, MAYBE_ChildExit) {
   std::unique_ptr<ChildProcessMonitor> monitor =
       std::make_unique<ChildProcessMonitor>();
 
@@ -124,9 +131,11 @@ MULTIPROCESS_TEST_MAIN(SleepyCrashChildProcess) {
   return 1;
 }
 
-// Some tests are failing for Windows x86 CI,
-// See https://github.com/brave/brave-browser/issues/22767
-#if BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86)
+// Some tests are failing for Windows x86 and Mac Arm64 CI due to timeouts.
+// See https://github.com/brave/brave-browser/issues/22767 and
+// https://github.com/brave/brave-browser/issues/37630
+#if (BUILDFLAG(IS_WIN) && defined(ARCH_CPU_X86)) || \
+    (BUILDFLAG(IS_MAC) && defined(ARCH_CPU_ARM_FAMILY))
 #define MAYBE_ChildCrash DISABLED_ChildCrash
 #else
 #define MAYBE_ChildCrash ChildCrash

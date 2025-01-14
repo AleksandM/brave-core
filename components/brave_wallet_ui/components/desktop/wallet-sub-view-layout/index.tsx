@@ -10,13 +10,11 @@ export interface Props {
   children?: React.ReactNode
 }
 
-export default class WalletSubViewLayout extends React.PureComponent<Props, {}> {
-  render () {
+export class WalletSubViewLayout extends React.PureComponent<Props, {}> {
+  render() {
     const { children, noPadding } = this.props
-    return (
-      <StyledWrapper noPadding={noPadding}>
-        {children}
-      </StyledWrapper>
-    )
+    return <StyledWrapper noPadding={noPadding}>{children}</StyledWrapper>
   }
 }
+
+export default WalletSubViewLayout

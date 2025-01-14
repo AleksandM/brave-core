@@ -7,38 +7,23 @@ import * as React from 'react'
 
 import { LocaleContext, formatMessage } from '../../shared/lib/locale_context'
 import { HostContext, useHostListener } from '../lib/host_context'
-import { supportedWalletRegionsURL, aboutBATURL } from '../../shared/lib/rewards_urls'
-import { ToggleButton } from '../../shared/components/toggle_button'
+import { aboutBATURL } from '../../shared/lib/rewards_urls'
 import { NewTabLink } from '../../shared/components/new_tab_link'
 import { SettingsIcon } from '../../shared/components/icons/settings_icon'
 import { ArrowNextIcon } from '../../shared/components/icons/arrow_next_icon'
-import { FancyBatIcon } from './icons/fancy_bat_icon'
 
-import * as derivedState from '../lib/derived_state'
 import * as style from './limited_view.style'
 
 export function LimitedView () {
   const host = React.useContext(HostContext)
   const { getString, getPluralString } = React.useContext(LocaleContext)
 
-  const [requestedView, setRequestedView] =
-    React.useState(host.state.requestedView)
-  const [adsEnabled, setAdsEnabled] =
-    React.useState(host.state.settings.adsEnabled)
-  const [publisherInfo, setPublisherInfo] =
-    React.useState(host.state.publisherInfo)
   const [publishersVisitedCount, setPublishersVisitedCount] =
     React.useState(host.state.publishersVisitedCount)
   const [publisherCountText, setPublisherCountText] = React.useState('')
-  const [canConnectAccount, setCanConnectAccount] =
-    React.useState(derivedState.canConnectAccount(host.state))
 
   useHostListener(host, (state) => {
-    setRequestedView(state.requestedView)
-    setAdsEnabled(state.settings.adsEnabled)
-    setPublisherInfo(state.publisherInfo)
     setPublishersVisitedCount(state.publishersVisitedCount)
-    setCanConnectAccount(derivedState.canConnectAccount(state))
   })
 
   React.useEffect(() => {
@@ -47,10 +32,6 @@ export function LimitedView () {
       .then((value) => { active && setPublisherCountText(value) })
     return () => { active = false }
   }, [publishersVisitedCount])
-
-  function onToggleAdsEnabled () {
-    host.setAdsEnabled(!adsEnabled)
-  }
 
   function onConnectAccount () {
     host.handleExternalWalletAction('verify')
@@ -61,45 +42,6 @@ export function LimitedView () {
   }
 
   function renderConnectBox () {
-    if (!canConnectAccount) {
-      return (
-        <style.connect>
-          <div>
-            {
-              getString(publisherInfo
-                ? 'connectContributeNoProviders'
-                : 'connectAccountNoProviders')
-            }
-          </div>
-          <style.connectLearnMore>
-            <NewTabLink href={supportedWalletRegionsURL}>
-              {getString('learnMore')}
-            </NewTabLink>
-          </style.connectLearnMore>
-        </style.connect>
-      )
-    }
-
-    if (publisherInfo && requestedView === 'inline-tip') {
-      return (
-        <style.connect>
-          <style.connectAction>
-            <button onClick={onConnectAccount}>
-              {getString('rewardsConnectAccount')}<ArrowNextIcon />
-            </button>
-          </style.connectAction>
-          <div>
-            <div>
-              <strong>{getString('connectContributeHeader')}</strong>
-            </div>
-            <div>
-              {getString('connectContributeText')}
-            </div>
-          </div>
-        </style.connect>
-      )
-    }
-
     return (
       <style.connect>
         <style.connectAction>
@@ -133,45 +75,18 @@ export function LimitedView () {
     )
   }
 
-  function renderContent () {
-    if (!adsEnabled) {
-      return (
-        <style.disabledText>
-          <div><FancyBatIcon /></div>
-          <div>{getString('aboutRewardsText')}</div>
-        </style.disabledText>
-      )
-    }
-
-    return (
-      <>
-        {renderConnectBox()}
-        {renderPublisherBox()}
-      </>
-    )
-  }
-
   return (
     <style.root>
       <style.header>
         <style.title>
           {getString('headerTitle')}
           <style.headerText>
-            {
-              adsEnabled
-                ? getString('headerTextAdsEnabled')
-                : getString('headerTextAdsDisabled')
-            }
+            {getString('headerText')}
           </style.headerText>
         </style.title>
-        <style.rewardsSwitch>
-          <ToggleButton
-            checked={adsEnabled}
-            onChange={onToggleAdsEnabled}
-          />
-        </style.rewardsSwitch>
       </style.header>
-      {renderContent()}
+      {renderConnectBox()}
+      {renderPublisherBox()}
       <style.settings>
         <button onClick={onSettingsClick}>
           <SettingsIcon /> {getString('rewardsSettings')}

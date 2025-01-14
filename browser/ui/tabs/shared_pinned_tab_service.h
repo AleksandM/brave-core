@@ -12,10 +12,12 @@
 #include "base/scoped_observation.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "chrome/browser/ui/browser_list_observer.h"
+#include "chrome/browser/ui/tabs/tab_model.h"
 #include "chrome/browser/ui/tabs/tab_renderer_data.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
+#include "components/prefs/pref_member.h"
 
 class Profile;
 class BrowserList;
@@ -34,7 +36,7 @@ class SharedPinnedTabService : public KeyedService,
  public:
   struct PinnedTabData {
     TabRendererData renderer_data;
-    raw_ptr<content::WebContents> shared_contents = nullptr;
+    raw_ptr<content::WebContents, DanglingUntriaged> shared_contents = nullptr;
     raw_ptr<TabStripModel> contents_owner_model = nullptr;
   };
 
@@ -55,10 +57,7 @@ class SharedPinnedTabService : public KeyedService,
       int index,
       content::WebContents* maybe_dummy_contents);
 
-  void CacheWebContentsIfNeeded(
-      Browser* browser,
-      const std::vector<std::unique_ptr<TabStripModel::DetachedWebContents>>&
-          web_contents);
+  void TabDraggingEnded(Browser* browser);
 
   // KeyedService:
   void Shutdown() override;
@@ -103,10 +102,18 @@ class SharedPinnedTabService : public KeyedService,
   void SynchronizeNewBrowser(Browser* browser);
 
   void MoveSharedWebContentsToActiveBrowser(int index);
-  void MoveSharedWebContentsToBrowser(Browser* browser, int index);
+  void MoveSharedWebContentsToBrowser(Browser* browser,
+                                      int index,
+                                      bool is_last_closing_browser = false);
+
+  void OnSharedPinnedTabPrefChanged();
+  void OnSharedPinnedTabEnabled();
+  void OnSharedPinnedTabDisabled();
 
   std::unique_ptr<content::WebContents> CreateDummyWebContents(
       content::WebContents* shared_contents);
+
+  bool IsBrowserInTabDragging(Browser* browser) const;
 
   raw_ptr<Profile> profile_;
 
@@ -116,6 +123,7 @@ class SharedPinnedTabService : public KeyedService,
   base::flat_set<Browser*> closing_browsers_;
   base::flat_set<std::unique_ptr<content::WebContents>>
       cached_shared_contentses_from_closing_browser_;
+  base::flat_set<Browser*> in_tab_dragging_browsers_;
 
   // This data is ordered in the actual pinned tab order.
   std::vector<PinnedTabData> pinned_tab_data_;
@@ -128,6 +136,8 @@ class SharedPinnedTabService : public KeyedService,
 
   base::ScopedObservation<BrowserList, BrowserListObserver>
       browser_list_observation_{this};
+
+  BooleanPrefMember shared_pinned_tab_enabled_;
 
   base::WeakPtrFactory<SharedPinnedTabService> weak_ptr_factory_{this};
 };

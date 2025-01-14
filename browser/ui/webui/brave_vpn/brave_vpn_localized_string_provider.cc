@@ -8,7 +8,7 @@
 #include "base/no_destructor.h"
 #include "brave/components/l10n/common/localization_util.h"
 #include "components/grit/brave_components_strings.h"
-#include "content/public/browser/url_data_source.h"
+#include "content/public/browser/web_ui_data_source.h"
 #include "ui/base/webui/web_ui_util.h"
 
 namespace brave_vpn {
@@ -30,10 +30,14 @@ void AddLocalizedStrings(content::WebUIDataSource* html_source) {
       {"braveVpnPurchased", IDS_BRAVE_VPN_HAS_PURCHASED},
       {"braveVpnPoweredBy", IDS_BRAVE_VPN_POWERED_BY},
       {"braveVpnSettingsPanelHeader", IDS_BRAVE_VPN_SETTINGS_PANEL_HEADER},
-      {"braveVpnErrorPanelHeader", IDS_BRAVE_VPN_ERROR_PANEL_HEADER},
+      {"braveVpnSettingsPanelBackButtonAriaLabel",
+       IDS_BRAVE_VPN_SETTINGS_PANEL_BACK_BUTTON_ARIA_LABEL},
+      {"braveVpnErrorPanelBackButtonAriaLabel",
+       IDS_BRAVE_VPN_PANEL_GO_TO_MAIN_BUTTON_ARIA_LABEL},
       {"braveVpnStatus", IDS_BRAVE_VPN_STATUS},
       {"braveVpnExpires", IDS_BRAVE_VPN_EXPIRES},
       {"braveVpnManageSubscription", IDS_BRAVE_VPN_MANAGE_SUBSCRIPTION},
+      {"braveVpnReconnectAutomatically", IDS_BRAVE_VPN_RECONNECT_AUTOMATICALLY},
       {"braveVpnContactSupport", IDS_BRAVE_VPN_CONTACT_SUPPORT},
       {"braveVpnAbout", IDS_BRAVE_VPN_ABOUT},
       {"braveVpnFeature1", IDS_BRAVE_VPN_FEATURE_1},
@@ -43,12 +47,35 @@ void AddLocalizedStrings(content::WebUIDataSource* html_source) {
       {"braveVpnFeature5", IDS_BRAVE_VPN_FEATURE_5},
       {"braveVpnLoading", IDS_BRAVE_VPN_LOADING},
       {"braveVpnPurchaseFailed", IDS_BRAVE_VPN_PURCHASE_FAILED},
+      {"braveVpnSelectYourServer", IDS_BRAVE_VPN_SELECT_YOUR_SERVER},
+      {"braveVpnServerSelectionSingleCity",
+       IDS_BRAVE_VPN_SERVER_SELECTION_SINGLE_CITY},
+      {"braveVpnServerSelectionMultipleCities",
+       IDS_BRAVE_VPN_SERVER_SELECTION_MULTIPLE_CITIES},
+      {"braveVpnServerSelectionSingleServer",
+       IDS_BRAVE_VPN_SERVER_SELECTION_SINGLE_SERVER},
+      {"braveVpnServerSelectionMultipleServers",
+       IDS_BRAVE_VPN_SERVER_SELECTION_MULTIPLE_SERVERS},
+      {"braveVpnServerSelectionAutomaticLabel",
+       IDS_BRAVE_VPN_SERVER_SELECTION_AUTOMATIC_LABEL},
+      {"braveVpnServerSelectionOptimalLabel",
+       IDS_BRAVE_VPN_SERVER_SELECTION_OPTIMAL_LABEL},
+      {"braveVpnServerSelectionOptimalDesc",
+       IDS_BRAVE_VPN_SERVER_SELECTION_OPTIMAL_DESC},
+      {"braveVpnSelectPanelBackButtonAriaLabel",
+       IDS_BRAVE_VPN_PANEL_GO_TO_MAIN_BUTTON_ARIA_LABEL},
       {"braveVpnSupportTicketFailed", IDS_BRAVE_VPN_SUPPORT_TICKET_FAILED},
       {"braveVpnEditPaymentMethod", IDS_BRAVE_VPN_EDIT_PAYMENT},
       {"braveVpnPaymentFailure", IDS_BRAVE_VPN_PAYMENT_FAILURE},
       {"braveVpnPaymentFailureReason", IDS_BRAVE_VPN_PAYMENT_FAILURE_REASON},
+      {"braveVpnSupportPanelBackButtonAriaLabel",
+       IDS_BRAVE_VPN_SUPPORT_PANEL_BACK_BUTTON_ARIA_LABEL},
       {"braveVpnSupportEmail", IDS_BRAVE_VPN_SUPPORT_EMAIL},
+      {"braveVpnSupportEmailInputPlaceholder",
+       IDS_BRAVE_VPN_SUPPORT_EMAIL_PLACEHOLDER},
       {"braveVpnSupportEmailNotValid", IDS_BRAVE_VPN_SUPPORT_EMAIL_NOT_VALID},
+      {"braveVpnSupportFieldIsRequired",
+       IDS_BRAVE_VPN_SUPPORT_FIELD_IS_REQUIRED},
       {"braveVpnSupportSubject", IDS_BRAVE_VPN_SUPPORT_SUBJECT},
       {"braveVpnSupportSubjectNotSet", IDS_BRAVE_VPN_SUPPORT_SUBJECT_NOTSET},
       {"braveVpnSupportSubjectOtherConnectionProblem",
@@ -61,6 +88,8 @@ void AddLocalizedStrings(content::WebUIDataSource* html_source) {
        IDS_BRAVE_VPN_SUPPORT_SUBJECT_WEBSITE_DOESNT_WORK},
       {"braveVpnSupportSubjectOther", IDS_BRAVE_VPN_SUPPORT_SUBJECT_OTHER},
       {"braveVpnSupportBody", IDS_BRAVE_VPN_SUPPORT_BODY},
+      {"braveVpnSupportDescriptionPlaceholder",
+       IDS_BRAVE_VPN_SUPPORT_BODY_PLACEHOLDER},
       {"braveVpnSupportOptionalHeader", IDS_BRAVE_VPN_SUPPORT_OPTIONAL_HEADER},
       {"braveVpnSupportOptionalNotes", IDS_BRAVE_VPN_SUPPORT_OPTIONAL_NOTES},
       {"braveVpnSupportOptionalNotesPrivacyPolicy",
@@ -80,6 +109,8 @@ void AddLocalizedStrings(content::WebUIDataSource* html_source) {
       {"braveVpnSettingsTooltip", IDS_BRAVE_VPN_MAIN_PANEL_VPN_SETTINGS_TITLE},
       {"braveVpnSessionExpiredContent",
        IDS_BRAVE_VPN_MAIN_PANEL_SESSION_EXPIRED_PART_CONTENT},
+      {"braveVpnOutOfCredentials",
+       IDS_BRAVE_VPN_MAIN_PANEL_OUT_OF_CREDENTIALS_TITLE},
   };
 
   for (const auto& str : kLocalizedStrings) {

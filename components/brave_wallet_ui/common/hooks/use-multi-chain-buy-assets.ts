@@ -3,178 +3,76 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
-import * as React from 'react'
 import { skipToken } from '@reduxjs/toolkit/query/react'
 
-// utils
-import {
-  filterTokensByNetworks,
-  getRampAssetSymbol,
-  isSelectedAssetInAssetOptions
-} from '../../utils/asset-utils'
-
 // types
-import {
-  BraveWallet,
-  BuyOption,
-  SupportedTestNetworks
-} from '../../constants/types'
-import { WalletSelectors } from '../selectors'
-import { PageSelectors } from '../../page/selectors'
+import { BraveWallet } from '../../constants/types'
 
-// options
-import { BuyOptions } from '../../options/buy-with-options'
+// utils
+import { getAssetSymbol } from '../../utils/meld_utils'
+import { loadTimeData } from '../../../common/loadTimeData'
 
 // hooks
-import { useIsMounted } from './useIsMounted'
-import { useLib } from './useLib'
 import {
-  useUnsafePageSelector,
-  useUnsafeWalletSelector
-} from './use-safe-selector'
-import {
-  useGetNetworkQuery,
-  useGetOnRampNetworksQuery,
-  useGetSelectedChainQuery
+  useGetMeldCryptoCurrenciesQuery,
+  useGetOnRampAssetsQuery
 } from '../slices/api.slice'
 
-export const useMultiChainBuyAssets = () => {
-  // redux
-  const selectedCurrency = useUnsafeWalletSelector(WalletSelectors.selectedCurrency)
-  const reduxSelectedAsset = useUnsafePageSelector(PageSelectors.selectedAsset)
-
-  // custom hooks
-  const isMounted = useIsMounted()
-  const { getAllBuyAssets, getBuyAssetUrl } = useLib()
-
-  // state
-  const [buyAmount, setBuyAmount] = React.useState<string>('')
-  const [selectedAsset, setSelectedAsset] = React.useState<BraveWallet.BlockchainToken | undefined>()
-  const [options, setOptions] = React.useState<
-    {
-      rampAssetOptions: BraveWallet.BlockchainToken[]
-      sardineAssetOptions: BraveWallet.BlockchainToken[]
-      transakAssetOptions: BraveWallet.BlockchainToken[]
-      allAssetOptions: BraveWallet.BlockchainToken[]
-    }
-  >({
-    rampAssetOptions: [],
-    sardineAssetOptions: [],
-    transakAssetOptions: [],
-    allAssetOptions: []
-  })
+export const useFindBuySupportedToken = (
+  token?: Pick<
+    BraveWallet.BlockchainToken,
+    'symbol' | 'contractAddress' | 'chainId'
+  >
+) => {
+  // Computed
+  const isAndroid = loadTimeData.getBoolean('isAndroid') || false
 
   // queries
-  const { data: selectedNetwork } = useGetSelectedChainQuery()
-  const { data: buyAssetNetworks = [] } = useGetOnRampNetworksQuery()
-  const { data: selectedAssetNetwork } = useGetNetworkQuery(
-    selectedAsset ?? skipToken
+  const { data: options } = useGetMeldCryptoCurrenciesQuery(
+    token && !isAndroid ? undefined : skipToken
   )
 
-  // memos
-  const selectedAssetBuyOptions: BuyOption[] = React.useMemo(() => {
-    const { rampAssetOptions, sardineAssetOptions, transakAssetOptions } = options
-    const onRampAssetMap = {
-      [BraveWallet.OnRampProvider.kRamp]: rampAssetOptions,
-      [BraveWallet.OnRampProvider.kSardine]: sardineAssetOptions,
-      [BraveWallet.OnRampProvider.kTransak]: transakAssetOptions
-    }
-    return selectedAsset
-      ? [...BuyOptions]
-        .filter(buyOption => isSelectedAssetInAssetOptions(selectedAsset, onRampAssetMap[buyOption.id]))
-        .sort((optionA, optionB) => optionA.name.localeCompare(optionB.name))
-      : []
-  }, [selectedAsset, options])
+  const { data: androidOptions = undefined } = useGetOnRampAssetsQuery(
+    token && isAndroid ? undefined : skipToken
+  )
 
-  const isSelectedNetworkSupported = React.useMemo(() => {
-    if (!selectedNetwork) return false
+  const canBuyOnAndroid =
+    token &&
+    isAndroid &&
+    androidOptions?.allAssetOptions.some(
+      (asset) => asset.symbol.toLowerCase() === token.symbol.toLowerCase()
+    )
 
-    // Test networks are not supported in buy tab
-    if (SupportedTestNetworks.includes(selectedNetwork.chainId.toLowerCase())) {
-      return false
-    }
+  // computed
+  const foundNativeToken =
+    token &&
+    token.contractAddress === '' &&
+    options?.find(
+      (asset) =>
+        asset.chainId?.toLowerCase() === token.chainId.toLowerCase() &&
+        getAssetSymbol(asset).toLowerCase() === token.symbol.toLowerCase()
+    )
 
-    return options.allAssetOptions
-      .map(asset => asset.chainId.toLowerCase())
-      .includes(selectedNetwork.chainId.toLowerCase())
-  }, [options.allAssetOptions, selectedNetwork])
+  const foundTokenByContractAddress =
+    token &&
+    options?.find(
+      (asset) =>
+        asset.contractAddress?.toLowerCase() ===
+          token.contractAddress.toLowerCase() &&
+        asset.chainId?.toLowerCase() === token.chainId.toLowerCase()
+    )
 
-  const assetsForFilteredNetwork = React.useMemo(() => {
-    return options.allAssetOptions.filter(asset => selectedNetwork?.chainId === asset.chainId)
-  }, [selectedNetwork, options.allAssetOptions])
+  const foundTokenBySymbol =
+    token &&
+    options?.find(
+      (asset) =>
+        getAssetSymbol(asset).toLowerCase() === token.symbol.toLowerCase()
+    )
 
-  // methods
-  const getAllBuyOptionsAllChains = React.useCallback(() => {
-    getAllBuyAssets()
-      .then(result => {
-        if (isMounted && result) {
-          setOptions({
-            rampAssetOptions: filterTokensByNetworks(result.rampAssetOptions, buyAssetNetworks),
-            sardineAssetOptions: filterTokensByNetworks(result.sardineAssetOptions, buyAssetNetworks),
-            transakAssetOptions: filterTokensByNetworks(result.transakAssetOptions, buyAssetNetworks),
-            allAssetOptions: filterTokensByNetworks(result.allAssetOptions, buyAssetNetworks)
-          })
-        }
-      })
-  }, [getAllBuyAssets, buyAssetNetworks, isMounted])
-
-  const openBuyAssetLink = React.useCallback(({ buyOption, depositAddress }: {
-    buyOption: BraveWallet.OnRampProvider
-    depositAddress: string
-  }) => {
-    if (!selectedAsset || !selectedAssetNetwork) {
-      return
-    }
-
-    const asset = {
-      ...selectedAsset,
-      symbol:
-        buyOption === BraveWallet.OnRampProvider.kRamp ? getRampAssetSymbol(selectedAsset)
-            : selectedAsset.symbol
-    }
-
-    getBuyAssetUrl({
-      asset,
-      onRampProvider: buyOption,
-      chainId: selectedAssetNetwork.chainId,
-      address: depositAddress,
-      amount: buyAmount,
-      currencyCode: selectedCurrency ? selectedCurrency.currencyCode : 'USD'
-    })
-      .then(url => {
-        chrome.tabs.create({ url }, () => {
-          if (chrome.runtime.lastError) {
-            console.error('tabs.create failed: ' + chrome.runtime.lastError.message)
-          }
-        })
-      })
-      .catch(e => console.error(e))
-  }, [
-    selectedAsset,
-    selectedAssetNetwork,
-    getBuyAssetUrl,
-    buyAmount,
-    selectedCurrency
-  ])
-
-  const isReduxSelectedAssetBuySupported = React.useMemo(() => {
-    return options.allAssetOptions.some((asset) => asset.symbol.toLowerCase() === reduxSelectedAsset?.symbol.toLowerCase())
-  }, [options.allAssetOptions, reduxSelectedAsset?.symbol])
-
+  // render
   return {
-    allAssetOptions: options.allAssetOptions,
-    rampAssetOptions: options.rampAssetOptions,
-    selectedAsset,
-    setSelectedAsset,
-    selectedAssetNetwork,
-    selectedAssetBuyOptions,
-    buyAssetNetworks,
-    getAllBuyOptionsAllChains,
-    buyAmount,
-    setBuyAmount,
-    openBuyAssetLink,
-    isReduxSelectedAssetBuySupported,
-    isSelectedNetworkSupported,
-    assetsForFilteredNetwork
+    foundMeldBuyToken:
+      foundNativeToken || foundTokenByContractAddress || foundTokenBySymbol,
+    foundAndroidBuyToken: canBuyOnAndroid ? token : undefined
   }
 }

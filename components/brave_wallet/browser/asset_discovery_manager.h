@@ -13,11 +13,13 @@
 #include <utility>
 #include <vector>
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "brave/components/api_request_helper/api_request_helper.h"
 #include "brave/components/brave_wallet/browser/asset_discovery_task.h"
 #include "brave/components/brave_wallet/browser/keyring_service_observer_base.h"
+#include "brave/components/brave_wallet/browser/simple_hash_client.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 
@@ -27,6 +29,7 @@ namespace brave_wallet {
 
 class BraveWalletService;
 class JsonRpcService;
+class SimpleHashClient;
 class KeyringService;
 
 class AssetDiscoveryManager : public KeyringServiceObserverBase {
@@ -35,9 +38,10 @@ class AssetDiscoveryManager : public KeyringServiceObserverBase {
   using APIRequestResult = api_request_helper::APIRequestResult;
   AssetDiscoveryManager(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      BraveWalletService* wallet_service,
-      JsonRpcService* json_rpc_service,
-      KeyringService* keyring_service,
+      BraveWalletService& wallet_service,
+      JsonRpcService& json_rpc_service,
+      KeyringService& keyring_service,
+      SimpleHashClient& simple_hash_client,
       PrefService* prefs);
 
   AssetDiscoveryManager(const AssetDiscoveryManager&) = delete;
@@ -78,11 +82,12 @@ class AssetDiscoveryManager : public KeyringServiceObserverBase {
                    account_addresses);
   void FinishTask();
 
-  std::queue<std::unique_ptr<AssetDiscoveryTask>> queue_;
   std::unique_ptr<APIRequestHelper> api_request_helper_;
-  raw_ptr<BraveWalletService> wallet_service_;
-  raw_ptr<JsonRpcService> json_rpc_service_;
-  raw_ptr<KeyringService> keyring_service_;
+  std::queue<std::unique_ptr<AssetDiscoveryTask>> queue_;
+  raw_ref<BraveWalletService> wallet_service_;
+  raw_ref<JsonRpcService> json_rpc_service_;
+  raw_ref<KeyringService> keyring_service_;
+  raw_ref<SimpleHashClient> simple_hash_client_;
   raw_ptr<PrefService> prefs_;
   mojo::Receiver<brave_wallet::mojom::KeyringServiceObserver>
       keyring_service_observer_receiver_{this};

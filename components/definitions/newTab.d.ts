@@ -84,7 +84,7 @@ declare namespace NewTab {
     url: string
   }
 
-  export type StackWidget = 'rewards' | 'braveTalk' | 'bitcoinDotCom' | ''
+  export type StackWidget = 'rewards' | 'braveTalk' | 'braveVPN' | 'bitcoinDotCom' | ''
 
   export interface GridSitesState {
     removedSites: Site[]
@@ -121,6 +121,11 @@ declare namespace NewTab {
     showTopSites: boolean
     showRewards: boolean
     showBraveTalk: boolean
+    showBraveVPN: boolean
+    showSearchBox: boolean
+    lastUsedNtpSearchEngine: string
+    promptEnableSearchSuggestions: boolean
+    searchSuggestionsEnabled: boolean
     hideAllWidgets: boolean
     isBraveNewsOptedIn: boolean
     isBrandedWallpaperNotificationDismissed: boolean
@@ -131,15 +136,13 @@ declare namespace NewTab {
     textDirection: string
     featureFlagBraveNTPSponsoredImagesWallpaper: boolean
     featureFlagBraveNewsPromptEnabled: boolean
+    featureFlagBraveNewsFeedV2Enabled: boolean
     searchPromotionEnabled: boolean
     featureCustomBackgroundEnabled: boolean
     isIncognito: boolean
-    useAlternativePrivateSearchEngine: boolean
-    showAlternativePrivateSearchEngineToggle: boolean
     torCircuitEstablished: boolean,
     torInitProgress: string,
     isTor: boolean
-    isQwant: boolean
     gridLayoutSize?: 'small'
     showGridSiteRemovedNotification?: boolean
     showBackgroundImage: boolean
@@ -155,30 +158,27 @@ declare namespace NewTab {
   export interface RewardsWidgetState {
     rewardsEnabled: boolean
     userType: string
-    isUnsupportedRegion: boolean
     declaredCountry: string
-    adsSupported?: boolean
     balance?: number
     externalWallet?: RewardsExtension.ExternalWallet
     externalWalletProviders?: string[]
     report?: RewardsBalanceReport
     adsAccountStatement: AdsAccountStatement
     dismissedNotifications: string[]
-    enabledAds: boolean
     needsBrowserUpgradeToServeAds: boolean
-    promotions: Promotion[]
     parameters: RewardsParameters
     totalContribution: number
     publishersVisitedCount: number
+    selfCustodyInviteDismissed: boolean
+    isTermsOfServiceUpdateRequired: boolean
   }
 
   export const enum RewardsResult {
-    LEDGER_OK = 0,
-    LEDGER_ERROR = 1,
+    OK = 0,
+    FAILED = 1,
     NO_PUBLISHER_STATE = 2,
-    NO_LEDGER_STATE = 3,
+    NO_LEGACY_STATE = 3,
     INVALID_PUBLISHER_STATE = 4,
-    INVALID_LEDGER_STATE = 5,
     CAPTCHA_FAILED = 6,
     NO_PUBLISHER_LIST = 7,
     TOO_MANY_RESULTS = 8,
@@ -192,27 +192,7 @@ declare namespace NewTab {
     ads: number
     contribute: number
     monthly: number
-    grant: number
     tips: number
-  }
-
-  export enum PromotionTypes {
-    UGP = 0,
-    ADS = 1
-  }
-
-  export interface PromotionResponse {
-    result: number
-    promotions: Promotion[]
-  }
-
-  export interface Promotion {
-    type: PromotionTypes
-    promotionId: string
-    createdAt: number
-    claimableUntil?: number
-    expiresAt?: number
-    amount: number
   }
 
   export interface AdsAccountStatement {

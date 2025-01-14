@@ -8,28 +8,12 @@ import { PanelState } from '../../constants/types'
 
 // mocks
 import { mockOriginInfo } from './mock-origin-info'
-import {
-  mockAddChainRequest,
-  mockSignMessageRequest,
-  mockGetEncryptionPublicKeyRequest,
-  mockDecryptRequest,
-  mockSwitchChainRequest
-} from './mock-eth-requests'
 
 export const mockPanelState: PanelState = {
   hasInitialized: false,
   connectToSiteOrigin: mockOriginInfo,
   selectedPanel: 'main',
-  panelTitle: '',
   connectingAccounts: [],
-  addChainRequest: mockAddChainRequest,
-  signMessageData: [mockSignMessageRequest],
-  signAllTransactionsRequests: [],
-  signTransactionRequests: [],
-  getEncryptionPublicKeyRequest: mockGetEncryptionPublicKeyRequest,
-  decryptRequest: mockDecryptRequest,
-  switchChainRequest: mockSwitchChainRequest,
   hardwareWalletCode: undefined,
-  suggestedTokenRequest: undefined,
   selectedTransactionId: undefined
 }

@@ -142,9 +142,7 @@ ChildProcessMonitor::ChildProcessMonitor()
 #if BUILDFLAG(IS_POSIX)
   SetupPipeHack();
 #endif
-  if (!child_monitor_thread_->Start()) {
-    NOTREACHED();
-  }
+  CHECK(child_monitor_thread_->Start());
 }
 
 ChildProcessMonitor::~ChildProcessMonitor() {

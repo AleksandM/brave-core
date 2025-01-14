@@ -20,6 +20,7 @@ import org.chromium.chrome.browser.about_settings.AboutChromeSettings;
 import org.chromium.chrome.browser.about_settings.AboutSettingsBridge;
 import org.chromium.chrome.browser.ntp_background_images.NTPBackgroundImagesBridge;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 import org.chromium.net.ChromiumNetworkAdapter;
 import org.chromium.net.NetworkTrafficAnnotationTag;
 
@@ -34,7 +35,7 @@ import java.nio.charset.StandardCharsets;
 
 public class RateFeedbackUtils {
     private static final String TAG = "Rate_Brave";
-    private static final String RATE_URL = "https://laptop-updates.brave.com/1/feedback";
+    private static final String RATE_URL = "https://feedback.brave.com/1/feedback";
 
     public interface RateFeedbackCallback {
         void rateFeedbackSubmitted();
@@ -68,19 +69,22 @@ public class RateFeedbackUtils {
 
     private static void sendRateFeedback(String userSelection, String userFeedback) {
         Context context = ContextUtils.getApplicationContext();
-        String appVersion = AboutChromeSettings.getApplicationVersion(
-                context, AboutSettingsBridge.getApplicationVersion());
+        String appVersion =
+                AboutChromeSettings.getApplicationVersion(
+                        context, AboutSettingsBridge.getApplicationVersion());
         StringBuilder sb = new StringBuilder();
 
-        Profile mProfile = Profile.getLastUsedRegularProfile();
+        Profile mProfile = ProfileManager.getLastUsedRegularProfile();
         NTPBackgroundImagesBridge mNTPBackgroundImagesBridge =
                 NTPBackgroundImagesBridge.getInstance(mProfile);
 
         HttpURLConnection urlConnection = null;
         try {
             URL url = new URL(RATE_URL);
-            urlConnection = (HttpURLConnection) ChromiumNetworkAdapter.openConnection(
-                    url, NetworkTrafficAnnotationTag.MISSING_TRAFFIC_ANNOTATION);
+            urlConnection =
+                    (HttpURLConnection)
+                            ChromiumNetworkAdapter.openConnection(
+                                    url, NetworkTrafficAnnotationTag.MISSING_TRAFFIC_ANNOTATION);
             urlConnection.setDoOutput(true);
             urlConnection.setRequestMethod("POST");
             urlConnection.setUseCaches(false);

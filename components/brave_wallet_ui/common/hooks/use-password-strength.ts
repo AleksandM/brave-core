@@ -9,10 +9,11 @@ export interface PasswordStrengthResults {
   isLongEnough: boolean
 }
 
-export const usePasswordStrength = () => {
+export const usePasswordStrength = (initialPassword: string = '') => {
   // state
-  const [password, setPassword] = React.useState<string>('')
-  const [confirmedPassword, setConfirmedPassword] = React.useState<string>('')
+  const [password, setPassword] = React.useState<string>(initialPassword)
+  const [confirmedPassword, setConfirmedPassword] =
+    React.useState<string>(initialPassword)
 
   // methods
   const checkIsStrongPassword = React.useCallback((pass: string) => {
@@ -53,13 +54,14 @@ export const usePasswordStrength = () => {
   }, [confirmedPassword, password])
 
   // computed
-  const passwordsMatch = password === confirmedPassword && confirmedPassword
-  const isValid = !(
-    hasConfirmedPasswordError ||
-    hasPasswordError ||
-    password === '' ||
-    confirmedPassword === ''
-  ) && isStrongPassword
+  const passwordsMatch = password === confirmedPassword
+  const isValid =
+    !(
+      hasConfirmedPasswordError ||
+      hasPasswordError ||
+      password === '' ||
+      confirmedPassword === ''
+    ) && isStrongPassword
 
   return {
     confirmedPassword,

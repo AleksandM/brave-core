@@ -21,6 +21,7 @@
 #include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
 #include "components/prefs/pref_change_registrar.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/gfx/geometry/skia_conversions.h"
 #include "ui/views/widget/widget_observer.h"
 
@@ -38,8 +39,10 @@ class BraveRewardsActionView
       public brave_rewards::RewardsPanelCoordinator::Observer,
       public brave_rewards::RewardsServiceObserver,
       public brave_rewards::RewardsNotificationServiceObserver {
+  METADATA_HEADER(BraveRewardsActionView, ToolbarButton)
  public:
-  explicit BraveRewardsActionView(Browser* browser);
+  explicit BraveRewardsActionView(
+      BrowserWindowInterface* browser_window_interface);
 
   ~BraveRewardsActionView() override;
 
@@ -56,6 +59,7 @@ class BraveRewardsActionView
   // views::LabelButton:
   std::unique_ptr<views::LabelButtonBorder> CreateDefaultBorder()
       const override;
+  void OnThemeChanged() override;
 
   // views::WidgetObserver:
   void OnWidgetDestroying(views::Widget* widget) override;
@@ -116,7 +120,7 @@ class BraveRewardsActionView
       brave_rewards::RewardsNotificationService,
       brave_rewards::RewardsNotificationServiceObserver>;
 
-  raw_ptr<Browser> browser_ = nullptr;
+  raw_ptr<BrowserWindowInterface> browser_window_interface_ = nullptr;
   raw_ptr<brave_rewards::RewardsPanelCoordinator> panel_coordinator_ = nullptr;
   raw_ptr<brave_rewards::RewardsTabHelper> tab_helper_ = nullptr;
   std::unique_ptr<WebUIBubbleManager> bubble_manager_;

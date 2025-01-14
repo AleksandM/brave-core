@@ -21,6 +21,7 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/permission_controller_delegate.h"
+#include "content/public/browser/permission_request_description.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
@@ -109,7 +110,7 @@ blink::mojom::PermissionStatus GetCurrentGoogleSignInPermissionStatus(
     const GURL& request_initiator_url) {
   return permission_controller->GetPermissionStatusForCurrentDocument(
       blink::PermissionType::BRAVE_GOOGLE_SIGN_IN,
-      contents->GetPrimaryMainFrame());
+      contents->GetPrimaryMainFrame(), /*should_include_device_status=*/false);
 }
 
 void CreateGoogleSignInPermissionRequest(
@@ -126,7 +127,9 @@ void CreateGoogleSignInPermissionRequest(
     *defer = true;
   }
   permission_controller->RequestPermissionsFromCurrentDocument(
-      {blink::PermissionType::BRAVE_GOOGLE_SIGN_IN}, rfh, true,
+      rfh,
+      content::PermissionRequestDescription(
+          blink::PermissionType::BRAVE_GOOGLE_SIGN_IN, /*user_gesture*/ true),
       std::move(callback));
 }
 

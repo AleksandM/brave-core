@@ -4,16 +4,17 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "brave/ios/browser/api/certificate/models/brave_certificate_rdns_sequence.h"
+
 #include "base/strings/sys_string_conversions.h"
 #include "brave/base/mac/conversions.h"
 #include "brave/ios/browser/api/certificate/utils/brave_certificate_utils.h"
 #include "brave/ios/browser/api/certificate/utils/brave_certificate_x509_utils.h"
 #include "net/cert/x509_cert_types.h"
-#include "net/der/input.h"
+#include "third_party/boringssl/src/pki/input.h"
 
 @implementation BraveCertificateRDNSequence
-- (instancetype)initWithBERName:(const net::der::Input&)berName
-                       uniqueId:(const net::der::BitString&)uniqueId {
+- (instancetype)initWithBERName:(const bssl::der::Input&)berName
+                       uniqueId:(const bssl::der::BitString&)uniqueId {
   if ((self = [super init])) {
     net::CertPrincipal rdns;  // relative_distinquished_name_sequence;
     auto string_handling =
@@ -24,8 +25,6 @@
       _organization = [[NSArray alloc] init];
       _organizationalUnit = [[NSArray alloc] init];
       _commonName = [[NSString alloc] init];
-      _streetAddress = [[NSArray alloc] init];
-      _domainComponent = [[NSArray alloc] init];
       _userId = [[NSString alloc] init];
       _countryOrRegion = [[NSString alloc] init];
       return self;
@@ -37,8 +36,6 @@
     _organization = brave::vector_to_ns(rdns.organization_names);
     _organizationalUnit = brave::vector_to_ns(rdns.organization_unit_names);
     _commonName = base::SysUTF8ToNSString(rdns.common_name);
-    _streetAddress = brave::vector_to_ns(rdns.street_addresses);
-    _domainComponent = brave::vector_to_ns(rdns.domain_components);
     _userId = base::SysUTF8ToNSString(uniqueId.bytes().AsString());
   }
   return self;

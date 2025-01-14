@@ -12,8 +12,6 @@
 #define BRAVE_BROWSER_BRAVE_BROWSER_PROCESS_H_
 
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
-#include "brave/components/greaselion/browser/buildflags/buildflags.h"
-#include "brave/components/ipfs/buildflags/buildflags.h"
 #include "brave/components/request_otr/common/buildflags/buildflags.h"
 #include "brave/components/speedreader/common/buildflags/buildflags.h"
 #include "brave/components/tor/buildflags/buildflags.h"
@@ -22,13 +20,12 @@
 
 namespace brave {
 class BraveReferralsService;
-class BraveFarblingService;
 class URLSanitizerComponentInstaller;
 }  // namespace brave
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
 namespace brave_vpn {
-class BraveVPNOSConnectionAPI;
+class BraveVPNConnectionManager;
 }  // namespace brave_vpn
 #endif
 
@@ -38,18 +35,11 @@ class LocalDataFilesService;
 
 namespace brave_shields {
 class AdBlockService;
-class HTTPSEverywhereService;
 }  // namespace brave_shields
 
 namespace brave_stats {
 class BraveStatsUpdater;
 }  // namespace brave_stats
-
-namespace greaselion {
-#if BUILDFLAG(ENABLE_GREASELION)
-class GreaselionDownloadService;
-#endif
-}  // namespace greaselion
 
 namespace debounce {
 class DebounceComponentInstaller;
@@ -64,7 +54,7 @@ class LocalhostPermissionComponent;
 }  // namespace localhost_permission
 
 namespace misc_metrics {
-class MenuMetrics;
+class ProcessMiscMetrics;
 }  // namespace misc_metrics
 
 namespace request_otr {
@@ -86,10 +76,6 @@ class BraveTorClientUpdater;
 class BraveTorPluggableTransportUpdater;
 }  // namespace tor
 
-namespace ipfs {
-class BraveIpfsClientUpdater;
-}
-
 namespace speedreader {
 class SpeedreaderRewriterService;
 }
@@ -109,10 +95,6 @@ class BraveBrowserProcess {
   https_upgrade_exceptions_service() = 0;
   virtual localhost_permission::LocalhostPermissionComponent*
   localhost_permission_component() = 0;
-#if BUILDFLAG(ENABLE_GREASELION)
-  virtual greaselion::GreaselionDownloadService*
-  greaselion_download_service() = 0;
-#endif
   virtual debounce::DebounceComponentInstaller*
   debounce_component_installer() = 0;
 #if BUILDFLAG(ENABLE_REQUEST_OTR)
@@ -121,16 +103,12 @@ class BraveBrowserProcess {
 #endif
   virtual brave::URLSanitizerComponentInstaller*
   URLSanitizerComponentInstaller() = 0;
-  virtual brave_shields::HTTPSEverywhereService* https_everywhere_service() = 0;
   virtual brave_component_updater::LocalDataFilesService*
   local_data_files_service() = 0;
 #if BUILDFLAG(ENABLE_TOR)
   virtual tor::BraveTorClientUpdater* tor_client_updater() = 0;
   virtual tor::BraveTorPluggableTransportUpdater*
   tor_pluggable_transport_updater() = 0;
-#endif
-#if BUILDFLAG(ENABLE_IPFS)
-  virtual ipfs::BraveIpfsClientUpdater* ipfs_client_updater() = 0;
 #endif
   virtual p3a::P3AService* p3a_service() = 0;
   virtual brave::BraveReferralsService* brave_referrals_service() = 0;
@@ -143,11 +121,11 @@ class BraveBrowserProcess {
   speedreader_rewriter_service() = 0;
 #endif
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
-  virtual brave_vpn::BraveVPNOSConnectionAPI* brave_vpn_os_connection_api() = 0;
+  virtual brave_vpn::BraveVPNConnectionManager*
+  brave_vpn_connection_manager() = 0;
 #endif
   virtual brave_ads::ResourceComponent* resource_component() = 0;
-  virtual brave::BraveFarblingService* brave_farbling_service() = 0;
-  virtual misc_metrics::MenuMetrics* menu_metrics() = 0;
+  virtual misc_metrics::ProcessMiscMetrics* process_misc_metrics() = 0;
 };
 
 extern BraveBrowserProcess* g_brave_browser_process;

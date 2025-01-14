@@ -11,8 +11,8 @@
 #include "base/feature_list.h"
 #include "base/no_destructor.h"
 #include "brave/browser/brave_browser_process.h"
-#include "brave/components/debounce/browser/debounce_service.h"
-#include "brave/components/debounce/common/features.h"
+#include "brave/components/debounce/core/browser/debounce_service.h"
+#include "brave/components/debounce/core/common/features.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
@@ -39,7 +39,8 @@ DebounceServiceFactory::DebounceServiceFactory()
 
 DebounceServiceFactory::~DebounceServiceFactory() = default;
 
-KeyedService* DebounceServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+DebounceServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   // Don't create service is debounce feature is disabled
   if (!base::FeatureList::IsEnabled(debounce::features::kBraveDebounce))
@@ -51,13 +52,13 @@ KeyedService* DebounceServiceFactory::BuildServiceInstanceFor(
   if (g_brave_browser_process)
     component_installer =
         g_brave_browser_process->debounce_component_installer();
-  return new DebounceService(component_installer,
-                             Profile::FromBrowserContext(context)->GetPrefs());
+  return std::make_unique<DebounceService>(
+      component_installer, Profile::FromBrowserContext(context)->GetPrefs());
 }
 
 content::BrowserContext* DebounceServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return GetBrowserContextRedirectedInIncognito(context);
 }
 
 bool DebounceServiceFactory::ServiceIsNULLWhileTesting() const {

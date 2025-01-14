@@ -4,53 +4,59 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
+import { skipToken } from '@reduxjs/toolkit/dist/query'
 
+// Constants
+import { emptyRewardsInfo } from '../../../../../common/async/base-query-cache'
+
+// Queries
 import {
-  useGetVisibleNetworksQuery
+  useGetVisibleNetworksQuery,
+  useGetRewardsInfoQuery
 } from '../../../../../common/slices/api.slice'
 
 // Types
 import {
+  BraveWallet,
   SupportedTestNetworks
 } from '../../../../../constants/types'
 
 // Options
 import {
-  SupportedTopLevelChainIds
+  SupportedTopLevelChainIds //
 } from '../../../../../options/network-filter-options'
 
 // Utils
 import {
-  networkEntityAdapter
+  networkEntityAdapter //
 } from '../../../../../common/slices/entities/network.entity'
 import { getLocale } from '../../../../../../common/locale'
 
 // Components
-import {
-  NetworkCheckboxes
-} from './network-chekboxes'
+import { NetworkCheckboxes } from './network-chekboxes'
 
 // Styled Components
-import {
-  SelectAllButton,
-  Title,
-} from './filter-components.style'
-import {
-  Row
-} from '../../../../shared/style'
+import { SelectAllButton, Title } from './filter-components.style'
+import { Row } from '../../../../shared/style'
 
 interface Props {
   filteredOutNetworkKeys: string[]
   setFilteredOutNetworkKeys: (keys: string[]) => void
+  networksSubset?: BraveWallet.NetworkInfo[]
 }
 
-export const FilterNetworksSection = (props: Props) => {
-  const {
-    filteredOutNetworkKeys,
-    setFilteredOutNetworkKeys
-  } = props
-
-  const { data: networks } = useGetVisibleNetworksQuery()
+export const FilterNetworksSection = ({
+  filteredOutNetworkKeys,
+  setFilteredOutNetworkKeys,
+  networksSubset
+}: Props) => {
+  // Queries
+  const { data: visibleNetworks = [] } = useGetVisibleNetworksQuery(
+    networksSubset ? skipToken : undefined
+  )
+  const { data: { rewardsNetwork: providerNetwork } = emptyRewardsInfo } =
+    useGetRewardsInfoQuery(networksSubset ? skipToken : undefined)
+  const networks = networksSubset || visibleNetworks
 
   // Memos
   const primaryNetworks = React.useMemo(() => {
@@ -60,74 +66,62 @@ export const FilterNetworksSection = (props: Props) => {
   }, [networks])
 
   const secondaryNetworks = React.useMemo(() => {
-    return networks
-      .filter(
-        (network) =>
-          !SupportedTopLevelChainIds.includes(network.chainId) &&
-          !SupportedTestNetworks.includes(network.chainId)
-      )
+    return networks.filter(
+      (network) =>
+        !SupportedTopLevelChainIds.includes(network.chainId) &&
+        !SupportedTestNetworks.includes(network.chainId)
+    )
   }, [networks])
 
   const testNetworks = React.useMemo(() => {
-    return networks
-      .filter(
-        (network) =>
-          SupportedTestNetworks.includes(network.chainId)
-      )
+    return networks.filter((network) =>
+      SupportedTestNetworks.includes(network.chainId)
+    )
   }, [networks])
 
+  // Computed
   const isSelectAll = React.useMemo(() => {
-    return filteredOutNetworkKeys.length > 0 && networks
-      .some(
-        (network) =>
-          filteredOutNetworkKeys
-            .includes(
-              networkEntityAdapter
-                .selectId(network)
-                .toString()
-            )
+    return (
+      filteredOutNetworkKeys.length > 0 &&
+      networks.some((network) =>
+        filteredOutNetworkKeys.includes(
+          networkEntityAdapter.selectId(network).toString()
+        )
       )
+    )
   }, [networks, filteredOutNetworkKeys])
 
   const isNetworkFilteredOut = React.useCallback(
     (key: string) => {
       return filteredOutNetworkKeys.includes(key)
-    }, [filteredOutNetworkKeys])
+    },
+    [filteredOutNetworkKeys]
+  )
 
-  const onCheckNetwork = React.useCallback((key: string) => {
-    if (isNetworkFilteredOut(key)) {
-      setFilteredOutNetworkKeys(
-        filteredOutNetworkKeys
-          .filter((networkKey) => networkKey !== key)
-      )
-      return
-    }
-    setFilteredOutNetworkKeys([...filteredOutNetworkKeys, key])
-  }, [
-    filteredOutNetworkKeys,
-    isNetworkFilteredOut,
-    setFilteredOutNetworkKeys
-  ])
-
-  const onSelectOrDeselectAllNetworks = React.useCallback(
-    () => {
-      if (isSelectAll) {
-        setFilteredOutNetworkKeys([])
+  const onCheckNetwork = React.useCallback(
+    (key: string) => {
+      if (isNetworkFilteredOut(key)) {
+        setFilteredOutNetworkKeys(
+          filteredOutNetworkKeys.filter((networkKey) => networkKey !== key)
+        )
         return
       }
-      setFilteredOutNetworkKeys(
-        networks
-          .map((network) =>
-            networkEntityAdapter
-              .selectId(network)
-              .toString()
-          ))
-    }, [
-    networks,
-    filteredOutNetworkKeys,
-    setFilteredOutNetworkKeys,
-    isSelectAll
-  ])
+      setFilteredOutNetworkKeys([...filteredOutNetworkKeys, key])
+    },
+    [filteredOutNetworkKeys, isNetworkFilteredOut, setFilteredOutNetworkKeys]
+  )
+
+  const onSelectOrDeselectAllNetworks = React.useCallback(() => {
+    if (isSelectAll) {
+      setFilteredOutNetworkKeys([])
+      return
+    }
+    setFilteredOutNetworkKeys(
+      networks.map((network) =>
+        networkEntityAdapter.selectId(network).toString()
+      )
+    )
+  }, [networks, setFilteredOutNetworkKeys, isSelectAll])
 
   return (
     <>
@@ -141,19 +135,15 @@ export const FilterNetworksSection = (props: Props) => {
         >
           {getLocale('braveWalletSelectNetworks')}
         </Title>
-        <SelectAllButton
-          onClick={onSelectOrDeselectAllNetworks}
-        >
-          {
-            isSelectAll
-              ? getLocale('braveWalletSelectAll')
-              : getLocale('braveWalletDeselectAll')
-          }
+        <SelectAllButton onClick={onSelectOrDeselectAllNetworks}>
+          {isSelectAll
+            ? getLocale('braveWalletSelectAll')
+            : getLocale('braveWalletDeselectAll')}
         </SelectAllButton>
       </Row>
 
       {/* Primary Networks */}
-      {primaryNetworks.length > 0 &&
+      {primaryNetworks.length > 0 && (
         <NetworkCheckboxes
           isNetworkFilteredOut={isNetworkFilteredOut}
           onCheckNetwork={onCheckNetwork}
@@ -161,10 +151,10 @@ export const FilterNetworksSection = (props: Props) => {
           title={getLocale('braveWalletPrimaryNetworks')}
           marginBottom={8}
         />
-      }
+      )}
 
       {/* Secondary Networks */}
-      {secondaryNetworks.length > 0 &&
+      {secondaryNetworks.length > 0 && (
         <NetworkCheckboxes
           isNetworkFilteredOut={isNetworkFilteredOut}
           onCheckNetwork={onCheckNetwork}
@@ -172,18 +162,29 @@ export const FilterNetworksSection = (props: Props) => {
           title={getLocale('braveWalletNetworkFilterSecondary')}
           marginBottom={8}
         />
-      }
+      )}
 
       {/* Test Networks */}
-      {testNetworks.length > 0 &&
+      {testNetworks.length > 0 && (
         <NetworkCheckboxes
           isNetworkFilteredOut={isNetworkFilteredOut}
           onCheckNetwork={onCheckNetwork}
           networks={testNetworks}
           title={getLocale('braveWalletNetworkFilterTestNetworks')}
+          marginBottom={8}
+        />
+      )}
+
+      {/* Provider Networks */}
+      {providerNetwork && (
+        <NetworkCheckboxes
+          isNetworkFilteredOut={isNetworkFilteredOut}
+          onCheckNetwork={onCheckNetwork}
+          networks={[providerNetwork]}
+          title={getLocale('braveWalletPlatforms')}
           marginBottom={0}
         />
-      }
+      )}
     </>
   )
 }

@@ -8,16 +8,17 @@
 #include <utility>
 
 #include "brave/components/brave_rewards/core/endpoint/uphold/uphold_server.h"
-#include "brave/components/brave_rewards/core/logging/logging.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 
 namespace brave_rewards::internal::uphold {
 
-UpholdCard::UpholdCard(LedgerImpl& ledger) : uphold_server_(ledger) {}
+UpholdCard::UpholdCard(RewardsEngine& engine)
+    : engine_(engine), uphold_server_(engine) {}
 
 UpholdCard::~UpholdCard() = default;
 
 void UpholdCard::CreateBATCardIfNecessary(const std::string& access_token,
-                                          CreateCardCallback callback) {
+                                          CreateCardCallback callback) const {
   uphold_server_.get_cards().Request(
       access_token,
       base::BindOnce(&UpholdCard::OnGetBATCardId, base::Unretained(this),
@@ -27,16 +28,16 @@ void UpholdCard::CreateBATCardIfNecessary(const std::string& access_token,
 void UpholdCard::OnGetBATCardId(CreateCardCallback callback,
                                 const std::string& access_token,
                                 mojom::Result result,
-                                std::string&& id) {
+                                std::string&& id) const {
   if (result == mojom::Result::EXPIRED_TOKEN) {
     return std::move(callback).Run(mojom::Result::EXPIRED_TOKEN, "");
   }
 
-  if (result == mojom::Result::LEDGER_OK && !id.empty()) {
-    return std::move(callback).Run(mojom::Result::LEDGER_OK, std::move(id));
+  if (result == mojom::Result::OK && !id.empty()) {
+    return std::move(callback).Run(mojom::Result::OK, std::move(id));
   }
 
-  BLOG(1, "Couldn't get BAT card ID!");
+  engine_->Log(FROM_HERE) << "Couldn't get BAT card ID";
 
   uphold_server_.post_cards().Request(
       access_token,
@@ -47,19 +48,19 @@ void UpholdCard::OnGetBATCardId(CreateCardCallback callback,
 void UpholdCard::OnCreateBATCard(CreateCardCallback callback,
                                  const std::string& access_token,
                                  mojom::Result result,
-                                 std::string&& id) {
+                                 std::string&& id) const {
   if (result == mojom::Result::EXPIRED_TOKEN) {
     return std::move(callback).Run(mojom::Result::EXPIRED_TOKEN, "");
   }
 
-  if (result != mojom::Result::LEDGER_OK) {
-    BLOG(0, "Couldn't create BAT card!");
+  if (result != mojom::Result::OK) {
+    engine_->LogError(FROM_HERE) << "Couldn't create BAT card";
     return std::move(callback).Run(result, "");
   }
 
   if (id.empty()) {
-    BLOG(0, "BAT card ID is empty!");
-    return std::move(callback).Run(mojom::Result::LEDGER_ERROR, "");
+    engine_->LogError(FROM_HERE) << "BAT card ID is empty";
+    return std::move(callback).Run(mojom::Result::FAILED, "");
   }
 
   uphold_server_.patch_card().Request(
@@ -75,13 +76,13 @@ void UpholdCard::OnUpdateBATCardSettings(CreateCardCallback callback,
     return std::move(callback).Run(mojom::Result::EXPIRED_TOKEN, "");
   }
 
-  if (result != mojom::Result::LEDGER_OK) {
-    BLOG(0, "Couldn't update BAT card settings!");
+  if (result != mojom::Result::OK) {
+    engine_->LogError(FROM_HERE) << "Couldn't update BAT card settings";
     return std::move(callback).Run(result, "");
   }
 
   DCHECK(!id.empty());
-  std::move(callback).Run(mojom::Result::LEDGER_OK, std::move(id));
+  std::move(callback).Run(mojom::Result::OK, std::move(id));
 }
 
 }  // namespace brave_rewards::internal::uphold

@@ -4,13 +4,12 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
+import { EntityState } from '@reduxjs/toolkit'
 
 // utils
 import { getSolanaProgramIdName } from '../../../utils/solana-program-id-utils'
 import { getLocale } from '../../../../common/locale'
-import { findAccountName } from '../../../utils/account-utils'
-import { useUnsafeWalletSelector } from '../../../common/hooks/use-safe-selector'
-import { WalletSelectors } from '../../../common/selectors'
+import { findAccountByAddress } from '../../../utils/account-utils'
 
 // types
 import { BraveWallet } from '../../../constants/types'
@@ -41,6 +40,9 @@ import {
   CodeSnippetText
 } from '../../extension/transaction-box/style'
 
+// queries
+import { useGetAccountInfosRegistryQuery } from '../../../common/slices/api.slice'
+
 interface Props {
   typedInstructionWithParams: TypedSolanaInstructionWithParams
 }
@@ -55,8 +57,7 @@ export const SolanaTransactionInstruction: React.FC<Props> = ({
     accountMetas
   }
 }) => {
-  // redux
-  const accounts = useUnsafeWalletSelector(WalletSelectors.accounts)
+  const { data: accounts } = useGetAccountInfosRegistryQuery()
 
   // render
   if (!type) {
@@ -127,7 +128,7 @@ export const SolanaTransactionInstruction: React.FC<Props> = ({
               text={programId}
               tooltipText={programId}
               isAddress
-              position="left"
+              position='left'
             >
               {getSolanaProgramIdName(programId)} - {type}
             </CopyTooltip>
@@ -138,8 +139,7 @@ export const SolanaTransactionInstruction: React.FC<Props> = ({
           <>
             <Divider />
 
-            {accountParams.map((
-              { localizedName, name, value }, i) => {
+            {accountParams.map(({ localizedName, name, value }, i) => {
               // signers param
               if (name === BraveWallet.SIGNERS) {
                 if (!value) {
@@ -175,7 +175,7 @@ export const SolanaTransactionInstruction: React.FC<Props> = ({
                     accounts={accounts}
                     pubkey={value}
                     lookupTableIndex={
-                      accountMetas[i].addrTableLookupIndex?.val
+                      accountMetas[i]?.addrTableLookupIndex?.val
                     }
                   />
                 </InstructionParamBox>
@@ -198,7 +198,10 @@ export const SolanaTransactionInstruction: React.FC<Props> = ({
                 <InstructionParamBox key={name}>
                   <var>{localizedName}</var>
                   {isAddressParam ? (
-                    <AddressParamValue accounts={accounts} pubkey={value} />
+                    <AddressParamValue
+                      accounts={accounts}
+                      pubkey={value}
+                    />
                   ) : (
                     <samp>{formattedValue}</samp>
                   )}
@@ -219,48 +222,40 @@ const AddressParamValue = ({
   pubkey,
   lookupTableIndex
 }: {
-  accounts: Array<{
-    address: string
-    name: string
-  }>
+  accounts: EntityState<BraveWallet.AccountInfo> | undefined
   pubkey: string
   lookupTableIndex?: number
 }) => {
   // memos
   const formattedValue = React.useMemo(() => {
-    return findAccountName(accounts, pubkey) ?? pubkey
+    return findAccountByAddress(pubkey, accounts)?.name ?? pubkey
   }, [accounts, pubkey])
 
   // render
   return (
     <>
-      {lookupTableIndex !== undefined &&
+      {lookupTableIndex !== undefined && (
         <AddressText isBold={true}>
           {getLocale('braveWalletSolanaAddressLookupTableAccount')}
         </AddressText>
-      }
+      )}
       <CopyTooltip
         key={pubkey}
         text={pubkey}
-        tooltipText={
-          formattedValue === pubkey
-            ? undefined
-            : pubkey
-        }
+        tooltipText={formattedValue === pubkey ? undefined : pubkey}
         isAddress
         position='left'
       >
         <AddressText>{formattedValue}</AddressText>
       </CopyTooltip>
-      {
-        lookupTableIndex !== undefined &&
+      {lookupTableIndex !== undefined && (
         <>
           <AddressText isBold={true}>
             {getLocale('braveWalletSolanaAddressLookupTableIndex')}
           </AddressText>
           <AddressText>{lookupTableIndex}</AddressText>
         </>
-      }
+      )}
     </>
   )
 }

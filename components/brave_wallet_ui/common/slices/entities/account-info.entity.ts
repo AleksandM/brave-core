@@ -3,49 +3,28 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
-import {
-  createEntityAdapter,
-  EntityAdapter,
-  EntityId
-} from '@reduxjs/toolkit'
+import { createEntityAdapter, EntityAdapter, EntityId } from '@reduxjs/toolkit'
 
 import { BraveWallet } from '../../../constants/types'
-import { RootStoreState } from '../../../page/store'
-import { getAccountId } from '../../../utils/account-utils'
-import { walletApi } from '../api.slice'
 import {
   EntityByIdFromRegistryResultSelectorFactory,
   makeSelectEntityByIdFromRegistryQuery
 } from './entity.selectors'
+import { entityIdFromAccountId } from '../../../utils/account-utils'
 
 export type AccountInfoEntity = BraveWallet.AccountInfo
 
-export type AccountInfoEntityAdaptor =
-  EntityAdapter<AccountInfoEntity> & {
-    selectId: (accountInfo: { address: string }) => EntityId
-  }
-
-export const accountInfoEntityAdaptor: AccountInfoEntityAdaptor =
-  createEntityAdapter<AccountInfoEntity>({
-    selectId: getAccountId
+export const accountInfoEntityAdaptor: EntityAdapter<AccountInfoEntity> = {
+  ...createEntityAdapter<AccountInfoEntity>({
+    selectId: (model: Pick<BraveWallet.AccountInfo, 'accountId'>): EntityId => {
+      return entityIdFromAccountId(model.accountId)
+    }
   })
+}
 
-export const accountInfoEntityAdaptorInitialState = accountInfoEntityAdaptor.getInitialState()
+export const accountInfoEntityAdaptorInitialState =
+  accountInfoEntityAdaptor.getInitialState()
 export type AccountInfoEntityState = typeof accountInfoEntityAdaptorInitialState
-
-// Selectors from Root State
-export const {
-  selectAll: selectAllAccountInfos,
-  selectById: selectAccountInfoById,
-  selectEntities: selectAccountInfoEntities,
-  selectIds: selectAccountInfoIds,
-  selectTotal: selectTotalAccountInfos
-} = accountInfoEntityAdaptor.getSelectors((state: RootStoreState) => {
-  return (
-    walletApi.endpoints.getAccountInfosRegistry.select()(state)?.data ??
-    accountInfoEntityAdaptor.getInitialState()
-  )
-})
 
 // Selectors from Query Results
 export const selectAccountInfosRegistryFromQuery = (result: {
@@ -60,9 +39,7 @@ export const {
   selectEntities: selectAccountInfoEntitiesFromQuery,
   selectIds: selectAccountInfoIdsFromQuery,
   selectTotal: selectTotalAccountInfosFromQuery
-} = accountInfoEntityAdaptor.getSelectors(
-  selectAccountInfosRegistryFromQuery
-)
+} = accountInfoEntityAdaptor.getSelectors(selectAccountInfosRegistryFromQuery)
 
 type MakeSelectNetworkByIdFromQuery =
   EntityByIdFromRegistryResultSelectorFactory<BraveWallet.NetworkInfo>

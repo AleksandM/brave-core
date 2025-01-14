@@ -9,10 +9,12 @@
 #include <memory>
 #include <string>
 
+#include "base/containers/flat_map.h"
 #include "base/functional/callback.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/ref_counted.h"
 #include "brave/components/p3a/constellation/rs/cxx/src/lib.rs.h"
+#include "brave/components/p3a/metric_log_type.h"
 #include "brave/components/p3a/star_randomness_meta.h"
 
 namespace network {
@@ -28,43 +30,33 @@ struct P3AConfig;
 // server in order to receive randomness point data for STAR measurements.
 class StarRandomnessPoints {
  public:
-  using RandomnessDataCallback = base::RepeatingCallback<void(
-      std::string metric_name,
-      uint8_t epoch,
-      ::rust::Box<constellation::RandomnessRequestStateWrapper>
-          randomness_request_state,
+  using RandomnessDataCallback = base::OnceCallback<void(
       std::unique_ptr<rust::Vec<constellation::VecU8>> resp_points,
       std::unique_ptr<rust::Vec<constellation::VecU8>> resp_proofs)>;
 
   StarRandomnessPoints(
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-      RandomnessDataCallback data_callback,
       const P3AConfig* config);
   ~StarRandomnessPoints();
   StarRandomnessPoints(const StarRandomnessPoints&) = delete;
   StarRandomnessPoints& operator=(const StarRandomnessPoints&) = delete;
 
   void SendRandomnessRequest(
-      std::string metric_name,
-      StarRandomnessMeta* randomness_meta,
+      MetricLogType log_type,
       uint8_t epoch,
-      ::rust::Box<constellation::RandomnessRequestStateWrapper>
-          randomness_request_state,
-      const rust::Vec<constellation::VecU8>& rand_req_points);
+      StarRandomnessMeta* randomness_meta,
+      const rust::Vec<constellation::VecU8>& rand_req_points,
+      RandomnessDataCallback callback);
 
  private:
-  void HandleRandomnessResponse(
-      std::string metric_name,
-      StarRandomnessMeta* randomness_meta,
-      uint8_t epoch,
-      ::rust::Box<constellation::RandomnessRequestStateWrapper>
-          randomness_request_state,
-      std::unique_ptr<std::string> response_body);
+  void HandleRandomnessResponse(MetricLogType log_type,
+                                StarRandomnessMeta* randomness_meta,
+                                RandomnessDataCallback callback,
+                                std::unique_ptr<std::string> response_body);
 
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
-  std::unique_ptr<network::SimpleURLLoader> url_loader_;
-
-  RandomnessDataCallback data_callback_;
+  base::flat_map<MetricLogType, std::unique_ptr<network::SimpleURLLoader>>
+      url_loaders_;
 
   const raw_ptr<const P3AConfig> config_;
 };

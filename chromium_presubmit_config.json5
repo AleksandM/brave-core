@@ -1,7 +1,7 @@
 {
   "disabled_checks": {
     // Checks defined in the //PRESUBMIT.py global scope.
-    "PRESUBMIT.py": [
+    "//PRESUBMIT.py": [
       // We don't use OWNERS files.
       "CheckSecurityOwners",
       // This validates added strings with screenshot tests which we don't use.
@@ -30,12 +30,14 @@
       "CheckTreeIsOpen",
       // We run our own format check.
       "CheckPatchFormatted",
+      // We don't use Chromium LSC process for Brave repository.
+      "CheckLargeScaleChange",
     ],
   },
 
   // Checks that should trigger presubmit errors instead of warnings.
   "checks_to_force_presubmit_errors": {
-    "PRESUBMIT.py": [
+    "//PRESUBMIT.py": [
       "CheckBuildConfigMacrosWithoutInclude",
       "CheckForSuperfluousStlIncludesInHeaders",
       "CheckForIncludeGuards",
@@ -57,9 +59,12 @@
   // Files to skip in all checks.
   "default_files_to_skip": [
     "\\.storybook/",
+    "ios/brave-ios/Sources/Brave/Frontend/UserContent/UserScripts/Scripts_Dynamic/Scripts/Sandboxed/DarkReaderScript.js",
     "components/brave_wallet/resources/solana_web3_script\\.js",
-    "ios/browser/api/ledger/legacy_database/core_data_models/",
+    "third_party/rust/",
+    "tools/crates/",
     "win_build_output/",
+    "third_party/ios_deps/",
   ],
 
   // Regex to match function names in the current presubmit stack trace. Matched
@@ -79,6 +84,8 @@
     "CheckNoBannedFunctions": [
       // Use `ban_rule_excluded_paths` instead.
     ],
+    "CheckNoJsInIos": ["ios/brave-ios/"],
+    "CheckNoDeprecatedCss": ["ios/brave-ios/"],
 
     // Checks to be fixed.
     "CheckUnwantedDependencies": [".*\\.java"],
@@ -86,12 +93,9 @@
       "browser/browsing_data/brave_clear_browsing_data\\.cc",
       "chromium_src/chrome/browser/ui/startup/startup_browser_creator\\.cc",
       "components/brave_vpn/winvpntool\\.cc",
-      "components/greaselion/browser/greaselion_download_service\\.cc",
       "components/permissions/permission_lifetime_utils\\.cc",
       "components/tor/tor_launcher_factory\\.cc",
       "components/webcompat_reporter/browser/webcompat_report_uploader\\.cc",
-      "ios/browser/api/ledger/legacy_database/legacy_ledger_database\\.mm",
-      "ios/browser/api/ledger/promotion_solution\\.mm",
     ],
     "CheckUniquePtrOnUpload": [
       "components/brave_sync/qr_code_data\\.cc",
@@ -142,18 +146,14 @@
       "components/cosmetic_filters/renderer/cosmetic_filters_js_handler\\.h",
       "components/speedreader/renderer/speedreader_js_handler\\.h",
     ],
-    // A temporary fix to silence a failing presubmit check on a namespace
-    // change.
-    "CheckStableMojomChanges": [
-      "components/services/bat_ledger/public/interfaces/ledger_factory\\.mojom",
-      "components/brave_rewards/common/mojom/bat_ledger\\.mojom",
-      "components/brave_rewards/common/mojom/tip_panel\\.mojom",
-    ],
     "CheckWebDevStyle": [
       "components/speedreader/resources/speedreader-desktop.css",
       "components/speedreader/resources/third_party/",
       "components/webpack/gen-webpack-grd\\.js",
       "test/data/speedreader/",
+    ],
+    "CheckStableMojomChanges": [
+      "components/brave_rewards/common/mojom/rewards_engine\\.mojom",
     ]
   },
 
@@ -162,46 +162,26 @@
   // Maps BanRule.pattern -> BanRule.excluded_paths.
   "ban_rule_excluded_paths": {
     "import android.annotation.TargetApi;": [
-      "android/java/org/chromium/chrome/browser/notifications/BraveNotificationSettingsBridge\\.java",
       "android/java/org/chromium/chrome/browser/qrreader/CameraSource\\.java",
       "browser/notifications/android/java/src/org/chromium/chrome/browser/notifications/BraveNotificationManagerProxyImpl\\.java",
-    ],
-    "leveldb::DB::Open": [
-      "components/brave_shields/browser/https_everywhere_service\\.cc",
     ],
     "/\\s+UTF8String\\s*]": [
       "base/mac/conversions\\.h",
       "browser/mac/sparkle_glue\\.mm",
     ],
-    "/\\bstd::bind\\b": [
-      "components/brave_rewards/.*",
-      "components/services/bat_ledger/bat_ledger_impl\\.cc",
-      "components/services/bat_ledger/public/cpp/ledger_client_mojo_bridge\\.cc",
-    ],
     "/\\bstd::function\\b": [
       "chromium_src/chrome/browser/ui/views/frame/browser_non_client_frame_view_factory_views\\.cc",
-      "components/brave_rewards/.*",
       "ios/browser/api/bookmarks/exporter/brave_bookmarks_exporter\\.mm",
       "ios/browser/api/bookmarks/importer/brave_bookmarks_importer\\.mm",
     ],
     "/\\bstd::shared_ptr\\b": [
       "browser/net/.*",
-      "components/brave_rewards/.*",
       "ios/browser/api/certificate/brave_certificate\\.mm",
       "ios/browser/api/net/certificate_utility\\.mm",
     ],
-    "/\\bstd::sto(f|d|ld)\\b": [
-      "browser/ui/webui/brave_rewards_page_ui\\.cc",
-      "components/brave_rewards/core/legacy/bat_util\\.cc",
-      "components/brave_rewards/core/legacy/media/youtube\\.cc",
-    ],
     "/\\bstd::sto(i|l|ul|ll|ull)\\b": [
-      "components/brave_rewards/browser/test/rewards_state_browsertest\\.cc",
-      "components/brave_rewards/core/legacy/media/github\\.cc",
-      "components/brave_rewards/core/report/report\\.cc",
       "components/brave_wallet/browser/rlp_encode_unittest\\.cc",
       "components/brave_wallet/common/eth_address\\.cc",
-      "components/ipfs/ipfs_json_parser\\.cc",
       "utility/importer/chrome_importer\\.cc",
     ],
     "/\\busing namespace ": [

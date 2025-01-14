@@ -16,35 +16,35 @@ namespace database {
 
 class DatabaseBalanceReport : public DatabaseTable {
  public:
-  explicit DatabaseBalanceReport(LedgerImpl& ledger);
+  explicit DatabaseBalanceReport(RewardsEngine& engine);
   ~DatabaseBalanceReport() override;
 
   void InsertOrUpdate(mojom::BalanceReportInfoPtr info,
-                      LegacyResultCallback callback);
+                      ResultCallback callback);
 
   void InsertOrUpdateList(std::vector<mojom::BalanceReportInfoPtr> list,
-                          LegacyResultCallback callback);
+                          ResultCallback callback);
 
   void SetAmount(mojom::ActivityMonth month,
                  int year,
                  mojom::ReportType type,
                  double amount,
-                 LegacyResultCallback callback);
+                 ResultCallback callback);
 
   void GetRecord(mojom::ActivityMonth month,
                  int year,
-                 GetBalanceReportCallback callback);
+                 mojom::RewardsEngine::GetBalanceReportCallback callback);
 
   void GetAllRecords(GetBalanceReportListCallback callback);
 
-  void DeleteAllRecords(LegacyResultCallback callback);
+  void DeleteAllRecords(ResultCallback callback);
 
  private:
-  void OnGetRecord(mojom::DBCommandResponsePtr response,
-                   GetBalanceReportCallback callback);
+  void OnGetRecord(mojom::RewardsEngine::GetBalanceReportCallback callback,
+                   mojom::DBCommandResponsePtr response);
 
-  void OnGetAllRecords(mojom::DBCommandResponsePtr response,
-                       GetBalanceReportListCallback callback);
+  void OnGetAllRecords(GetBalanceReportListCallback callback,
+                       mojom::DBCommandResponsePtr response);
 };
 
 }  // namespace database

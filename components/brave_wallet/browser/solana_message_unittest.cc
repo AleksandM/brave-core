@@ -5,62 +5,23 @@
 
 #include "brave/components/brave_wallet/browser/solana_message.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "base/json/json_reader.h"
+#include "base/sys_byteorder.h"
 #include "base/test/gtest_util.h"
+#include "brave/components/brave_wallet/browser/simple_hash_client.h"
 #include "brave/components/brave_wallet/browser/solana_account_meta.h"
 #include "brave/components/brave_wallet/browser/solana_instruction.h"
+#include "brave/components/brave_wallet/browser/solana_instruction_builder.h"
+#include "brave/components/brave_wallet/browser/solana_test_utils.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/brave_wallet_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace brave_wallet {
-
-namespace {
-
-constexpr char kFromAccount[] = "3Lu176FQzbQJCc8iL9PnmALbpMPhZeknoturApnXRDJw";
-constexpr char kToAccount[] = "3QpJ3j1vq1PfqJdvCcHKWuePykqoUYSvxyRb3Cnh79BD";
-constexpr char kTestAccount[] = "BrG44HdsEhzapvs8bEqzvkq4egwevS3fRE6ze2ENo6S8";
-constexpr char kRecentBlockhash[] =
-    "9sHcv6xwn9YkB8nxTUGKDwPwNnmqVp5oAXxU8Fdkm4J6";
-constexpr uint64_t kLastValidBlockHeight = 3090;
-
-SolanaMessage GetTestLegacyMessage() {
-  const std::vector<uint8_t> data = {2, 0, 0, 0, 128, 150, 152, 0, 0, 0, 0, 0};
-  SolanaInstruction instruction(
-      // Program ID
-      mojom::kSolanaSystemProgramId,
-      // Accounts
-      {SolanaAccountMeta(kFromAccount, absl::nullopt, true, true),
-       SolanaAccountMeta(kToAccount, absl::nullopt, false, true)},
-      data);
-  auto message = SolanaMessage::CreateLegacyMessage(
-      kRecentBlockhash, kLastValidBlockHeight, kFromAccount, {instruction});
-  return std::move(*message);
-}
-
-SolanaMessage GetTestV0Message() {
-  const std::vector<uint8_t> data = {2, 0, 0, 0, 128, 150, 152, 0, 0, 0, 0, 0};
-  SolanaMessageAddressTableLookup lookup(*SolanaAddress::FromBase58(kToAccount),
-                                         {3, 1}, {2, 4});
-  SolanaInstruction instruction(
-      mojom::kSolanaSystemProgramId,
-      {SolanaAccountMeta(kFromAccount, absl::nullopt, true, true),
-       SolanaAccountMeta(kToAccount, 1, false, true)},
-      data);
-  std::vector<SolanaMessageAddressTableLookup> lookups;
-  lookups.push_back(std::move(lookup));
-  return SolanaMessage(
-      mojom::SolanaMessageVersion::kV0, kRecentBlockhash, kLastValidBlockHeight,
-      kFromAccount, SolanaMessageHeader(1, 0, 1),
-      {*SolanaAddress::FromBase58(kFromAccount),
-       *SolanaAddress::FromBase58(mojom::kSolanaSystemProgramId)},
-      {instruction}, std::move(lookups));
-}
-
-}  // namespace
 
 TEST(SolanaMessageUnitTest, SerializeDeserialize) {
   std::vector<uint8_t> expected_bytes_legacy = {
@@ -175,10 +136,10 @@ TEST(SolanaMessageUnitTest, SerializeDeserialize) {
       // Program ID
       mojom::kSolanaSystemProgramId,
       // Accounts
-      {SolanaAccountMeta(kFromAccount, absl::nullopt, true, true),
-       SolanaAccountMeta(kToAccount, absl::nullopt, false, true)},
+      {SolanaAccountMeta(kFromAccount, std::nullopt, true, true),
+       SolanaAccountMeta(kToAccount, std::nullopt, false, true)},
       // Data
-      {2, 0, 0, 0, 128, 150, 152, 0, 0, 0, 0, 0});
+      std::vector<uint8_t>({2, 0, 0, 0, 128, 150, 152, 0, 0, 0, 0, 0}));
   auto message_without_blockhash =
       SolanaMessage::CreateLegacyMessage("", 0, kFromAccount, {instruction});
   ASSERT_TRUE(message_without_blockhash);
@@ -188,9 +149,9 @@ TEST(SolanaMessageUnitTest, SerializeDeserialize) {
 TEST(SolanaMessageUnitTest, GetSignerAccountsFromSerializedMessageLegacy) {
   SolanaInstruction ins(
       mojom::kSolanaSystemProgramId,
-      {SolanaAccountMeta(kFromAccount, absl::nullopt, true, true),
-       SolanaAccountMeta(kToAccount, absl::nullopt, true, true),
-       SolanaAccountMeta(kTestAccount, absl::nullopt, false, true)},
+      {SolanaAccountMeta(kFromAccount, std::nullopt, true, true),
+       SolanaAccountMeta(kToAccount, std::nullopt, true, true),
+       SolanaAccountMeta(kTestAccount, std::nullopt, false, true)},
       {});
   auto msg = SolanaMessage::CreateLegacyMessage(kRecentBlockhash, 0,
                                                 kFromAccount, {ins});
@@ -230,7 +191,7 @@ TEST(SolanaMessageUnitTest, SerializeExceedNumOfAccountMaxSize) {
                        std::vector<uint8_t>());
   lookups.emplace_back(*SolanaAddress::FromBase58(kTestAccount),
                        std::vector<uint8_t>({2}), std::vector<uint8_t>());
-  ASSERT_TRUE(static_accounts.empty());
+  static_accounts.clear();
   msg =
       SolanaMessage(mojom::SolanaMessageVersion::kV0, kRecentBlockhash,
                     kLastValidBlockHeight, kFromAccount, SolanaMessageHeader(),
@@ -238,8 +199,8 @@ TEST(SolanaMessageUnitTest, SerializeExceedNumOfAccountMaxSize) {
   EXPECT_FALSE(msg.Serialize(nullptr));
 
   // Number of read indexes exceeds UINT8_MAX.
-  ASSERT_TRUE(static_accounts.empty());
-  ASSERT_TRUE(lookups.empty());
+  static_accounts.clear();
+  lookups.clear();
   lookups.emplace_back(*SolanaAddress::FromBase58(kToAccount),
                        std::vector<uint8_t>(), max_indexes);
   lookups.emplace_back(*SolanaAddress::FromBase58(kTestAccount),
@@ -252,8 +213,8 @@ TEST(SolanaMessageUnitTest, SerializeExceedNumOfAccountMaxSize) {
 
   // Number of entries in combined static_accounts, write_indexes, read_indexes
   // array exceeds UINT8_MAX.
-  ASSERT_TRUE(static_accounts.empty());
-  ASSERT_TRUE(lookups.empty());
+  static_accounts.clear();
+  lookups.clear();
   for (size_t i = 0; i < UINT8_MAX / 3; ++i) {
     static_accounts.emplace_back(*SolanaAddress::FromBase58(kFromAccount));
   }
@@ -280,12 +241,12 @@ TEST(SolanaMessageUnitTest, GetUniqueAccountMetas) {
   std::string account4 = "GcdayuLaLyrdmUu324nahyv33G5poQdLUEZ1nEytDeP";
   std::string account5 = "LX3EUdRUBUa3TbsYXLEUdj9J3prXkWXvLYSWyYyc2Jj";
 
-  SolanaAccountMeta account1_fee_payer(account1, absl::nullopt, true, true);
-  SolanaAccountMeta program1_non_signer_readonly(program1, absl::nullopt, false,
+  SolanaAccountMeta account1_fee_payer(account1, std::nullopt, true, true);
+  SolanaAccountMeta program1_non_signer_readonly(program1, std::nullopt, false,
                                                  false);
 
   // Test instructions with duplicate pubkeys.
-  SolanaAccountMeta account2_non_signer_readonly(account2, absl::nullopt, false,
+  SolanaAccountMeta account2_non_signer_readonly(account2, std::nullopt, false,
                                                  false);
   SolanaInstruction instruction1(program1, {account2_non_signer_readonly}, {});
   SolanaMessage::GetUniqueAccountMetas(account1, {instruction1, instruction1},
@@ -299,13 +260,13 @@ TEST(SolanaMessageUnitTest, GetUniqueAccountMetas) {
   // Test account order.
   // signer-read-write -> signer-readonly -> non-signer-read-write ->
   // non-signer-readonly
-  SolanaAccountMeta account3_non_signer_read_write(account3, absl::nullopt,
+  SolanaAccountMeta account3_non_signer_read_write(account3, std::nullopt,
                                                    false, true);
-  SolanaAccountMeta account4_signer_readonly(account4, absl::nullopt, true,
+  SolanaAccountMeta account4_signer_readonly(account4, std::nullopt, true,
                                              false);
-  SolanaAccountMeta account5_signer_read_write(account5, absl::nullopt, true,
+  SolanaAccountMeta account5_signer_read_write(account5, std::nullopt, true,
                                                true);
-  SolanaAccountMeta program2_non_signer_readonly(program2, absl::nullopt, false,
+  SolanaAccountMeta program2_non_signer_readonly(program2, std::nullopt, false,
                                                  false);
   SolanaInstruction instruction2(
       program1, {account3_non_signer_read_write, account4_signer_readonly}, {});
@@ -322,15 +283,15 @@ TEST(SolanaMessageUnitTest, GetUniqueAccountMetas) {
 
   // Test writable being updated when readonly and read-write both present for
   // the same account pubkey.
-  SolanaAccountMeta account2_signer_read_write(account2, absl::nullopt, true,
+  SolanaAccountMeta account2_signer_read_write(account2, std::nullopt, true,
                                                true);
-  SolanaAccountMeta account3_non_signer_readonly(account3, absl::nullopt, false,
+  SolanaAccountMeta account3_non_signer_readonly(account3, std::nullopt, false,
                                                  false);
-  SolanaAccountMeta account4_non_signer_read_write(account4, absl::nullopt,
+  SolanaAccountMeta account4_non_signer_read_write(account4, std::nullopt,
                                                    false, true);
-  SolanaAccountMeta account4_signer_read_write(account4, absl::nullopt, true,
+  SolanaAccountMeta account4_signer_read_write(account4, std::nullopt, true,
                                                true);
-  SolanaAccountMeta account5_signer_readonly(account5, absl::nullopt, true,
+  SolanaAccountMeta account5_signer_readonly(account5, std::nullopt, true,
                                              false);
 
   instruction1 = SolanaInstruction(
@@ -494,7 +455,7 @@ TEST(SolanaMessageUnitTest, FromToValue) {
       R"({"fee_payer": "fee payer", "instructions": []})"};
 
   for (const auto& invalid_value_string : invalid_value_strings) {
-    absl::optional<base::Value> invalid_value =
+    std::optional<base::Value> invalid_value =
         base::JSONReader::Read(invalid_value_string);
     ASSERT_TRUE(invalid_value) << ":" << invalid_value_string;
     EXPECT_FALSE(SolanaMessage::FromValue(invalid_value->GetDict()))
@@ -574,6 +535,231 @@ TEST(SolanaMessageUnitTest, FromToValue) {
 
   message_from_value = SolanaMessage::FromValue(value);
   EXPECT_EQ(message2, message_from_value);
+}
+
+TEST(SolanaMessageUnitTest, UsesDurableNonce) {
+  // Mock AdvanceNonceAccount instruction.
+
+  SolanaInstruction instruction = SolanaInstruction(
+      mojom::kSolanaSystemProgramId,
+      std::vector<SolanaAccountMeta>(
+          {SolanaAccountMeta(kTestAccount, std::nullopt, false, true),
+           SolanaAccountMeta(kFromAccount, std::nullopt, false, false),
+           SolanaAccountMeta(kToAccount, std::nullopt, true, false)}),
+      base::byte_span_from_ref(
+          base::numerics::U32FromLittleEndian(base::byte_span_from_ref(
+              mojom::SolanaSystemInstruction::kAdvanceNonceAccount))));
+
+  auto message1 = GetTestLegacyMessage();
+  auto message2 = GetTestV0Message();
+  for (auto* message : {&message1, &message2}) {
+    EXPECT_FALSE(message->UsesDurableNonce());
+
+    std::vector<SolanaInstruction> vec;
+    vec.emplace_back(instruction);
+    vec.emplace_back(message->instructions()[0]);
+    message->SetInstructionsForTesting(vec);
+    EXPECT_TRUE(message->UsesDurableNonce());
+  }
+}
+
+TEST(SolanaMessageUnitTest, AddPriorityFee) {
+  auto legacy_message = GetTestLegacyMessage();
+  auto static_account_keys_before = legacy_message.static_account_keys();
+  auto legacy_message_header_before = legacy_message.message_header();
+  auto instructions_size_before = legacy_message.instructions().size();
+  ASSERT_TRUE(legacy_message.AddPriorityFee(300, 1000));
+
+  // Should have two more instrucitons, one to modify compute units, one to
+  // specify the priority fee.
+  EXPECT_EQ(instructions_size_before + 2, legacy_message.instructions().size());
+  EXPECT_EQ(legacy_message.instructions()[0].GetProgramId(),
+            mojom::kSolanaComputeBudgetProgramId);
+  EXPECT_EQ(legacy_message.instructions()[1].GetProgramId(),
+            mojom::kSolanaComputeBudgetProgramId);
+  EXPECT_EQ(static_account_keys_before.size() + 1,
+            legacy_message.static_account_keys().size());
+
+  // Compute budget program ID should only be found in the new static account
+  // keys
+  bool found_compute_budge_program_id = false;
+  for (const auto& key : legacy_message.static_account_keys()) {
+    if (key.ToBase58() == mojom::kSolanaComputeBudgetProgramId) {
+      found_compute_budge_program_id = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(found_compute_budge_program_id);
+
+  found_compute_budge_program_id = false;
+  for (const auto& key : static_account_keys_before) {
+    if (key.ToBase58() == mojom::kSolanaComputeBudgetProgramId) {
+      found_compute_budge_program_id = true;
+      break;
+    }
+  }
+  EXPECT_FALSE(found_compute_budge_program_id);
+
+  // Header should be the same except for the number of readonly unsigned
+  // accounts.
+  EXPECT_EQ(legacy_message_header_before.num_required_signatures,
+            legacy_message.message_header().num_required_signatures);
+  EXPECT_EQ(legacy_message_header_before.num_readonly_signed_accounts,
+            legacy_message.message_header().num_readonly_signed_accounts);
+  EXPECT_EQ(legacy_message_header_before.num_readonly_unsigned_accounts + 1,
+            legacy_message.message_header().num_readonly_unsigned_accounts);
+
+  auto legacy_message_with_durable_nonce = GetTestLegacyMessage();
+  SolanaInstruction instruction = GetAdvanceNonceAccountInstruction();
+  std::vector<SolanaInstruction> vec;
+  vec.emplace_back(instruction);
+  vec.emplace_back(legacy_message_with_durable_nonce.instructions()[0]);
+  legacy_message_with_durable_nonce.SetInstructionsForTesting(vec);
+  instructions_size_before =
+      legacy_message_with_durable_nonce.instructions().size();
+  ASSERT_TRUE(legacy_message_with_durable_nonce.AddPriorityFee(300, 1000));
+  EXPECT_EQ(instructions_size_before + 2,
+            legacy_message_with_durable_nonce.instructions().size());
+  EXPECT_EQ(instructions_size_before + 2,
+            legacy_message_with_durable_nonce.instructions().size());
+  EXPECT_EQ(legacy_message_with_durable_nonce.instructions()[0].GetProgramId(),
+            mojom::kSolanaSystemProgramId);  // Nonce instruction
+  EXPECT_EQ(legacy_message_with_durable_nonce.instructions()[1].GetProgramId(),
+            mojom::kSolanaComputeBudgetProgramId);
+  EXPECT_EQ(legacy_message_with_durable_nonce.instructions()[2].GetProgramId(),
+            mojom::kSolanaComputeBudgetProgramId);
+}
+
+TEST(SolanaMessageUnitTest, AddPriorityFeeV0) {
+  // Test without durable nonce
+  auto v0_message = GetTestV0Message();
+  auto v0_instructions_size_before = v0_message.instructions().size();
+  ASSERT_TRUE(v0_message.AddPriorityFee(300, 1000));
+
+  // Check instruction count and positions
+  EXPECT_EQ(v0_instructions_size_before + 2, v0_message.instructions().size());
+  EXPECT_EQ(
+      v0_message.instructions()[0].GetProgramId(),
+      mojom::kSolanaComputeBudgetProgramId);  // First priority fee instruction
+  EXPECT_EQ(
+      v0_message.instructions()[1].GetProgramId(),
+      mojom::kSolanaComputeBudgetProgramId);  // Second priority fee instruction
+
+  // Test with durable nonce
+  auto v0_message_with_nonce = GetTestV0Message();
+  SolanaInstruction nonce_instruction = GetAdvanceNonceAccountInstruction();
+  std::vector<SolanaInstruction> nonce_vec = {
+      nonce_instruction, v0_message_with_nonce.instructions()[0]};
+  v0_message_with_nonce.SetInstructionsForTesting(nonce_vec);
+  v0_instructions_size_before = v0_message_with_nonce.instructions().size();
+  ASSERT_TRUE(v0_message_with_nonce.AddPriorityFee(300, 1000));
+
+  // Check instruction count and positions with nonce
+  EXPECT_EQ(v0_instructions_size_before + 2,
+            v0_message_with_nonce.instructions().size());
+  EXPECT_EQ(v0_message_with_nonce.instructions()[0].GetProgramId(),
+            mojom::kSolanaSystemProgramId);  // Nonce instruction remains first
+  EXPECT_EQ(
+      v0_message_with_nonce.instructions()[1].GetProgramId(),
+      mojom::kSolanaComputeBudgetProgramId);  // First priority fee instruction
+  EXPECT_EQ(
+      v0_message_with_nonce.instructions()[2].GetProgramId(),
+      mojom::kSolanaComputeBudgetProgramId);  // Second priority fee instruction
+}
+
+TEST(SolanaMessageUnitTest, UsesPriorityFee) {
+  // Legacy message without durable nonce
+  SolanaMessage message1 = GetTestLegacyMessage();
+  EXPECT_FALSE(message1.UsesPriorityFee());
+  ASSERT_TRUE(message1.AddPriorityFee(0, 0));
+  EXPECT_TRUE(message1.UsesPriorityFee());
+
+  // Add a specific test for kSetComputeUnitLimit
+  SolanaMessage message1a = GetTestLegacyMessage();
+  SolanaInstruction set_compute_unit_limit_instruction =
+      solana::compute_budget_program::SetComputeUnitLimit(0);
+  std::vector<SolanaInstruction> vec1a = {set_compute_unit_limit_instruction};
+  message1a.SetInstructionsForTesting(vec1a);
+  EXPECT_TRUE(message1a.UsesPriorityFee());
+
+  // Add a specific test for kSetComputeUnitPrice
+  SolanaMessage message1b = GetTestLegacyMessage();
+  SolanaInstruction set_compute_unit_price_instruction =
+      solana::compute_budget_program::SetComputeUnitPrice(0);
+  std::vector<SolanaInstruction> vec1b = {set_compute_unit_price_instruction};
+  message1b.SetInstructionsForTesting(vec1b);
+  EXPECT_TRUE(message1b.UsesPriorityFee());
+
+  // Legacy message with durable nonce
+  SolanaMessage message2 = GetTestLegacyMessage();
+  EXPECT_FALSE(message2.UsesPriorityFee());
+  SolanaInstruction instruction1 = GetAdvanceNonceAccountInstruction();
+  std::vector<SolanaInstruction> vec1 = {instruction1,
+                                         message2.instructions()[0]};
+  message2.SetInstructionsForTesting(vec1);
+  ASSERT_TRUE(message2.AddPriorityFee(0, 0));
+  EXPECT_TRUE(message2.UsesPriorityFee());
+
+  // V0 message without durable nonce
+  SolanaMessage message3 = GetTestV0Message();
+  EXPECT_FALSE(message3.UsesPriorityFee());
+  ASSERT_TRUE(message3.AddPriorityFee(0, 0));
+  EXPECT_TRUE(message3.UsesPriorityFee());
+
+  // Add a specific test for kSetComputeUnitLimit in V0 message
+  SolanaMessage message3a = GetTestV0Message();
+  std::vector<SolanaInstruction> vec3a = {set_compute_unit_limit_instruction};
+  message3a.SetInstructionsForTesting(vec3a);
+  EXPECT_TRUE(message3a.UsesPriorityFee());
+
+  // Add a specific test for kSetComputeUnitPrice in V0 message
+  SolanaMessage message3b = GetTestV0Message();
+  std::vector<SolanaInstruction> vec3b = {set_compute_unit_price_instruction};
+  message3b.SetInstructionsForTesting(vec3b);
+  EXPECT_TRUE(message3b.UsesPriorityFee());
+
+  // V0 message with durable nonce
+  SolanaMessage message4 = GetTestV0Message();
+  EXPECT_FALSE(message4.UsesPriorityFee());
+  SolanaInstruction instruction2 = GetAdvanceNonceAccountInstruction();
+  std::vector<SolanaInstruction> vec2 = {instruction2,
+                                         message4.instructions()[0]};
+  message4.SetInstructionsForTesting(vec2);
+  ASSERT_TRUE(message4.AddPriorityFee(0, 0));
+  EXPECT_TRUE(message4.UsesPriorityFee());
+}
+
+TEST(SolanaMessageUnitTest, ContainsCompressedNftTransfer) {
+  // Legacy message does not contain compressed NFT transfer.
+  SolanaMessage message1 = GetTestLegacyMessage();
+  EXPECT_FALSE(message1.ContainsCompressedNftTransfer());
+
+  // Message with compressed NFT transfer instruction.
+  std::vector<mojom::SolanaAccountMetaPtr> account_metas;
+  std::vector<uint8_t> data = {
+      // Contains compressed NFT transfer disctiminator.
+      0xa3, 0x34, 0xc8, 0xe7, 0x8c, 0x03, 0x45, 0xba, 0x44, 0x3f, 0xca, 0x38,
+      0xd1, 0x3e, 0x68, 0xf2, 0x95, 0xaf, 0xfc, 0x5f, 0x34, 0x31, 0xf3, 0x75,
+      0xba, 0xd8, 0xd3, 0x82, 0x90, 0x1a, 0x94, 0x7f, 0x72, 0x96, 0xfc, 0xd8,
+      0x79, 0x8a, 0xb7, 0x98, 0x3b, 0x17, 0x52, 0x74, 0x15, 0x6f, 0x94, 0x1a,
+      0xe6, 0xc6, 0x1e, 0x0e, 0xb4, 0x6c, 0xcf, 0x64, 0xd6, 0x8f, 0xfd, 0x34,
+      0xb7, 0x68, 0x6d, 0x97, 0x32, 0x45, 0x7e, 0x8a, 0x5c, 0x1a, 0x80, 0x31,
+      0x9b, 0x22, 0x99, 0xb4, 0xc2, 0x20, 0x0e, 0x5e, 0xef, 0x2e, 0x12, 0xb1,
+      0x6d, 0x4f, 0xbd, 0xf1, 0x2e, 0x11, 0xe1, 0x4f, 0xb2, 0x76, 0xc3, 0x91,
+      0x21, 0x88, 0x34, 0xf3, 0x0a, 0xec, 0x39, 0x45, 0xa5, 0x15, 0x14, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0xa5, 0x15, 0x14, 0x00};
+  auto solana_instruction = mojom::SolanaInstruction::New(
+      mojom::kSolanaBubbleGumProgramId, std::move(account_metas),
+      std::move(data), nullptr);
+
+  std::vector<mojom::SolanaInstructionPtr> mojom_instructions;
+  mojom_instructions.push_back(std::move(solana_instruction));
+  std::vector<SolanaInstruction> instructions;
+  SolanaInstruction::FromMojomSolanaInstructions(mojom_instructions,
+                                                 &instructions);
+
+  message1.SetInstructionsForTesting(instructions);
+  EXPECT_TRUE(message1.ContainsCompressedNftTransfer());
 }
 
 }  // namespace brave_wallet

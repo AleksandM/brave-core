@@ -4,20 +4,20 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 #include "brave/components/brave_rewards/core/endpoint/private_cdn/get_publisher/get_publisher.h"
 
+#include <string_view>
 #include <utility>
 
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "brave/components/brave_private_cdn/private_cdn_helper.h"
 #include "brave/components/brave_rewards/core/common/brotli_util.h"
+#include "brave/components/brave_rewards/core/common/environment_config.h"
 #include "brave/components/brave_rewards/core/common/time_util.h"
-#include "brave/components/brave_rewards/core/endpoint/private_cdn/private_cdn_util.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/common/url_loader.h"
 #include "brave/components/brave_rewards/core/publisher/protos/channel_response.pb.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_status_code.h"
-
-using std::placeholders::_1;
 
 // Due to privacy concerns, the request length must be consistent
 // for all publisher lookups. Do not add URL parameters or headers
@@ -118,7 +118,7 @@ mojom::Result ServerPublisherInfoFromMessage(
   DCHECK(info);
 
   if (expected_key.empty()) {
-    return mojom::Result::LEDGER_ERROR;
+    return mojom::Result::FAILED;
   }
 
   for (const auto& entry : message.channel_responses()) {
@@ -133,31 +133,31 @@ mojom::Result ServerPublisherInfoFromMessage(
     if (entry.has_site_banner_details()) {
       info->banner = GetPublisherBannerFromMessage(entry.site_banner_details());
     }
-    return mojom::Result::LEDGER_OK;
+    return mojom::Result::OK;
   }
 
-  return mojom::Result::LEDGER_ERROR;
+  return mojom::Result::FAILED;
 }
 
-bool DecompressMessage(base::StringPiece payload, std::string* output) {
+bool DecompressMessage(std::string_view payload, std::string* output) {
   constexpr size_t buffer_size = 32 * 1024;
   return util::DecodeBrotliStringWithBuffer(payload, buffer_size, output);
 }
 
 }  // namespace
 
-namespace endpoint {
-namespace private_cdn {
+namespace endpoint::private_cdn {
 
-GetPublisher::GetPublisher(LedgerImpl& ledger) : ledger_(ledger) {}
+GetPublisher::GetPublisher(RewardsEngine& engine) : engine_(engine) {}
 
 GetPublisher::~GetPublisher() = default;
 
 std::string GetPublisher::GetUrl(const std::string& hash_prefix) {
-  const std::string prefix = base::ToLowerASCII(hash_prefix);
-  const std::string path =
-      base::StringPrintf("/publishers/prefixes/%s", prefix.c_str());
-  return GetServerUrl(path);
+  return engine_->Get<EnvironmentConfig>()
+      .brave_pcdn_url()
+      .Resolve(base::StrCat(
+          {"/publishers/prefixes/", base::ToLowerASCII(hash_prefix)}))
+      .spec();
 }
 
 mojom::Result GetPublisher::CheckStatusCode(const int status_code) {
@@ -166,11 +166,11 @@ mojom::Result GetPublisher::CheckStatusCode(const int status_code) {
   }
 
   if (status_code != net::HTTP_OK) {
-    BLOG(0, "Unexpected HTTP status: " << status_code);
-    return mojom::Result::LEDGER_ERROR;
+    engine_->LogError(FROM_HERE) << "Unexpected HTTP status: " << status_code;
+    return mojom::Result::FAILED;
   }
 
-  return mojom::Result::LEDGER_OK;
+  return mojom::Result::OK;
 }
 
 mojom::Result GetPublisher::ParseBody(const std::string& body,
@@ -179,79 +179,80 @@ mojom::Result GetPublisher::ParseBody(const std::string& body,
   DCHECK(info);
 
   if (body.empty()) {
-    BLOG(0, "Publisher data empty");
-    return mojom::Result::LEDGER_ERROR;
+    engine_->LogError(FROM_HERE) << "Publisher data empty";
+    return mojom::Result::FAILED;
   }
 
-  base::StringPiece body_payload(body.data(), body.size());
+  std::string_view body_payload(body.data(), body.size());
   if (!brave::PrivateCdnHelper::GetInstance()->RemovePadding(&body_payload)) {
-    BLOG(0, "Publisher data response has invalid padding");
-    return mojom::Result::LEDGER_ERROR;
+    engine_->LogError(FROM_HERE)
+        << "Publisher data response has invalid padding";
+    return mojom::Result::FAILED;
   }
 
   std::string message_string;
   if (!DecompressMessage(body_payload, &message_string)) {
-    BLOG(1,
-         "Error decompressing publisher data response. "
-         "Attempting to parse as uncompressed message.");
+    engine_->Log(FROM_HERE) << "Error decompressing publisher data response. "
+                               "Attempting to parse as uncompressed message.";
     message_string.assign(body_payload.data(), body_payload.size());
   }
 
   publishers_pb::ChannelResponseList message;
   if (!message.ParseFromString(message_string)) {
-    BLOG(0, "Error parsing publisher data protobuf message");
-    return mojom::Result::LEDGER_ERROR;
+    engine_->LogError(FROM_HERE)
+        << "Error parsing publisher data protobuf message";
+    return mojom::Result::FAILED;
   }
 
   auto result = ServerPublisherInfoFromMessage(message, publisher_key, info);
-  if (result != mojom::Result::LEDGER_OK) {
+  if (result != mojom::Result::OK) {
     GetServerInfoForEmptyResponse(publisher_key, info);
   }
 
-  return mojom::Result::LEDGER_OK;
+  return mojom::Result::OK;
 }
 
 void GetPublisher::Request(const std::string& publisher_key,
                            const std::string& hash_prefix,
                            GetPublisherCallback callback) {
-  auto url_callback =
-      std::bind(&GetPublisher::OnRequest, this, _1, publisher_key, callback);
-
   auto request = mojom::UrlRequest::New();
   request->url = GetUrl(hash_prefix);
   request->load_flags = net::LOAD_BYPASS_CACHE | net::LOAD_DISABLE_CACHE;
-  ledger_->LoadURL(std::move(request), url_callback);
+
+  engine_->Get<URLLoader>().Load(
+      std::move(request), URLLoader::LogLevel::kDetailed,
+      base::BindOnce(&GetPublisher::OnRequest, base::Unretained(this),
+                     publisher_key, std::move(callback)));
 }
 
-void GetPublisher::OnRequest(mojom::UrlResponsePtr response,
-                             const std::string& publisher_key,
-                             GetPublisherCallback callback) {
+void GetPublisher::OnRequest(const std::string& publisher_key,
+                             GetPublisherCallback callback,
+                             mojom::UrlResponsePtr response) {
   DCHECK(response);
-  LogUrlResponse(__func__, *response);
   auto result = CheckStatusCode(response->status_code);
 
   auto info = mojom::ServerPublisherInfo::New();
   if (result == mojom::Result::NOT_FOUND) {
     GetServerInfoForEmptyResponse(publisher_key, info.get());
-    callback(mojom::Result::LEDGER_OK, std::move(info));
+    std::move(callback).Run(mojom::Result::OK, std::move(info));
     return;
   }
 
-  if (result != mojom::Result::LEDGER_OK) {
-    callback(mojom::Result::LEDGER_ERROR, nullptr);
+  if (result != mojom::Result::OK) {
+    std::move(callback).Run(mojom::Result::FAILED, nullptr);
     return;
   }
 
   result = ParseBody(response->body, publisher_key, info.get());
 
-  if (result != mojom::Result::LEDGER_OK) {
-    callback(result, nullptr);
+  if (result != mojom::Result::OK) {
+    std::move(callback).Run(result, nullptr);
     return;
   }
 
-  callback(mojom::Result::LEDGER_OK, std::move(info));
+  std::move(callback).Run(mojom::Result::OK, std::move(info));
 }
 
-}  // namespace private_cdn
-}  // namespace endpoint
+}  // namespace endpoint::private_cdn
+
 }  // namespace brave_rewards::internal

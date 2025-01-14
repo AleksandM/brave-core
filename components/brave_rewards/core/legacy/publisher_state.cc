@@ -5,18 +5,14 @@
 
 #include <utility>
 
-#include "brave/components/brave_rewards/core/ledger_impl.h"
 #include "brave/components/brave_rewards/core/legacy/publisher_settings_properties.h"
 #include "brave/components/brave_rewards/core/legacy/publisher_state.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 
-using std::placeholders::_1;
-using std::placeholders::_2;
+namespace brave_rewards::internal::publisher {
 
-namespace brave_rewards::internal {
-namespace publisher {
-
-LegacyPublisherState::LegacyPublisherState(LedgerImpl& ledger)
-    : ledger_(ledger) {}
+LegacyPublisherState::LegacyPublisherState(RewardsEngine& engine)
+    : engine_(engine) {}
 
 LegacyPublisherState::~LegacyPublisherState() = default;
 
@@ -32,28 +28,28 @@ bool LegacyPublisherState::GetPublisherAllowNonVerified() const {
   return state_.allow_non_verified_sites_in_list;
 }
 
-void LegacyPublisherState::Load(LegacyResultCallback callback) {
-  ledger_->client()->LoadPublisherState(
+void LegacyPublisherState::Load(ResultCallback callback) {
+  engine_->client()->LoadPublisherState(
       base::BindOnce(&LegacyPublisherState::OnLoad, base::Unretained(this),
                      std::move(callback)));
 }
 
-void LegacyPublisherState::OnLoad(LegacyResultCallback callback,
+void LegacyPublisherState::OnLoad(ResultCallback callback,
                                   mojom::Result result,
                                   const std::string& data) {
-  if (result != mojom::Result::LEDGER_OK) {
-    callback(result);
+  if (result != mojom::Result::OK) {
+    std::move(callback).Run(result);
     return;
   }
 
   PublisherSettingsProperties state;
   if (!state.FromJson(data)) {
-    callback(mojom::Result::LEDGER_ERROR);
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
   state_ = std::move(state);
-  callback(mojom::Result::LEDGER_OK);
+  std::move(callback).Run(mojom::Result::OK);
 }
 
 std::vector<std::string> LegacyPublisherState::GetAlreadyProcessedPublishers()
@@ -78,5 +74,4 @@ void LegacyPublisherState::GetAllBalanceReports(
   }
 }
 
-}  // namespace publisher
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::publisher

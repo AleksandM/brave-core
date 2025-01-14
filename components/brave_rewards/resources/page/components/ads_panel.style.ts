@@ -7,14 +7,17 @@ import styled from 'styled-components'
 
 import * as mixins from '../../shared/lib/css_mixins'
 
-export const root = styled.div`
-  --settings-panel-title-color: #C12D7C;
-`
+export const root = styled.div``
 
 export const description = styled.div`
   color: var(--brave-palette-neutral600);
   margin: 16px 0;
   line-height: 24px;
+
+  a {
+    padding-left: 4px;
+    text-decoration: none;
+  }
 `
 
 export const terms = styled.div`
@@ -68,10 +71,10 @@ export const paymentStatus = styled.div`
       vertical-align: middle;
     }
   }
+`
 
-  .rewards-payment-check-status {
-    display: block;
-  }
+export const earningsRow = styled.div`
+  display: none;
 `
 
 export const earnings = styled.span`
@@ -93,6 +96,10 @@ export const hiddenEarnings = styled.div`
     line-height: 18px;
     text-decoration: none;
   }
+`
+
+export const totalAdsCount = styled.span`
+  font-weight: 600;
 `
 
 export const showHistory = styled.div`
@@ -174,6 +181,7 @@ export const notSupportedIcon = styled.div`
 `
 
 export const connect = styled.div`
+  margin-bottom: 8px;
   background: rgba(93, 181, 252, 0.2);
   border-radius: 8px;
   padding: 16px;
@@ -210,24 +218,5 @@ export const connectAction = styled.div`
       margin-left: 8px;
       margin-top: -2px;
     }
-  }
-`
-
-export const connectUnavailable = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: #FFFCF0;
-  border-radius: 8px;
-  padding: 16px;
-  font-size: 14px;
-  line-height: 20px;
-
-  a {
-    font-weight: 600;
-    font-size: 13px;
-    line-height: 20px;
-    color: #4C54D2;
-    text-decoration: none;
   }
 `

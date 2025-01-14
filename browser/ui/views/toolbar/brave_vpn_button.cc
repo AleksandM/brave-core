@@ -5,6 +5,7 @@
 
 #include "brave/browser/ui/views/toolbar/brave_vpn_button.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
@@ -12,20 +13,21 @@
 #include "brave/app/brave_command_ids.h"
 #include "brave/app/vector_icons/vector_icons.h"
 #include "brave/browser/brave_vpn/brave_vpn_service_factory.h"
+#include "brave/browser/ui/brave_icon_with_badge_image_source.h"
 #include "brave/browser/ui/color/brave_color_id.h"
 #include "brave/components/brave_vpn/browser/brave_vpn_service.h"
 #include "brave/components/l10n/common/localization_util.h"
+#include "brave/components/vector_icons/vector_icons.h"
 #include "brave/grit/brave_generated_resources.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/color/chrome_color_id.h"
 #include "chrome/browser/ui/layout_constants.h"
+#include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/toolbar/toolbar_ink_drop_util.h"
 #include "components/grit/brave_components_strings.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/base/models/simple_menu_model.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/color_utils.h"
@@ -33,6 +35,7 @@
 #include "ui/gfx/geometry/rrect_f.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/skia_util.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/views/animation/ink_drop.h"
 #include "ui/views/animation/ink_drop_host.h"
 #include "ui/views/background.h"
@@ -44,24 +47,7 @@ using PurchasedState = brave_vpn::mojom::PurchasedState;
 
 namespace {
 
-constexpr int kButtonRadius = 100;
-
-class BraveVPNButtonHighlightPathGenerator
-    : public views::HighlightPathGenerator {
- public:
-  explicit BraveVPNButtonHighlightPathGenerator(const gfx::Insets& insets)
-      : HighlightPathGenerator(insets) {}
-
-  BraveVPNButtonHighlightPathGenerator(
-      const BraveVPNButtonHighlightPathGenerator&) = delete;
-  BraveVPNButtonHighlightPathGenerator& operator=(
-      const BraveVPNButtonHighlightPathGenerator&) = delete;
-
-  // views::HighlightPathGenerator overrides:
-  absl::optional<gfx::RRectF> GetRoundRect(const gfx::RectF& rect) override {
-    return gfx::RRectF(rect, kButtonRadius);
-  }
-};
+constexpr int kBadgeSize = 10;
 
 // For error icon's inner color.
 class ConnectErrorIconBackground : public views::Background {
@@ -90,7 +76,7 @@ class VPNButtonMenuModel : public ui::SimpleMenuModel,
         browser_(browser),
         service_(brave_vpn::BraveVpnServiceFactory::GetForProfile(
             browser_->profile())) {
-    DCHECK(service_);
+    CHECK(service_);
     Observe(service_);
     Build(service_->is_purchased_user());
   }
@@ -108,7 +94,7 @@ class VPNButtonMenuModel : public ui::SimpleMenuModel,
   // BraveVPNServiceObserver overrides:
   void OnPurchasedStateChanged(
       brave_vpn::mojom::PurchasedState state,
-      const absl::optional<std::string>& description) override {
+      const std::optional<std::string>& description) override {
     // Rebuild menu items based on purchased state change.
     Build(service_->is_purchased_user());
   }
@@ -129,8 +115,56 @@ class VPNButtonMenuModel : public ui::SimpleMenuModel,
     }
   }
 
-  raw_ptr<Browser> browser_ = nullptr;
-  raw_ptr<brave_vpn::BraveVpnService> service_ = nullptr;
+  raw_ptr<Browser, DanglingUntriaged> browser_ = nullptr;
+  raw_ptr<brave_vpn::BraveVpnService, DanglingUntriaged> service_ = nullptr;
+};
+
+const ui::ColorProvider* GetColorProviderForView(
+    base::WeakPtr<BraveVPNButton> view) {
+  if (view) {
+    return view->GetColorProvider();
+  }
+
+  return ui::ColorProviderManager::Get().GetColorProviderFor(
+      ui::NativeTheme::GetInstanceForNativeUi()->GetColorProviderKey(nullptr));
+}
+
+// An image with custom badge image(not text).
+class BraveVPNBadgeImageSource : public brave::BraveIconWithBadgeImageSource {
+ public:
+  BraveVPNBadgeImageSource(const gfx::Size& image_size,
+                           int icon_size,
+                           GetColorProviderCallback get_color_provider_callback,
+                           const gfx::VectorIcon& badge_icon,
+                           SkColor badge_icon_color)
+      : BraveIconWithBadgeImageSource(image_size,
+                                      std::move(get_color_provider_callback),
+                                      icon_size,
+                                      /* image_left_margin_extra */ 0),
+        badge_icon_(badge_icon),
+        badge_icon_color_(badge_icon_color) {
+    // true as this image is for badge with image not text.
+    SetAllowEmptyText(true);
+  }
+
+ private:
+  // brave::BraveIconWithBadgeImageSource:
+  void PaintBadgeWithoutText(const gfx::Rect& badge_rect,
+                             gfx::Canvas* canvas) override {
+    auto image =
+        gfx::CreateVectorIcon(*badge_icon_, kBadgeSize, badge_icon_color_);
+    cc::PaintFlags image_flags;
+    image_flags.setStyle(cc::PaintFlags::kFill_Style);
+    image_flags.setAntiAlias(true);
+
+    // badge is located at the right bottom of image area.
+    const int x_offset = size().width() - kBadgeSize;
+    const int y_offset = size().height() - kBadgeSize;
+    canvas->DrawImageInt(image, x_offset, y_offset, image_flags);
+  }
+
+  raw_ref<const gfx::VectorIcon> badge_icon_;
+  SkColor badge_icon_color_ = SK_ColorTRANSPARENT;
 };
 
 }  // namespace
@@ -145,19 +179,9 @@ BraveVPNButton::BraveVPNButton(Browser* browser)
       browser_(browser),
       service_(brave_vpn::BraveVpnServiceFactory::GetForProfile(
           browser_->profile())) {
-  DCHECK(service_);
+  CHECK(service_);
+  UpdateButtonState();
   Observe(service_);
-
-  // Replace ToolbarButton's highlight path generator.
-  views::HighlightPathGenerator::Install(
-      this, std::make_unique<BraveVPNButtonHighlightPathGenerator>(
-                GetToolbarInkDropInsets(this)));
-
-  // Set 0.0f to use same color for activated state.
-  views::InkDrop::Get(this)->SetVisibleOpacity(0.00f);
-
-  // Different base color is set per themes and it has alpha.
-  views::InkDrop::Get(this)->SetHighlightOpacity(1.0f);
 
   // The MenuButtonController makes sure the panel closes when clicked if the
   // panel is already open.
@@ -168,54 +192,43 @@ BraveVPNButton::BraveVPNButton(Browser* browser)
       std::make_unique<views::Button::DefaultButtonControllerDelegate>(this));
   menu_button_controller_ = menu_button_controller.get();
   SetButtonController(std::move(menu_button_controller));
-
-  SetTextSubpixelRenderingEnabled(false);
-  label()->SetText(brave_l10n::GetLocalizedResourceUTF16String(
-      IDS_BRAVE_VPN_TOOLBAR_BUTTON_TEXT));
-  gfx::FontList font_list = views::Label::GetDefaultFontList();
-  constexpr int kFontSize = 12;
-  label()->SetFontList(
-      font_list.DeriveWithSizeDelta(kFontSize - font_list.GetFontSize()));
-
-  // W/o layer, ink drop affects text color.
-  label()->SetPaintToLayer();
-
-  // To clear previous pixels.
-  label()->layer()->SetFillsBoundsOpaquely(false);
-
-  // Set image positions first. then label.
-  SetHorizontalAlignment(gfx::ALIGN_LEFT);
-
-  // Views resulting in focusable nodes later on in the accessibility tree need
-  // to have an accessible name for screen readers to see what they are about.
-  // TODO(simonhong): Re-visit this name.
   SetAccessibleName(brave_l10n::GetLocalizedResourceUTF16String(
       IDS_BRAVE_VPN_TOOLBAR_BUTTON_TEXT));
-
-  constexpr int kBraveAvatarImageLabelSpacing = 4;
-  SetImageLabelSpacing(kBraveAvatarImageLabelSpacing);
 }
 
 BraveVPNButton::~BraveVPNButton() = default;
 
 void BraveVPNButton::OnConnectionStateChanged(ConnectionState state) {
+  if (IsErrorState() && (state == ConnectionState::CONNECTING ||
+                         state == ConnectionState::DISCONNECTING)) {
+    // Skip attempts to connect/disconnet if we had an error before and keep
+    // the button in the error state until we get it clearly fixed.
+    return;
+  }
+  UpdateButtonState();
   UpdateColorsAndInsets();
+}
+
+void BraveVPNButton::UpdateButtonState() {
+  is_error_state_ = IsConnectError();
+  is_connected_ = IsConnected();
 }
 
 void BraveVPNButton::OnPurchasedStateChanged(
     brave_vpn::mojom::PurchasedState state,
-    const absl::optional<std::string>& description) {
-  if (IsPurchased()) {
-    UpdateColorsAndInsets();
-  }
+    const std::optional<std::string>& description) {
+  UpdateButtonState();
+  UpdateColorsAndInsets();
 }
 
 std::unique_ptr<views::Border> BraveVPNButton::GetBorder(
     SkColor border_color) const {
-  constexpr auto kTargetInsets = gfx::Insets::VH(5, 11);
+  constexpr auto kTargetInsets = gfx::Insets::VH(6, 8);
   constexpr auto kBorderThickness = 1;
+  const int radius = ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+      views::Emphasis::kMaximum, {});
   std::unique_ptr<views::Border> border = views::CreateRoundedRectBorder(
-      kBorderThickness, kButtonRadius, gfx::Insets(), border_color);
+      kBorderThickness, radius, gfx::Insets(), border_color);
   const gfx::Insets extra_insets = kTargetInsets - border->GetInsets();
   return views::CreatePaddedBorder(std::move(border), extra_insets);
 }
@@ -225,74 +238,122 @@ void BraveVPNButton::UpdateColorsAndInsets() {
   if (!cp) {
     return;
   }
-  const bool is_connect_error = IsConnectError();
-  const bool is_connected = IsConnected();
-  const gfx::Insets paint_insets =
-      gfx::Insets((height() - GetLayoutConstant(LOCATION_BAR_HEIGHT)) / 2);
+
   const auto bg_color =
-      cp->GetColor(is_connect_error ? kColorBraveVpnButtonErrorBackgroundNormal
-                                    : kColorBraveVpnButtonBackgroundNormal);
-  SetBackground(views::CreateBackgroundFromPainter(
-      views::Painter::CreateSolidRoundRectPainter(bg_color, kButtonRadius,
-                                                  paint_insets)));
+      cp->GetColor(is_error_state_ ? kColorBraveVpnButtonErrorBackgroundNormal
+                                   : kColorBraveVpnButtonBackgroundNormal);
+  const int radius = ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+      views::Emphasis::kMaximum, {});
+  SetBackground(views::CreateRoundedRectBackground(bg_color, radius));
 
-  SetEnabledTextColors(cp->GetColor(is_connect_error
-                                        ? kColorBraveVpnButtonTextError
-                                        : kColorBraveVpnButtonText));
+  constexpr gfx::Size kImageSizeWithBadge(22, 24);
+  const int button_size = GetLayoutConstant(TOOLBAR_BUTTON_HEIGHT);
+  const auto size_diff =
+      gfx::Size(button_size, button_size) - kImageSizeWithBadge;
 
-  if (is_connect_error) {
-    SetImage(
-        views::Button::STATE_NORMAL,
-        gfx::CreateVectorIcon(kVpnIndicatorErrorIcon,
-                              cp->GetColor(kColorBraveVpnButtonIconError)));
+  // Outside of image should be filled with border.
+  SetBorder(views::CreateEmptyBorder(
+      gfx::Insets::VH(size_diff.height() / 2, size_diff.width() / 2)));
+  auto image_source = std::make_unique<BraveVPNBadgeImageSource>(
+      kImageSizeWithBadge, GetIconSize(),
+      base::BindRepeating(&GetColorProviderForView,
+                          weak_ptr_factory_.GetWeakPtr()),
+      GetBadgeIcon(), GetBadgeColor());
 
-    // Use background for inner color of error button image.
-    image()->SetBackground(std::make_unique<ConnectErrorIconBackground>(
-        cp->GetColor(kColorBraveVpnButtonIconErrorInner)));
-  } else {
-    SetImage(
-        views::Button::STATE_NORMAL,
-        gfx::CreateVectorIcon(
-            is_connected ? kVpnIndicatorOnIcon : kVpnIndicatorOffIcon,
-            cp->GetColor(is_connected ? kColorBraveVpnButtonIconConnected
-                                      : kColorBraveVpnButtonIconDisconnected)));
+  if (IsPurchased()) {
+    // Don't need to have text badge here but custom badge is not painted
+    // if it's null. Set dummy badge.
+    image_source->SetBadge(std::make_unique<IconWithBadgeImageSource::Badge>(
+        std::string(), gfx::kPlaceholderColor, gfx::kPlaceholderColor));
+  }
+  image_source->SetIcon(gfx::Image(gfx::CreateVectorIcon(
+      kLeoProductVpnIcon, GetIconSize(), GetIconColor())));
+  SetImageModel(views::Button::STATE_NORMAL,
+                ui::ImageModel::FromImageSkia(gfx::ImageSkia(
+                    std::move(image_source), kImageSizeWithBadge)));
+}
 
-    // Use background for inner color of button image.
-    // Adjusted border thickness to make invisible to the outside of the icon.
-    image()->SetBackground(views::CreateRoundedRectBackground(
-        cp->GetColor(kColorBraveVpnButtonIconInner), 5 /*radi*/, 2 /*thick*/));
+SkColor BraveVPNButton::GetIconColor() {
+  ui::ColorProvider* cp = GetColorProvider();
+  CHECK(cp);
+
+  if (is_error_state_) {
+    return cp->GetColor(kColorBraveVpnButtonIconError);
   }
 
-  // Compute highlight color and border in advance. If not, highlight color and
-  // border color are mixed as both have alpha value.
-  // Use different ink drop hover color for each themes.
-  views::InkDrop::Get(this)->SetBaseColor(color_utils::GetResultingPaintColor(
-      cp->GetColor(is_connect_error ? kColorBraveVpnButtonErrorBackgroundHover
-                                    : kColorBraveVpnButtonBorder),
-      bg_color));
+  const auto ink_drop_state =
+      views::InkDrop::Get(this)->GetInkDrop()->GetTargetInkDropState();
+  ui::ColorId icon_color_id = kColorToolbarButtonIcon;
+  if (ink_drop_state == views::InkDropState::ACTIVATED) {
+    icon_color_id = kColorToolbarButtonActivated;
+  }
 
-  // Draw border only for error state.
-  SetBorder(GetBorder(color_utils::GetResultingPaintColor(
-      cp->GetColor(is_connect_error ? kColorBraveVpnButtonErrorBorder
-                                    : kColorBraveVpnButtonBorder),
-      bg_color)));
+  return cp->GetColor(icon_color_id);
+}
+
+SkColor BraveVPNButton::GetBadgeColor() {
+  ui::ColorProvider* cp = GetColorProvider();
+  CHECK(cp);
+
+  if (is_error_state_) {
+    return cp->GetColor(kColorBraveVpnButtonIconError);
+  }
+
+  return cp->GetColor(is_connected_ ? kColorBraveVpnButtonIconConnected
+                                    : kColorBraveVpnButtonIconDisconnected);
+}
+
+const gfx::VectorIcon& BraveVPNButton::GetBadgeIcon() {
+  if (is_error_state_) {
+    return kVpnIndicatorErrorIcon;
+  }
+
+  return is_connected_ ? kVpnIndicatorOnIcon : kVpnIndicatorOffIcon;
 }
 
 std::u16string BraveVPNButton::GetTooltipText(const gfx::Point& p) const {
-  if (!IsPurchased())
+  if (!IsPurchased()) {
     return l10n_util::GetStringUTF16(IDS_BRAVE_VPN);
+  }
 
   return l10n_util::GetStringUTF16(IsConnected()
                                        ? IDS_BRAVE_VPN_CONNECTED_TOOLTIP
                                        : IDS_BRAVE_VPN_DISCONNECTED_TOOLTIP);
 }
 
+void BraveVPNButton::OnThemeChanged() {
+  ToolbarButton::OnThemeChanged();
+
+  // Configure vpn button specific ink drop config as ink drop is reset
+  // whenever theme changes.
+
+  // Set 0.0f to use same color for activated state.
+  views::InkDrop::Get(this)->SetVisibleOpacity(0.00f);
+
+  // Different base color is set per themes and it has alpha.
+  views::InkDrop::Get(this)->SetHighlightOpacity(1.0f);
+
+  UpdateColorsAndInsets();
+}
+
+void BraveVPNButton::InkDropRippleAnimationEnded(views::InkDropState state) {
+  // To use different icon color when activated.
+  UpdateColorsAndInsets();
+}
+
 bool BraveVPNButton::IsConnected() const {
   return service_->IsConnected();
 }
 
+ConnectionState BraveVPNButton::GetVpnConnectionState() const {
+  if (connection_state_for_testing_) {
+    return connection_state_for_testing_.value();
+  }
+  return service_->GetConnectionState();
+}
+
 bool BraveVPNButton::IsConnectError() const {
-  const auto state = service_->GetConnectionState();
+  const auto state = GetVpnConnectionState();
   return (state == ConnectionState::CONNECT_NOT_ALLOWED ||
           state == ConnectionState::CONNECT_FAILED);
 }
@@ -304,5 +365,5 @@ void BraveVPNButton::OnButtonPressed(const ui::Event& event) {
   chrome::ExecuteCommand(browser_, IDC_SHOW_BRAVE_VPN_PANEL);
 }
 
-BEGIN_METADATA(BraveVPNButton, LabelButton)
+BEGIN_METADATA(BraveVPNButton)
 END_METADATA

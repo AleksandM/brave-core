@@ -3,22 +3,21 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "brave/components/brave_wallet/browser/eth_response_parser.h"
+
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "base/test/values_test_util.h"
-#include "brave/components/brave_wallet/browser/eth_response_parser.h"
-#include "brave/components/ipfs/ipfs_utils.h"
 #include "components/grit/brave_components_strings.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 
 using base::test::ParseJson;
 
-namespace brave_wallet {
-
-namespace eth {
+namespace brave_wallet::eth {
 
 TEST(EthResponseParserUnitTest, ParseEthGetBalance) {
   std::string json(
@@ -76,8 +75,9 @@ TEST(EthResponseParserUnitTest, DecodeEthCallResponse) {
   // OK: 32-byte uint256
   std::string result =
       "0x00000000000000000000000000000000000000000000000166e12cfce39a0000";
-  auto args = DecodeEthCallResponse(result, {"uint256"});
-  ASSERT_NE(args, absl::nullopt);
+  auto args = DecodeEthCallResponse(
+      result, eth_abi::Tuple().AddTupleType(eth_abi::Uint(256)).build());
+  ASSERT_NE(args, std::nullopt);
   ASSERT_EQ(args->size(), 1UL);
   ASSERT_EQ(args->at(0), "0x166e12cfce39a0000");
 
@@ -86,16 +86,23 @@ TEST(EthResponseParserUnitTest, DecodeEthCallResponse) {
       "0x0000000000000000000000000000000000000000000000000000000000045d12000000"
       "000000000000000000000000000000000000000000000000000000000000000000000000"
       "00000000000000000000000000000000000000000000000000";
-  args = DecodeEthCallResponse(result, {"uint256"});
-  ASSERT_NE(args, absl::nullopt);
+  args = DecodeEthCallResponse(
+      result, eth_abi::Tuple().AddTupleType(eth_abi::Uint(256)).build());
+  ASSERT_NE(args, std::nullopt);
   ASSERT_EQ(args->size(), 1UL);
   ASSERT_EQ(args->at(0), "0x45d12");
 
   // KO: insufficient length of response
-  ASSERT_EQ(DecodeEthCallResponse("0x0", {"uint256"}), absl::nullopt);
+  ASSERT_EQ(
+      DecodeEthCallResponse(
+          "0x0", eth_abi::Tuple().AddTupleType(eth_abi::Uint(256)).build()),
+      std::nullopt);
 
   // KO: invalid response
-  ASSERT_EQ(DecodeEthCallResponse("foobarbaz", {"uint256"}), absl::nullopt);
+  ASSERT_EQ(DecodeEthCallResponse(
+                "foobarbaz",
+                eth_abi::Tuple().AddTupleType(eth_abi::Uint(256)).build()),
+            std::nullopt);
 }
 
 TEST(EthResponseParserUnitTest, ParseEthGetTransactionReceipt) {
@@ -260,30 +267,6 @@ TEST(EthResponseParserUnitTest, ParseEthGetLogs) {
   })";
 
   EXPECT_FALSE(ParseEthGetLogs(ParseJson(json), &logs));
-}
-
-TEST(EthResponseParserUnitTest, ParseEnsResolverContentHash) {
-  std::string json =
-      "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":"
-      "\"0x00000000000000000000000000000000000000000000000000000000000000200000"
-      "00"
-      "0000000000000000000000000000000000000000000000000000000026e3010170122023"
-      "e0160eec32d7875c19c5ac7c03bc1f306dc260080d621454bc5f631e7310a70000000000"
-      "000000000000000000000000000000000000000000\"}";
-  std::vector<uint8_t> content_hash;
-  EXPECT_TRUE(ParseEnsResolverContentHash(ParseJson(json), &content_hash));
-  EXPECT_EQ(
-      ipfs::ContentHashToCIDv1URL(content_hash).spec(),
-      "ipfs://bafybeibd4ala53bs26dvygofvr6ahpa7gbw4eyaibvrbivf4l5rr44yqu4");
-
-  content_hash = {};
-  json =
-      "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":"
-      "\"0x000000000000000000000000000000000000000000000000000000000000002000\""
-      "}";
-
-  EXPECT_FALSE(ParseEnsResolverContentHash(ParseJson(json), &content_hash));
-  EXPECT_TRUE(content_hash.empty());
 }
 
 TEST(EthResponseParserUnitTest, ParseUnstoppableDomainsProxyReaderGetMany) {
@@ -510,6 +493,53 @@ TEST(EthResponseParserUnitTest, ParseEthGetFeeHistory) {
   EXPECT_EQ(oldest_block, "0xd6b1b0");
   EXPECT_EQ(reward, std::vector<std::vector<std::string>>());
 
+  // null reward is OK which is treated the same as missing reward
+  json = R"(
+      {
+        "jsonrpc":"2.0",
+        "id":1,
+        "result": {
+          "baseFeePerGas": [],
+          "gasUsedRatio": [],
+          "oldestBlock": "0xd6b1b0",
+          "reward": null
+        }
+      })";
+  base_fee_per_gas.clear();
+  gas_used_ratio.clear();
+  oldest_block.clear();
+  reward.clear();
+  EXPECT_TRUE(ParseEthGetFeeHistory(ParseJson(json), &base_fee_per_gas,
+                                    &gas_used_ratio, &oldest_block, &reward));
+  EXPECT_EQ(base_fee_per_gas, std::vector<std::string>());
+  EXPECT_EQ(gas_used_ratio, std::vector<double>());
+  EXPECT_EQ(oldest_block, "0xd6b1b0");
+  EXPECT_EQ(reward, std::vector<std::vector<std::string>>());
+
+  // OK: null values in baseFeePerGas array is handled correctly
+  json = R"(
+      {
+        "jsonrpc":"2.0",
+        "id":1,
+        "result": {
+          "baseFeePerGas": [null, "0x0", null, "0x1"],
+          "gasUsedRatio": [],
+          "oldestBlock": "0xd6b1b0",
+          "reward": null
+        }
+      })";
+  base_fee_per_gas.clear();
+  gas_used_ratio.clear();
+  oldest_block.clear();
+  reward.clear();
+  EXPECT_TRUE(ParseEthGetFeeHistory(ParseJson(json), &base_fee_per_gas,
+                                    &gas_used_ratio, &oldest_block, &reward));
+  EXPECT_EQ(base_fee_per_gas,
+            std::vector<std::string>({"0x0", "0x0", "0x0", "0x1"}));
+  EXPECT_EQ(gas_used_ratio, std::vector<double>());
+  EXPECT_EQ(oldest_block, "0xd6b1b0");
+  EXPECT_EQ(reward, std::vector<std::vector<std::string>>());
+
   // Unexpected input
   EXPECT_FALSE(ParseEthGetFeeHistory(base::Value(), &base_fee_per_gas,
                                      &gas_used_ratio, &oldest_block, &reward));
@@ -695,7 +725,7 @@ TEST(EthResponseParserUnitTest, ParseStringResult) {
 }
 
 TEST(EthResponseParserUnitTest, DecodeGetERC20TokenBalancesEthCallResponse) {
-  absl::optional<std::vector<absl::optional<std::string>>> result;
+  std::optional<std::vector<std::optional<std::string>>> result;
 
   // Empty string returns null
   result = eth::DecodeGetERC20TokenBalancesEthCallResponse("");
@@ -735,6 +765,4 @@ TEST(EthResponseParserUnitTest, DecodeGetERC20TokenBalancesEthCallResponse) {
       "0x0000000000000000000000000000000000000000000000000000000000000000");
 }
 
-}  // namespace eth
-
-}  // namespace brave_wallet
+}  // namespace brave_wallet::eth

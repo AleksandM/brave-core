@@ -6,7 +6,7 @@
 #ifndef BRAVE_BROWSER_BRAVE_WALLET_EXTERNAL_WALLETS_IMPORTER_H_
 #define BRAVE_BROWSER_BRAVE_WALLET_EXTERNAL_WALLETS_IMPORTER_H_
 
-#include <memory>
+#include <optional>
 #include <string>
 
 #include "base/functional/callback.h"
@@ -14,6 +14,7 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/sequence_checker.h"
+#include "base/types/expected.h"
 #include "base/values.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/brave_wallet_types.h"
@@ -35,7 +36,7 @@ class ExternalWalletsImporter {
  public:
   using InitCallback = base::OnceCallback<void(bool)>;
   using GetImportInfoCallback =
-      base::OnceCallback<void(bool, ImportInfo, ImportError)>;
+      base::OnceCallback<void(base::expected<ImportInfo, ImportError>)>;
 
   explicit ExternalWalletsImporter(mojom::ExternalWalletType,
                                    content::BrowserContext*);
@@ -70,7 +71,7 @@ class ExternalWalletsImporter {
   bool is_external_wallet_installed_for_testing_ = false;
   mojom::ExternalWalletType type_;
   raw_ptr<content::BrowserContext> context_ = nullptr;
-  absl::optional<base::Value::Dict> storage_data_;
+  std::optional<base::Value::Dict> storage_data_;
   scoped_refptr<extensions::Extension> extension_;
 
   SEQUENCE_CHECKER(sequence_checker_);

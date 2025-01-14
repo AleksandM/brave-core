@@ -56,13 +56,15 @@ class TabHoverCardBubbleViewBrowserTest : public DialogBrowserTest,
     TabStrip* const tab_strip = GetTabStrip(browser());
     Tab* const tab = tab_strip->tab_at(1);
     if (!tab) {
-      NOTREACHED();
+      SCOPED_TRACE(testing::Message()
+                   << "expected tab strip to have a tab at index 1");
       return false;
     }
 
     TabHoverCardBubbleView* const hover_card = GetHoverCard(tab_strip);
     if (!hover_card) {
-      NOTREACHED();
+      SCOPED_TRACE(testing::Message()
+                   << "expected tab strip to have a hover card");
       return false;
     }
 

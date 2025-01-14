@@ -31,9 +31,9 @@
 
 namespace brave_vpn {
 namespace {
-const char kCustomServersURLs[] =
+constexpr char kCustomServersURLs[] =
     "https://server1.com\nhttps://server2.com/{?dns}";
-const char kCloudflareDnsProviderURL[] =
+constexpr char kCloudflareDnsProviderURL[] =
     "https://chrome.cloudflare-dns.com/dns-query";
 }  // namespace
 
@@ -43,6 +43,7 @@ class BraveVpnDnsObserverServiceUnitTest : public testing::Test {
 
   void SetUp() override {
     RegisterLocalState(local_state_.registry());
+    TestingBrowserProcess::GetGlobal()->SetLocalState(&local_state_);
     BraveVpnDnsObserverFactory::GetInstance()->RegisterProfilePrefs(
         profile_pref_service_.registry());
     stub_resolver_config_reader_ =
@@ -68,6 +69,7 @@ class BraveVpnDnsObserverServiceUnitTest : public testing::Test {
     // BraveVpnDnsObserverService destructor must be called before the task
     // runner is destroyed.
     ResetDnsObserverService();
+    TestingBrowserProcess::GetGlobal()->SetLocalState(nullptr);
   }
   void EnableParentalControl(bool value) {
     StubResolverConfigReader* config_reader =

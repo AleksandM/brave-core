@@ -4,13 +4,19 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import {
+  mockBraveWalletOrigin,
+  mockUniswapOriginInfo
+} from '../stories/mock-data/mock-origin-info'
+import {
   isRemoteImageURL,
   isValidIconExtension,
   formatAsDouble,
   hasUnicode,
   padWithLeadingZeros,
   unicodeCharEscape,
-  removeDoubleSpaces
+  removeDoubleSpaces,
+  getIsBraveWalletOrigin,
+  reduceInt
 } from './string-utils'
 
 describe('Checking URL is remote image or not', () => {
@@ -23,7 +29,12 @@ describe('Checking URL is remote image or not', () => {
   })
 
   test('Data URL image should return true', () => {
-    expect(isRemoteImageURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4z8AAAAMBAQD3A0FDAAAAAElFTkSuQmCC')).toEqual(true)
+    expect(
+      isRemoteImageURL(
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAA' +
+          'CQd1PeAAAADElEQVR42mP4z8AAAAMBAQD3A0FDAAAAAElFTkSuQmCC'
+      )
+    ).toEqual(true)
   })
 
   test('local path should return false', () => {
@@ -105,5 +116,28 @@ describe('removeDoubleSpaces', () => {
     expect(removeDoubleSpaces('word  word  word')).toBe('word word word')
     expect(removeDoubleSpaces('word  word')).toBe('word word')
     expect(removeDoubleSpaces('word')).toBe('word')
+  })
+})
+
+describe('getIsBraveWalletOrigin', () => {
+  it('should return `false` if it is not a Brave Wallet origin', () => {
+    expect(getIsBraveWalletOrigin(mockUniswapOriginInfo)).toBe(false)
+    expect(
+      getIsBraveWalletOrigin({ originSpec: 'chrome://wallet@newtab' })
+    ).toBe(false)
+  })
+  it('should return `true` if it is a Brave Wallet origin', () => {
+    expect(getIsBraveWalletOrigin(mockBraveWalletOrigin)).toBe(true)
+  })
+})
+
+describe('reduceInt', () => {
+  it('should not shorten numbers with less than 7 digits', () => {
+    expect(reduceInt('1')).toBe('1')
+    expect(reduceInt('123456')).toBe('123456')
+  })
+  it('should shorten numbers with more than 7 digits', () => {
+    expect(reduceInt('12345678')).toBe('123...678')
+    expect(reduceInt('1234567890')).toBe('123...890')
   })
 })

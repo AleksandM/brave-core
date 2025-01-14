@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.app.helpers;
 
 import static org.chromium.ui.base.ViewUtils.dpToPx;
 
+import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
@@ -37,40 +38,45 @@ import org.xmlpull.v1.XmlPullParserException;
 import org.xmlpull.v1.XmlPullParserFactory;
 import org.xmlpull.v1.XmlSerializer;
 
+import org.chromium.base.Callbacks;
 import org.chromium.base.ContextUtils;
-import org.chromium.chrome.browser.WebContentsFactory;
+import org.chromium.chrome.browser.app.BraveActivity;
+import org.chromium.chrome.browser.content.WebContentsFactory;
 import org.chromium.chrome.browser.crypto_wallet.util.Utils;
 import org.chromium.chrome.browser.crypto_wallet.util.WalletConstants;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.ui.favicon.FaviconHelper;
 import org.chromium.chrome.browser.util.ConfigurationUtils;
 import org.chromium.components.image_fetcher.ImageFetcher;
 import org.chromium.components.image_fetcher.ImageFetcher.Params;
 import org.chromium.components.image_fetcher.ImageFetcherConfig;
 import org.chromium.components.image_fetcher.ImageFetcherFactory;
 import org.chromium.content_public.browser.WebContents;
+import org.chromium.net.NetId;
 import org.chromium.url.GURL;
 
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ImageLoader {
     private static final String TAG = "ImageLoader";
-    private static final List<String> ANIMATED_LIST = Arrays.asList(".gif");
     private static final String UNUSED_CLIENT_NAME = "unused";
     private static final String BASE64_ENCODING_PATTERN =
             "^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)$";
     private static final String ATT_VALUE_1000_PX = "1000px";
     private static final String SVG_TAG = "svg";
     private static final String DATA_IMAGE_SVG_UTF8_PREFIX = "data:image/svg+xml;utf8,";
+
+    private static FaviconHelper sFaviconHelper;
+    private static FaviconHelper.DefaultFaviconHelper sFaviconThemeHelper;
 
     private static void downloadImage(String url, final RequestManager requestManager,
             final boolean isCircular, final int roundedCorners, final ImageView imageView,
@@ -104,10 +110,11 @@ public class ImageLoader {
                 validUrl = url;
             }
 
-            WebContentsFactory webContentsFactory = new WebContentsFactory();
             WebContents webContents =
-                    webContentsFactory.createWebContentsWithWarmRenderer(profile, true);
-            webContents.downloadImage(new GURL(validUrl), // Url
+                    WebContentsFactory.createWebContentsWithWarmRenderer(
+                            profile, true, NetId.INVALID);
+            webContents.downloadImage(
+                    new GURL(validUrl), // Url
                     false, // isFavIcon
                     WalletConstants.MAX_BITMAP_SIZE_FOR_DOWNLOAD, // maxBitmapSize
                     false, // bypassCache
@@ -133,28 +140,49 @@ public class ImageLoader {
                                     new BitmapDrawable(resources, bestBitmap);
                             imageFetcherFacade = new ImageFetcherFacade(bitmapDrawable);
                         }
-                        loadImage(imageFetcherFacade, requestManager, isCircular, roundedCorners,
-                                imageView, customTarget, callback);
+                        loadImage(
+                                imageFetcherFacade,
+                                requestManager,
+                                isCircular,
+                                roundedCorners,
+                                imageView,
+                                customTarget,
+                                callback);
                     });
         } else {
-            ImageFetcher imageFetcher = ImageFetcherFactory.createImageFetcher(
-                    ImageFetcherConfig.NETWORK_ONLY, profile.getProfileKey());
+            ImageFetcher imageFetcher =
+                    ImageFetcherFactory.createImageFetcher(
+                            ImageFetcherConfig.NETWORK_ONLY, profile.getProfileKey());
             if (isGif(url)) {
                 imageFetcher.fetchGif(
-                        Params.create(new GURL(url), UNUSED_CLIENT_NAME), gifImage -> {
+                        Params.create(new GURL(url), UNUSED_CLIENT_NAME),
+                        gifImage -> {
                             ImageFetcherFacade imageFetcherFacade =
                                     new ImageFetcherFacade(gifImage.getData());
-                            loadImage(imageFetcherFacade, requestManager, isCircular,
-                                    roundedCorners, imageView, customTarget, callback);
+                            loadImage(
+                                    imageFetcherFacade,
+                                    requestManager,
+                                    isCircular,
+                                    roundedCorners,
+                                    imageView,
+                                    customTarget,
+                                    callback);
                         });
             } else {
                 imageFetcher.fetchImage(
-                        Params.create(new GURL(url), UNUSED_CLIENT_NAME), bitmap -> {
+                        Params.create(new GURL(url), UNUSED_CLIENT_NAME),
+                        bitmap -> {
                             BitmapDrawable bitmapDrawable = new BitmapDrawable(resources, bitmap);
                             ImageFetcherFacade imageFetcherFacade =
                                     new ImageFetcherFacade(bitmapDrawable);
-                            loadImage(imageFetcherFacade, requestManager, isCircular,
-                                    roundedCorners, imageView, customTarget, callback);
+                            loadImage(
+                                    imageFetcherFacade,
+                                    requestManager,
+                                    isCircular,
+                                    roundedCorners,
+                                    imageView,
+                                    customTarget,
+                                    callback);
                         });
             }
         }
@@ -301,36 +329,50 @@ public class ImageLoader {
         }
     }
 
-    private static void loadImage(ImageFetcherFacade imageFetcherFacade,
-            RequestManager requestManager, boolean isCircular, final int roundedCorners,
-            ImageView imageView, CustomTarget<Drawable> customTarget, Callback callback) {
+    private static void loadImage(
+            ImageFetcherFacade imageFetcherFacade,
+            RequestManager requestManager,
+            boolean isCircular,
+            final int roundedCorners,
+            ImageView imageView,
+            CustomTarget<Drawable> customTarget,
+            Callback callback) {
         if (imageFetcherFacade == null
-                || (imageFetcherFacade.data == null && imageFetcherFacade.drawable == null)) {
+                || (imageFetcherFacade.mData == null && imageFetcherFacade.mDrawable == null)) {
             if (callback != null) callback.onLoadFailed();
             return;
         }
         RequestBuilder<Drawable> request =
                 requestManager
-                        .load(imageFetcherFacade.data != null ? imageFetcherFacade.data
-                                                              : imageFetcherFacade.drawable)
+                        .load(
+                                imageFetcherFacade.mData != null
+                                        ? imageFetcherFacade.mData
+                                        : imageFetcherFacade.mDrawable)
                         .transform(getTransformations(isCircular, roundedCorners))
                         .diskCacheStrategy(DiskCacheStrategy.NONE)
                         .priority(Priority.IMMEDIATE)
-                        .listener(new RequestListener<Drawable>() {
-                            @Override
-                            public boolean onLoadFailed(GlideException glideException, Object model,
-                                    Target<Drawable> target, boolean isFirstResource) {
-                                return callback != null && callback.onLoadFailed();
-                            }
+                        .listener(
+                                new RequestListener<Drawable>() {
+                                    @Override
+                                    public boolean onLoadFailed(
+                                            GlideException glideException,
+                                            Object model,
+                                            Target<Drawable> target,
+                                            boolean isFirstResource) {
+                                        return callback != null && callback.onLoadFailed();
+                                    }
 
-                            @Override
-                            public boolean onResourceReady(Drawable resource, Object model,
-                                    Target<Drawable> target, DataSource dataSource,
-                                    boolean isFirstResource) {
-                                return callback != null
-                                        && callback.onResourceReady(resource, target);
-                            }
-                        });
+                                    @Override
+                                    public boolean onResourceReady(
+                                            Drawable resource,
+                                            Object model,
+                                            Target<Drawable> target,
+                                            DataSource dataSource,
+                                            boolean isFirstResource) {
+                                        return callback != null
+                                                && callback.onResourceReady(resource, target);
+                                    }
+                                });
 
         if (imageView != null) {
             request.into(imageView);
@@ -382,6 +424,41 @@ public class ImageLoader {
         // Converts the URL to lowercase to make the matching case-insensitive.
         url = url.toLowerCase(Locale.ENGLISH);
         return url.endsWith(".gif") || url.endsWith("=gif");
+    }
+
+    public static void fetchFavIcon(String originSpecUrl, WeakReference<Context> context,
+            Callbacks.Callback1<Bitmap> callback) {
+        try {
+            BraveActivity activity = BraveActivity.getBraveActivity();
+            FaviconHelper.FaviconImageCallback imageCallback = (bitmap, iconUrl) -> {
+                if (context.get() != null) {
+                    if (bitmap == null) {
+                        bitmap = getFaviconThemeHelper().getDefaultFaviconBitmap(
+                                context.get(), iconUrl, true);
+                    }
+                    callback.call(bitmap);
+                }
+            };
+            // 0 is a max bitmap size for download
+            getFaviconHelper().getLocalFaviconImageForURL(
+                    activity.getCurrentProfile(), new GURL(originSpecUrl), 0, imageCallback);
+
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static FaviconHelper getFaviconHelper() {
+        if (sFaviconHelper == null) {
+            sFaviconHelper = new FaviconHelper();
+        }
+        return sFaviconHelper;
+    }
+
+    private static FaviconHelper.DefaultFaviconHelper getFaviconThemeHelper() {
+        if (sFaviconThemeHelper == null) {
+            sFaviconThemeHelper = new FaviconHelper.DefaultFaviconHelper();
+        }
+        return sFaviconThemeHelper;
     }
 
     private static boolean isValidImgUrl(String url) {
@@ -449,16 +526,17 @@ public class ImageLoader {
     }
 
     private static class ImageFetcherFacade {
-        final byte[] data;
-        final Drawable drawable;
+        final byte[] mData;
+        final Drawable mDrawable;
+
         public ImageFetcherFacade(byte[] data) {
-            this.data = data;
-            this.drawable = null;
+            mData = data;
+            mDrawable = null;
         }
 
         ImageFetcherFacade(Drawable drawable) {
-            this.drawable = drawable;
-            this.data = null;
+            mDrawable = drawable;
+            mData = null;
         }
     }
 }

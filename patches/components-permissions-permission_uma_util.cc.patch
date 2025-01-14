@@ -1,12 +1,20 @@
 diff --git a/components/permissions/permission_uma_util.cc b/components/permissions/permission_uma_util.cc
-index 0c79f82bb8017dfaae8ccd68e7cce551b2728294..1368f8784bb672b5d314aad39a90bbed2cc96ede 100644
+index 4ab54d8bef9ec22fcaa0e5fb5723112d5ecfedb9..bab6ee3a2b2f03254ad6a9aaa2f1e683808db1e8 100644
 --- a/components/permissions/permission_uma_util.cc
 +++ b/components/permissions/permission_uma_util.cc
-@@ -117,6 +117,7 @@ RequestTypeForUma GetUmaValueForRequestType(RequestType request_type) {
+@@ -152,6 +152,7 @@ RequestTypeForUma GetUmaValueForRequestType(RequestType request_type) {
  #endif
-     case RequestType::kTopLevelStorageAccess:
-       return RequestTypeForUma::PERMISSION_TOP_LEVEL_STORAGE_ACCESS;
+     case RequestType::kIdentityProvider:
+       return RequestTypeForUma::PERMISSION_IDENTITY_PROVIDER;
 +    BRAVE_GET_UMA_VALUE_FOR_REQUEST_TYPE
    }
+ }
+ 
+@@ -177,6 +178,7 @@ RequestTypeForUma GetUmaValueForRequests(
+     return RequestTypeForUma::MULTIPLE_KEYBOARD_AND_POINTER_LOCK;
+   }
+ #endif
++  BRAVE_GET_UMA_VALUE_FOR_REQUESTS
+   return RequestTypeForUma::UNKNOWN;
  }
  

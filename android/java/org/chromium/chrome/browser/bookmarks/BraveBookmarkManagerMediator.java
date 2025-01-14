@@ -10,14 +10,13 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
-import android.provider.OpenableColumns;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.RecyclerView.OnScrollListener;
 
 import org.chromium.base.Log;
 import org.chromium.base.supplier.ObservableSupplierImpl;
@@ -25,11 +24,12 @@ import org.chromium.base.task.PostTask;
 import org.chromium.base.task.TaskTraits;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.ui.messages.snackbar.SnackbarManager;
 import org.chromium.components.bookmarks.BookmarkId;
 import org.chromium.components.browser_ui.widget.dragreorder.DragReorderableRecyclerViewAdapter;
 import org.chromium.components.browser_ui.widget.selectable_list.SelectableListLayout;
 import org.chromium.components.browser_ui.widget.selectable_list.SelectionDelegate;
-import org.chromium.components.favicon.LargeIconBridge;
+import org.chromium.components.commerce.core.ShoppingService;
 import org.chromium.ui.base.ActivityWindowAndroid;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.MVCListAdapter.ModelList;
@@ -38,6 +38,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.function.Consumer;
 
 class BraveBookmarkManagerMediator
         extends BookmarkManagerMediator implements BraveBookmarkDelegate {
@@ -49,19 +50,48 @@ class BraveBookmarkManagerMediator
     // Overridden Chromium's BookmarkManagerMediator.mContext
     private Context mContext;
     private static final String TAG = "BraveBookmarkManager";
+    private static final String IMPORTED_BOOKMARKS_TEMP_FILENAME = "ImportedBookmarks";
 
-    BraveBookmarkManagerMediator(Context context, BookmarkModel bookmarkModel,
-            BookmarkOpener bookmarkOpener, SelectableListLayout<BookmarkId> selectableListLayout,
-            SelectionDelegate<BookmarkId> selectionDelegate, RecyclerView recyclerView,
+    BraveBookmarkManagerMediator(
+            Context context,
+            BookmarkModel bookmarkModel,
+            BookmarkOpener bookmarkOpener,
+            SelectableListLayout<BookmarkId> selectableListLayout,
+            SelectionDelegate<BookmarkId> selectionDelegate,
+            RecyclerView recyclerView,
             DragReorderableRecyclerViewAdapter dragReorderableRecyclerViewAdapter,
-            LargeIconBridge largeIconBridge, boolean isDialogUi, boolean isIncognito,
-            ObservableSupplierImpl<Boolean> backPressStateSupplier, Profile profile,
-            BookmarkUndoController bookmarkUndoController, ModelList modelList,
-            BookmarkUiPrefs bookmarkUiPrefs) {
-        super(context, bookmarkModel, bookmarkOpener, selectableListLayout, selectionDelegate,
-                recyclerView, dragReorderableRecyclerViewAdapter, largeIconBridge, isDialogUi,
-                isIncognito, backPressStateSupplier, profile, bookmarkUndoController, modelList,
-                bookmarkUiPrefs);
+            boolean isDialogUi,
+            ObservableSupplierImpl<Boolean> backPressStateSupplier,
+            Profile profile,
+            BookmarkUndoController bookmarkUndoController,
+            ModelList modelList,
+            BookmarkUiPrefs bookmarkUiPrefs,
+            Runnable hideKeyboardRunnable,
+            BookmarkImageFetcher bookmarkImageFetcher,
+            ShoppingService shoppingService,
+            SnackbarManager snackbarManager,
+            Consumer<OnScrollListener> onScrollListenerConsumer,
+            BookmarkMoveSnackbarManager bookmarkMoveSnackbarManager) {
+        super(
+                context,
+                bookmarkModel,
+                bookmarkOpener,
+                selectableListLayout,
+                selectionDelegate,
+                recyclerView,
+                dragReorderableRecyclerViewAdapter,
+                isDialogUi,
+                backPressStateSupplier,
+                profile,
+                bookmarkUndoController,
+                modelList,
+                bookmarkUiPrefs,
+                hideKeyboardRunnable,
+                bookmarkImageFetcher,
+                shoppingService,
+                snackbarManager,
+                onScrollListenerConsumer,
+                bookmarkMoveSnackbarManager);
     }
 
     public void setWindow(ActivityWindowAndroid window) {
@@ -96,30 +126,32 @@ class BraveBookmarkManagerMediator
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("text/html");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        if (mWindowAndroid.showIntent(Intent.createChooser(intent,
-                                              mContext.getResources().getString(
-                                                      R.string.import_bookmarks_select_file)),
-                    new WindowAndroid.IntentCallback() {
-                        @Override
-                        public void onIntentCompleted(int resultCode, Intent results) {
-                            if (resultCode == Activity.RESULT_OK && results != null
-                                    && results.getData() != null) {
-                                PostTask.postTask(TaskTraits.USER_VISIBLE_MAY_BLOCK,
-                                        () -> { importFileSelected(results.getData()); });
-                            }
+        if (mWindowAndroid.showIntent(
+                Intent.createChooser(
+                        intent,
+                        mContext.getResources().getString(R.string.import_bookmarks_select_file)),
+                new WindowAndroid.IntentCallback() {
+                    @Override
+                    public void onIntentCompleted(int resultCode, Intent results) {
+                        if (resultCode == Activity.RESULT_OK
+                                && results != null
+                                && results.getData() != null) {
+                            PostTask.postTask(
+                                    TaskTraits.USER_VISIBLE_MAY_BLOCK,
+                                    () -> {
+                                        importFileSelected(results.getData());
+                                    });
                         }
-                    },
-                    null))
+                    }
+                },
+                null)) {
             return;
+        }
     }
 
     private void importFileSelected(Uri resultData) {
         try {
-            Cursor cursor = mContext.getContentResolver().query(resultData, null, null, null, null);
-            int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-            cursor.moveToFirst();
-            String name = cursor.getString(nameIndex);
-            File file = new File(mContext.getFilesDir(), name);
+            File file = new File(mContext.getFilesDir(), IMPORTED_BOOKMARKS_TEMP_FILENAME);
             try (InputStream inputStream =
                             mContext.getContentResolver().openInputStream(resultData);
                     FileOutputStream outputStream = new FileOutputStream(file)) {
@@ -175,18 +207,21 @@ class BraveBookmarkManagerMediator
     }
 
     private void doExportBookmarks() {
-        PostTask.postTask(TaskTraits.BEST_EFFORT_MAY_BLOCK, () -> {
-            File downloadDir =
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-            int num = 1;
-            String exportFileName = "bookmarks.html";
-            File file = new File(downloadDir, exportFileName);
-            while (file.exists()) {
-                exportFileName = "bookmarks (" + (num++) + ").html";
-                file = new File(downloadDir, exportFileName);
-            }
-            doExportBookmarksOnUI(file);
-        });
+        PostTask.postTask(
+                TaskTraits.BEST_EFFORT_MAY_BLOCK,
+                () -> {
+                    File downloadDir =
+                            Environment.getExternalStoragePublicDirectory(
+                                    Environment.DIRECTORY_DOWNLOADS);
+                    int num = 1;
+                    String exportFileName = "bookmarks.html";
+                    File file = new File(downloadDir, exportFileName);
+                    while (file.exists()) {
+                        exportFileName = "bookmarks (" + num++ + ").html";
+                        file = new File(downloadDir, exportFileName);
+                    }
+                    doExportBookmarksOnUI(file);
+                });
     }
 
     private void doExportBookmarksOnUI(File file) {

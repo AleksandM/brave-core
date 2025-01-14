@@ -7,41 +7,39 @@
 #include "brave/components/brave_ads/core/internal/common/url/url_request_string_util.h"
 
 #include <sstream>
+#include <string_view>
 #include <vector>
 
+#include "base/containers/fixed_flat_set.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads {
 
 namespace {
 
-bool ShouldAllowHeader(const std::string& header) {
-  const std::vector<std::string> allowed_headers{"digest", "signature",
-                                                 "accept", "content-type"};
+constexpr auto kAllowedHeaders = base::MakeFixedFlatSet<std::string_view>(
+    {"accept", "content-type", "digest", "signature"});
 
-  return base::ranges::any_of(
-      allowed_headers, [&header](const std::string& allowed_header) {
-        return base::StartsWith(header, allowed_header,
-                                base::CompareCase::INSENSITIVE_ASCII);
-      });
+bool ShouldAllowHeader(const std::string& header) {
+  return base::ranges::any_of(kAllowedHeaders,
+                              [&header](std::string_view allowed_header) {
+                                return header.starts_with(allowed_header);
+                              });
 }
 
 std::string HeadersToString(const std::vector<std::string>& headers,
                             const int indent = 4) {
   std::vector<std::string> formatted_headers;
 
-  const std::string spaces = std::string(indent, ' ');
+  const std::string spaces(indent, ' ');
 
   for (const auto& header : headers) {
-    if (!ShouldAllowHeader(header)) {
-      continue;
+    if (ShouldAllowHeader(header)) {
+      formatted_headers.push_back(base::StrCat({spaces, header}));
     }
-
-    const std::string formatted_header = base::StrCat({spaces, header});
-    formatted_headers.push_back(formatted_header);
   }
 
   return base::JoinString(formatted_headers, "\n");
@@ -49,36 +47,36 @@ std::string HeadersToString(const std::vector<std::string>& headers,
 
 }  // namespace
 
-std::string UrlRequestToString(const mojom::UrlRequestInfoPtr& url_request) {
+std::string UrlRequestToString(
+    const mojom::UrlRequestInfoPtr& mojom_url_request) {
   std::string log = "URL Request:\n";
 
-  log += base::ReplaceStringPlaceholders("  URL: $1\n",
-                                         {url_request->url.spec()}, nullptr);
+  log += base::ReplaceStringPlaceholders(
+      "  URL: $1\n", {mojom_url_request->url.spec()}, nullptr);
 
-  if (!url_request->content.empty()) {
-    log += base::ReplaceStringPlaceholders("  Content: $1\n",
-                                           {url_request->content}, nullptr);
+  if (!mojom_url_request->content.empty()) {
+    log += base::ReplaceStringPlaceholders(
+        "  Content: $1\n", {mojom_url_request->content}, nullptr);
   }
 
-  if (!url_request->content_type.empty()) {
+  if (!mojom_url_request->content_type.empty()) {
     log += base::ReplaceStringPlaceholders(
-        "  Content Type: $1\n", {url_request->content_type}, nullptr);
+        "  Content Type: $1\n", {mojom_url_request->content_type}, nullptr);
   }
 
   std::ostringstream ss;
-  ss << url_request->method;
-
+  ss << mojom_url_request->method;
   log += base::StrCat({"  Method: ", ss.str()});
 
   return log;
 }
 
 std::string UrlRequestHeadersToString(
-    const mojom::UrlRequestInfoPtr& url_request) {
+    const mojom::UrlRequestInfoPtr& mojom_url_request) {
   std::string log = "  Headers:\n";
 
-  if (!url_request->headers.empty()) {
-    log += HeadersToString(url_request->headers);
+  if (!mojom_url_request->headers.empty()) {
+    log += HeadersToString(mojom_url_request->headers);
   }
 
   return log;

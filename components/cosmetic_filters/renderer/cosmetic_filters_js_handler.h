@@ -7,6 +7,7 @@
 #define BRAVE_COMPONENTS_COSMETIC_FILTERS_RENDERER_COSMETIC_FILTERS_JS_HANDLER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,10 +16,12 @@
 #include "brave/components/cosmetic_filters/common/cosmetic_filters.mojom.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
+#include "content/public/renderer/v8_value_converter.h"
+#include "mojo/public/cpp/bindings/associated_receiver.h"
+#include "mojo/public/cpp/bindings/associated_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
-#include "v8/include/v8.h"
+#include "v8/include/v8-promise.h"
 
 namespace cosmetic_filters {
 
@@ -26,11 +29,11 @@ namespace cosmetic_filters {
 // a given render_frame. It also does interactions with CosmeticFiltersResources
 // class that lives in the main process.
 
-class CosmeticFiltersJSHandler {
+class CosmeticFiltersJSHandler : public mojom::CosmeticFiltersAgent {
  public:
   CosmeticFiltersJSHandler(content::RenderFrame* render_frame,
                            const int32_t isolated_world_id);
-  ~CosmeticFiltersJSHandler();
+  ~CosmeticFiltersJSHandler() override;
 
   // Adds the "cf_worker" JavaScript object and its functions to the current
   // render_frame_.
@@ -38,7 +41,7 @@ class CosmeticFiltersJSHandler {
   // Fetches an initial set of resources to inject into the page if cosmetic
   // filtering is enabled, and returns whether or not to proceed with cosmetic
   // filtering.
-  bool ProcessURL(const GURL& url, absl::optional<base::OnceClosure> callback);
+  bool ProcessURL(const GURL& url, std::optional<base::OnceClosure> callback);
   void ApplyRules(bool de_amp_enabled);
 
  private:
@@ -54,6 +57,14 @@ class CosmeticFiltersJSHandler {
   bool EnsureConnected();
   void OnRemoteDisconnect();
 
+  void Bind(
+      mojo::PendingAssociatedReceiver<mojom::CosmeticFiltersAgent> receiver);
+
+  void OnElementPickerRemoteHandlerDisconnect();
+
+  // CosmeticFiltersAgent overrides:
+  void LaunchContentPicker() override;
+
   // Injects content_cosmetic bundle (if needed) and calls the entry point.
   void ExecuteObservingBundleEntryPoint();
 
@@ -67,6 +78,16 @@ class CosmeticFiltersJSHandler {
   void CSSRulesRoutine(const base::Value::Dict& resources_dict);
   void OnHiddenClassIdSelectors(base::Value::Dict result);
   bool OnIsFirstParty(const std::string& url_string);
+  void OnAddSiteCosmeticFilter(const std::string& selector);
+  void OnManageCustomFilters();
+  v8::Local<v8::Value> GetPlatform(v8::Isolate* isolate);
+  v8::Local<v8::Promise> GetCosmeticFilterThemeInfo(v8::Isolate* isolate);
+  void OnGetCosmeticFilterThemeInfo(
+      std::unique_ptr<v8::Global<v8::Promise::Resolver>> promise_resolver,
+      v8::Isolate* isolate,
+      std::unique_ptr<v8::Global<v8::Context>> context_old,
+      bool is_dark_mode_enabled,
+      int32_t background_color);
   int OnEventBegin(const std::string& event_name);
   void OnEventEnd(const std::string& event_name, int);
 
@@ -74,14 +95,19 @@ class CosmeticFiltersJSHandler {
 
   bool generichide_ = false;
 
+  mojo::AssociatedRemote<cosmetic_filters::mojom::CosmeticFiltersHandler>&
+  GetElementPickerRemoteHandler();
+  mojo::AssociatedRemote<cosmetic_filters::mojom::CosmeticFiltersHandler>
+      element_picker_actions_handler_;
   raw_ptr<content::RenderFrame> render_frame_ = nullptr;
-  mojo::Remote<cosmetic_filters::mojom::CosmeticFiltersResources>
-      cosmetic_filters_resources_;
+  mojo::Remote<mojom::CosmeticFiltersResources> cosmetic_filters_resources_;
+  mojo::AssociatedReceiver<mojom::CosmeticFiltersAgent> receiver_{this};
   int32_t isolated_world_id_;
   bool enabled_1st_party_cf_;
   std::vector<std::string> exceptions_;
   GURL url_;
-  absl::optional<base::Value::Dict> resources_dict_;
+  std::optional<base::Value::Dict> resources_dict_;
+  std::unique_ptr<content::V8ValueConverter> v8_value_converter_;
 
   // True if the content_cosmetic.bundle.js has injected in the current frame.
   bool bundle_injected_ = false;

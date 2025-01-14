@@ -1,13 +1,12 @@
 diff --git a/build/android/gyp/dex.py b/build/android/gyp/dex.py
-index a7f024a277d567335091af8c5f90eedaedd0594f..71d47c73906e68b55828614bd798a26fe3f53b5f 100755
+index 836a19357dac5bc5ca28d5a9864fd6d09f005402..265545df755553e7f1ec8c6350712de871728b22 100755
 --- a/build/android/gyp/dex.py
 +++ b/build/android/gyp/dex.py
-@@ -63,7 +63,7 @@ _IGNORE_WARNINGS = (
- _SKIPPED_CLASS_FILE_NAMES = (
-     'module-info.class',  # Explicitly skipped by r8/utils/FileUtils#isClassFile
- )
--
-+_IGNORE_WARNINGS += ( r'.Brave', )
+@@ -30,6 +30,7 @@ DEFAULT_IGNORE_WARNINGS = (
+     # META-INF/. This means that all rules with a '-upto-' qualifier will be
+     # excluded and all rules with a -from- qualifier will be included.
+     r'Running R8 version main', )
++DEFAULT_IGNORE_WARNINGS += ( r'.Brave', )
  
- def _ParseArgs(args):
-   args = build_utils.ExpandFileArgs(args)
+ _IGNORE_SERVICE_ENTRIES = (
+     # ServiceLoader call is used only for ProtoBuf full (non-lite).

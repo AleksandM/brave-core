@@ -5,18 +5,15 @@
 
 #include "brave/browser/ui/browser_commands.h"
 
-#include "brave/browser/ui/commander/commander_service_factory.h"
-#include "brave/components/commander/browser/commander_frontend_delegate.h"
+#include "brave/components/commander/common/buildflags/buildflags.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_commands.h"
 
-#define ToggleCommander ToggleCommander_ChromiumImpl
 #define ReloadBypassingCache ReloadBypassingCache_ChromiumImpl
 #define GetReadingListModel GetReadingListModel_ChromiumImpl
 #include "src/chrome/browser/ui/browser_commands.cc"
 #undef ReloadBypassingCache
 #undef GetReadingListModel
-#undef ToggleCommander
 
 namespace chrome {
 
@@ -33,11 +30,6 @@ void ReloadBypassingCache(Browser* browser, WindowOpenDisposition disposition) {
 
 ReadingListModel* GetReadingListModel(Browser* browser) {
   return nullptr;
-}
-
-void ToggleCommander(Browser* browser) {
-  commander::CommanderServiceFactory::GetForBrowserContext(browser->profile())
-      ->Toggle();
 }
 
 }  // namespace chrome

@@ -29,9 +29,7 @@ namespace content {
 class BrowserContext;
 }  // namespace content
 
-class EthereumRemoteClientService
-    : public KeyedService,
-      public base::SupportsWeakPtr<EthereumRemoteClientService> {
+class EthereumRemoteClientService final : public KeyedService {
  public:
   explicit EthereumRemoteClientService(
       content::BrowserContext* context,
@@ -69,8 +67,8 @@ class EthereumRemoteClientService
                             std::string* nonce);
   static std::string GetRandomNonce();
   static std::string GetRandomSeed();
-  static const size_t kNonceByteLength;
-  static const size_t kSeedByteLength;
+  static constexpr size_t kNonceByteLength = 12;
+  static constexpr size_t kSeedByteLength = 32;
 
  private:
   bool LoadRootSeedInfo(std::vector<uint8_t> key, std::string* seed);

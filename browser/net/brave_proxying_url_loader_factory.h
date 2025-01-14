@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <utility>
@@ -35,7 +36,6 @@
 #include "services/network/public/mojom/url_loader.mojom.h"
 #include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace content {
@@ -59,13 +59,15 @@ class BraveProxyingURLLoaderFactory
         uint64_t request_id,
         int32_t network_service_request_id,
         int render_process_id,
-        int frame_tree_node_id,
+        content::FrameTreeNodeId frame_tree_node_id,
         uint32_t options,
         const network::ResourceRequest& request,
         content::BrowserContext* browser_context,
         const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
         mojo::PendingReceiver<network::mojom::URLLoader> loader_receiver,
-        mojo::PendingRemote<network::mojom::URLLoaderClient> client);
+        mojo::PendingRemote<network::mojom::URLLoaderClient> client,
+        scoped_refptr<base::SequencedTaskRunner>
+            navigation_response_task_runner);
     InProgressRequest(const InProgressRequest&) = delete;
     InProgressRequest& operator=(const InProgressRequest&) = delete;
     ~InProgressRequest() override;
@@ -77,7 +79,7 @@ class BraveProxyingURLLoaderFactory
         const std::vector<std::string>& removed_headers,
         const net::HttpRequestHeaders& modified_headers,
         const net::HttpRequestHeaders& modified_cors_exempt_headers,
-        const absl::optional<GURL>& new_url) override;
+        const std::optional<GURL>& new_url) override;
     void SetPriority(net::RequestPriority priority,
                      int32_t intra_priority_value) override;
     void PauseReadingBodyFromNet() override;
@@ -89,7 +91,7 @@ class BraveProxyingURLLoaderFactory
     void OnReceiveResponse(
         network::mojom::URLResponseHeadPtr response_head,
         mojo::ScopedDataPipeConsumerHandle body,
-        absl::optional<mojo_base::BigBuffer> cached_metadata) override;
+        std::optional<mojo_base::BigBuffer> cached_metadata) override;
     void OnReceiveRedirect(
         const net::RedirectInfo& redirect_info,
         network::mojom::URLResponseHeadPtr response_head) override;
@@ -125,7 +127,7 @@ class BraveProxyingURLLoaderFactory
     const int32_t network_service_request_id_;
 
     const int render_process_id_;
-    const int frame_tree_node_id_;
+    const content::FrameTreeNodeId frame_tree_node_id_;
     const uint32_t options_;
 
     raw_ptr<content::BrowserContext> browser_context_ = nullptr;
@@ -149,7 +151,7 @@ class BraveProxyingURLLoaderFactory
     // ExtensionWebRequestEventRouter) through much of the request's lifetime.
     // That code supports both Network Service and non-Network Service behavior,
     // which is why this weirdness exists here.
-    absl::optional<mojo_base::BigBuffer> cached_metadata_;
+    std::optional<mojo_base::BigBuffer> cached_metadata_;
     network::mojom::URLResponseHeadPtr current_response_head_;
     mojo::ScopedDataPipeConsumerHandle current_response_body_;
     scoped_refptr<net::HttpResponseHeaders> override_headers_;
@@ -168,9 +170,13 @@ class BraveProxyingURLLoaderFactory
       std::vector<std::string> removed_headers;
       net::HttpRequestHeaders modified_headers;
       net::HttpRequestHeaders modified_cors_exempt_headers;
-      absl::optional<GURL> new_url;
+      std::optional<GURL> new_url;
     };
     std::unique_ptr<FollowRedirectParams> pending_follow_redirect_params_;
+
+    // A task runner that should be used for the request when non-null. Non-null
+    // when this was created for a navigation request.
+    scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner_;
 
     base::WeakPtrFactory<InProgressRequest> weak_factory_;
   };
@@ -181,11 +187,11 @@ class BraveProxyingURLLoaderFactory
       BraveRequestHandler& request_handler,
       content::BrowserContext* browser_context,
       int render_process_id,
-      int frame_tree_node_id,
-      mojo::PendingReceiver<network::mojom::URLLoaderFactory> receiver,
-      mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory,
+      content::FrameTreeNodeId frame_tree_node_id,
+      network::URLLoaderFactoryBuilder& factory_builder,
       scoped_refptr<RequestIDGenerator> request_id_generator,
-      DisconnectCallback on_disconnect);
+      DisconnectCallback on_disconnect,
+      scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner);
 
   BraveProxyingURLLoaderFactory(const BraveProxyingURLLoaderFactory&) = delete;
   BraveProxyingURLLoaderFactory& operator=(
@@ -193,12 +199,12 @@ class BraveProxyingURLLoaderFactory
 
   ~BraveProxyingURLLoaderFactory() override;
 
-  static bool MaybeProxyRequest(
+  static void MaybeProxyRequest(
       content::BrowserContext* browser_context,
       content::RenderFrameHost* render_frame_host,
       int render_process_id,
-      mojo::PendingReceiver<network::mojom::URLLoaderFactory>*
-          factory_receiver);
+      network::URLLoaderFactoryBuilder& factory_builder,
+      scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner);
 
   // network::mojom::URLLoaderFactory:
   void CreateLoaderAndStart(
@@ -225,7 +231,7 @@ class BraveProxyingURLLoaderFactory
   const raw_ref<BraveRequestHandler> request_handler_;
   raw_ptr<content::BrowserContext> browser_context_ = nullptr;
   const int render_process_id_;
-  const int frame_tree_node_id_;
+  const content::FrameTreeNodeId frame_tree_node_id_;
 
   mojo::ReceiverSet<network::mojom::URLLoaderFactory> proxy_receivers_;
   mojo::Remote<network::mojom::URLLoaderFactory> target_factory_;
@@ -236,6 +242,10 @@ class BraveProxyingURLLoaderFactory
   scoped_refptr<RequestIDGenerator> request_id_generator_;
 
   DisconnectCallback disconnect_callback_;
+
+  // A task runner that should be used for requests when non-null. Non-null when
+  // this was created for a navigation request.
+  scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner_;
 
   base::WeakPtrFactory<BraveProxyingURLLoaderFactory> weak_factory_;
 };

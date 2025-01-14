@@ -12,7 +12,6 @@
 #include "brave/components/brave_rewards/common/pref_names.h"
 #include "brave/components/constants/pref_names.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_window.h"
@@ -25,7 +24,6 @@
 #include "chrome/test/base/search_test_utils.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/prefs/pref_service.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 
@@ -60,8 +58,8 @@ class BraveActionsContainerTest : public InProcessBrowserTest {
   }
 
  protected:
-  raw_ptr<BraveActionsContainer> brave_actions_ = nullptr;
-  raw_ptr<PrefService> prefs_ = nullptr;
+  raw_ptr<BraveActionsContainer, DanglingUntriaged> brave_actions_ = nullptr;
+  raw_ptr<PrefService, DanglingUntriaged> prefs_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(BraveActionsContainerTest, HideBraveRewardsAction) {

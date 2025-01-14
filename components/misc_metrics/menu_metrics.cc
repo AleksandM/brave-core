@@ -20,13 +20,13 @@ namespace misc_metrics {
 
 namespace {
 
-const char kTabWindowPrefKey[] = "tab_window";
-const char kBraveFeaturesPrefKey[] = "brave_features";
-const char kBrowserViewsPrefKey[] = "browser_views";
+constexpr char kTabWindowPrefKey[] = "tab_window";
+constexpr char kBraveFeaturesPrefKey[] = "brave_features";
+constexpr char kBrowserViewsPrefKey[] = "browser_views";
 
 constexpr base::TimeDelta kUpdateInterval = base::Days(1);
 
-const int kMenuOpenBuckets[] = {0, 5, 15, 29, 49};
+constexpr int kMenuOpenBuckets[] = {0, 5, 15, 29, 49};
 
 const char* GetMenuGroupPrefKey(MenuGroup group) {
   switch (group) {
@@ -41,11 +41,6 @@ const char* GetMenuGroupPrefKey(MenuGroup group) {
 }
 
 }  // namespace
-
-const char kFrequentMenuGroupHistogramName[] =
-    "Brave.Toolbar.FrequentMenuGroup";
-const char kMenuDismissRateHistogramName[] = "Brave.Toolbar.MenuDismissRate";
-const char kMenuOpensHistogramName[] = "Brave.Toolbar.MenuOpens";
 
 MenuMetrics::MenuMetrics(PrefService* local_state)
     : local_state_(local_state),

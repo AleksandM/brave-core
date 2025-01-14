@@ -1,0 +1,61 @@
+# Copyright 2023 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# @generated from third_party/rust/chromium_crates_io/BUILD.gn.hbs by
+# tools/crates/gnrt.
+# Do not edit!
+
+import("//build/rust/cargo_crate.gni")
+
+cargo_crate("lib") {
+  crate_name = "parking_lot_core"
+  epoch = "0.9"
+  crate_type = "rlib"
+  crate_root = "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/lib.rs"
+  sources = [
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/lib.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/parking_lot.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/spinwait.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/generic.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/linux.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/mod.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/redox.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/sgx.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/unix.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/wasm.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/wasm_atomic.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/windows/keyed_event.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/windows/mod.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/thread_parker/windows/waitaddress.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/util.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/src/word_lock.rs",
+  ]
+  inputs = []
+
+  build_native_rust_unit_tests = false
+  edition = "2018"
+  cargo_pkg_version = "0.9.7"
+  cargo_pkg_authors = "Amanieu d'Antras <amanieu@gmail.com>"
+  cargo_pkg_name = "parking_lot_core"
+  cargo_pkg_description =
+      "An advanced API for creating custom synchronization primitives."
+  library_configs -= [ "//build/config/compiler:chromium_code" ]
+  library_configs += [ "//build/config/compiler:no_chromium_code" ]
+  executable_configs -= [ "//build/config/compiler:chromium_code" ]
+  executable_configs += [ "//build/config/compiler:no_chromium_code" ]
+  proc_macro_configs -= [ "//build/config/compiler:chromium_code" ]
+  proc_macro_configs += [ "//build/config/compiler:no_chromium_code" ]
+  deps = [
+    "//brave/third_party/rust/cfg_if/v1:lib",
+    "//brave/third_party/rust/smallvec/v1:lib",
+  ]
+  if (!is_win) {
+    deps += [ "//brave/third_party/rust/libc/v0_2:lib" ]
+  }
+  if (is_win) {
+    deps += [ "//brave/third_party/rust/windows_sys/v0_45:lib" ]
+  }
+  build_root = "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/build.rs"
+  build_sources = [ "//brave/third_party/rust/chromium_crates_io/vendor/parking_lot_core-0.9.7/build.rs" ]
+}

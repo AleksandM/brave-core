@@ -6,47 +6,46 @@
 #include "brave/components/brave_ads/core/internal/account/statement/next_payment_date_util.h"
 
 #include "base/time/time.h"
-#include "brave/components/brave_ads/core/internal/account/account_feature.h"
+#include "brave/components/brave_ads/core/internal/account/statement/statement_feature.h"
 #include "brave/components/brave_ads/core/internal/account/transactions/reconciled_transactions_util.h"
 
 namespace brave_ads {
 
-base::Time CalculateNextPaymentDate(const base::Time next_token_redemption_at,
+base::Time CalculateNextPaymentDate(base::Time next_payment_token_redemption_at,
                                     const TransactionList& transactions) {
   const base::Time now = base::Time::Now();
 
   base::Time::Exploded now_exploded;
   now.UTCExplode(&now_exploded);
-  CHECK(now_exploded.HasValidValues());
 
   int month = now_exploded.month;
 
   if (now_exploded.day_of_month <= kNextPaymentDay.Get()) {
     // Today is on or before our next payment day
-    if (DidReconcileTransactionsLastMonth(transactions)) {
+    if (DidReconcileTransactionsPreviousMonth(transactions)) {
       // If last month has reconciled transactions, then the next payment date
       // will occur this month
     } else {
       // If last month does not have reconciled transactions, then the next
       // payment date will occur next month
-      month++;
+      ++month;
     }
   } else {
     // Today is after our next payment day
     if (DidReconcileTransactionsThisMonth(transactions)) {
       // If this month has reconciled transactions, then the next payment date
       // will occur next month
-      month++;
+      ++month;
     } else {
-      base::Time::Exploded next_token_redemption_at_exploded;
-      next_token_redemption_at.UTCExplode(&next_token_redemption_at_exploded);
-      CHECK(next_token_redemption_at_exploded.HasValidValues());
+      base::Time::Exploded next_payment_token_redemption_at_exploded;
+      next_payment_token_redemption_at.UTCExplode(
+          &next_payment_token_redemption_at_exploded);
 
-      if (next_token_redemption_at_exploded.month == month) {
+      if (next_payment_token_redemption_at_exploded.month == month) {
         // If this month does not have reconciled transactions and our next
         // token redemption date is this month, then the next payment date will
         // occur next month
-        month++;
+        ++month;
       } else {
         // If this month does not have reconciled transactions and our next
         // token redemption date is next month, then the next payment date will
@@ -60,7 +59,7 @@ base::Time CalculateNextPaymentDate(const base::Time next_token_redemption_at,
 
   if (month > 12) {
     month -= 12;
-    year++;
+    ++year;
   }
 
   base::Time::Exploded next_payment_date_exploded = now_exploded;
@@ -73,9 +72,8 @@ base::Time CalculateNextPaymentDate(const base::Time next_token_redemption_at,
   next_payment_date_exploded.millisecond = 999;
 
   base::Time next_payment_date;
-  const bool success = base::Time::FromUTCExploded(next_payment_date_exploded,
-                                                   &next_payment_date);
-  CHECK(success);
+  CHECK(base::Time::FromUTCExploded(next_payment_date_exploded,
+                                    &next_payment_date));
 
   return next_payment_date;
 }

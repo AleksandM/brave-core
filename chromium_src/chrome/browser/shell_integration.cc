@@ -40,8 +40,7 @@ std::u16string GetAppShortcutsSubdirName() {
       id = IDS_APP_SHORTCUTS_SUBDIR_NAME_BRAVE_DEVELOPMENT;
       break;
     default:
-      NOTREACHED();
-      break;
+      NOTREACHED() << "All possible channels are handled above.";
   }
 
   return brave_l10n::GetLocalizedResourceUTF16String(id);

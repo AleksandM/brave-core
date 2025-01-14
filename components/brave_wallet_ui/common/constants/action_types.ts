@@ -5,32 +5,10 @@
 
 import {
   BraveWallet,
-  Origin,
-  SerializableOrigin,
   SerializableTransactionInfo,
   SlippagePresetObjectType,
-  TransactionProviderError,
-  WalletAccountType
+  TransactionProviderError
 } from '../../constants/types'
-
-export type UnlockWalletPayloadType = {
-  password: string
-}
-
-export type ChainChangedEventPayloadType = {
-  chainId: string
-  coin: BraveWallet.CoinType
-  origin?: Origin
-}
-
-export type SelectedAccountChangedPayloadType = {
-  coin: BraveWallet.CoinType
-}
-
-export type IsEip1559Changed = {
-  chainId: string
-  isEip1559: boolean
-}
 
 export type UnapprovedTxUpdated = {
   txInfo: SerializableTransactionInfo
@@ -38,11 +16,6 @@ export type UnapprovedTxUpdated = {
 
 export type TransactionStatusChanged = {
   txInfo: SerializableTransactionInfo
-}
-
-export type SetUserAssetVisiblePayloadType = {
-  token: BraveWallet.BlockchainToken
-  isVisible: boolean
 }
 
 export type SwapParamsPayloadType = {
@@ -94,30 +67,6 @@ export type DefaultBaseCryptocurrencyChanged = {
   cryptocurrency: string
 }
 
-export type SitePermissionsPayloadType = {
-  accounts: WalletAccountType[]
-}
-
-export type RemoveSitePermissionPayloadType = {
-  accountId: BraveWallet.AccountId
-  origin: SerializableOrigin
-}
-
-export type AddSitePermissionPayloadType = {
-  accountId: BraveWallet.AccountId
-  origin: SerializableOrigin
-}
-
-export type GetCoinMarketPayload = {
-  vsAsset: string
-  limit: number
-}
-
-export type GetCoinMarketsResponse = {
-  success: boolean
-  values: BraveWallet.CoinMarket[]
-}
-
 export type SetTransactionProviderErrorType = {
   transactionId: string
   providerError: TransactionProviderError
@@ -127,13 +76,7 @@ export interface RetryTransactionPayload {
   chainId: string
   transactionId: string
   coinType: BraveWallet.CoinType
-  fromAddress: string
 }
 
 export type SpeedupTransactionPayload = RetryTransactionPayload
 export type CancelTransactionPayload = RetryTransactionPayload
-
-export type UpdateUsetAssetType = {
-  existing: BraveWallet.BlockchainToken
-  updated: BraveWallet.BlockchainToken
-}

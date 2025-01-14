@@ -12,7 +12,6 @@
 #include <vector>
 
 #include "base/containers/contains.h"
-#include "base/containers/cxx20_erase_vector.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/ranges/algorithm.h"
@@ -32,7 +31,8 @@ namespace {
 mojom::CommandPtr ToMojoCommand(
     int command_id,
     const std::vector<ui::Accelerator>& accelerators,
-    const std::vector<ui::Accelerator>& default_accelerators) {
+    const std::vector<ui::Accelerator>& default_accelerators,
+    const base::flat_set<ui::Accelerator>& unmodifiable) {
   auto command = mojom::Command::New();
   command->id = command_id;
   command->name = std::string(commands::GetCommandName(command_id));
@@ -53,6 +53,7 @@ mojom::CommandPtr ToMojoCommand(
     auto a = mojom::Accelerator::New();
     a->codes = commands::ToCodesString(accelerator);
     a->keys = commands::ToKeysString(accelerator);
+    a->unmodifiable = unmodifiable.contains(accelerator);
     command->accelerators.push_back(std::move(a));
   }
   return command;
@@ -60,24 +61,29 @@ mojom::CommandPtr ToMojoCommand(
 
 base::flat_map<int, mojom::CommandPtr> ToMojoCommands(
     const Accelerators& commands,
-    const Accelerators& default_commands) {
+    const Accelerators& default_commands,
+    const base::flat_set<ui::Accelerator>& unmodifiable) {
   base::flat_map<int, mojom::CommandPtr> result;
   for (const auto& [command_id, accelerators] : commands) {
     auto it = default_commands.find(command_id);
     result[command_id] = ToMojoCommand(command_id, accelerators,
                                        it == default_commands.end()
                                            ? std::vector<ui::Accelerator>()
-                                           : it->second);
+                                           : it->second,
+                                       unmodifiable);
   }
   return result;
 }
 
 }  // namespace
 
-AcceleratorService::AcceleratorService(PrefService* pref_service,
-                                       Accelerators default_accelerators)
+AcceleratorService::AcceleratorService(
+    PrefService* pref_service,
+    Accelerators default_accelerators,
+    base::flat_set<ui::Accelerator> system_managed)
     : pref_manager_(pref_service, commands::GetCommands()),
-      default_accelerators_(std::move(default_accelerators)) {
+      default_accelerators_(std::move(default_accelerators)),
+      system_managed_(std::move(system_managed)) {
   Initialize();
 }
 
@@ -97,8 +103,8 @@ void AcceleratorService::Initialize() {
 }
 
 void AcceleratorService::UpdateDefaultAccelerators() {
+  const auto& system_managed = system_managed_;
   auto old_defaults = pref_manager_.GetDefaultAccelerators();
-
   Accelerators added;
   Accelerators removed;
 
@@ -109,8 +115,11 @@ void AcceleratorService::UpdateDefaultAccelerators() {
     // Note all the added accelerators.
     base::ranges::copy_if(
         new_accelerators, std::back_inserter(added[command_id]),
-        [&old_accelerators](const auto& accelerator) {
-          return !base::Contains(old_accelerators, accelerator);
+        [&old_accelerators, &system_managed](const auto& accelerator) {
+          return !base::Contains(old_accelerators, accelerator) ||
+                 // If the accelerator is marked as a system command, be sure to
+                 // reset it.
+                 system_managed.contains(accelerator);
         });
 
     // Note all the removed accelerators.
@@ -125,7 +134,7 @@ void AcceleratorService::UpdateDefaultAccelerators() {
   // of default accelerators:
   for (const auto& [command_id, accelerators] : old_defaults) {
     // This is handled above.
-    if (base::Contains(default_accelerators_, command_id)) {
+    if (default_accelerators_.contains(command_id)) {
       continue;
     }
 
@@ -200,32 +209,49 @@ void AcceleratorService::ResetAcceleratorsForCommand(int command_id) {
 }
 
 void AcceleratorService::ResetAccelerators() {
-  accelerators_ = default_accelerators_;
-
   std::vector<int> commands;
   for (const auto command : GetCommands()) {
     pref_manager_.ClearAccelerators(command);
     commands.push_back(command);
 
     // Make sure we add all the accelerators back.
-    for (const auto& accelerator : accelerators_[command]) {
+    for (const auto& accelerator : default_accelerators_[command]) {
       pref_manager_.AddAccelerator(command, accelerator);
     }
   }
+
+  // Load the default accelerators back.
+  accelerators_ = pref_manager_.GetAccelerators();
+
   NotifyCommandsChanged(commands);
+}
+
+void AcceleratorService::GetKeyFromCode(const std::string& code,
+                                        GetKeyFromCodeCallback callback) {
+  std::move(callback).Run(CodeStringToKeyString(code));
 }
 
 void AcceleratorService::AddCommandsListener(
     mojo::PendingRemote<mojom::CommandsListener> listener) {
   auto id = mojo_listeners_.Add(std::move(listener));
   auto event = mojom::CommandsEvent::New();
-  event->addedOrUpdated = ToMojoCommands(accelerators_, default_accelerators_);
+  event->addedOrUpdated =
+      ToMojoCommands(accelerators_, default_accelerators_, system_managed_);
   mojo_listeners_.Get(id)->Changed(std::move(event));
 }
 
 void AcceleratorService::AddObserver(Observer* observer) {
+  Accelerators changed;
   observers_.AddObserver(observer);
-  observer->OnAcceleratorsChanged(accelerators_);
+  const auto& system_managed = system_managed_;
+  for (const auto& [command_id, accelerators] : accelerators_) {
+    base::ranges::copy_if(
+        accelerators, std::back_inserter(changed[command_id]),
+        [&system_managed](const ui::Accelerator& accelerator) {
+          return !system_managed.contains(accelerator);
+        });
+  }
+  observer->OnAcceleratorsChanged(changed);
 }
 
 void AcceleratorService::RemoveObserver(Observer* observer) {
@@ -238,7 +264,7 @@ const Accelerators& AcceleratorService::GetAcceleratorsForTesting() {
 
 mojom::CommandPtr AcceleratorService::GetCommandForTesting(int command_id) {
   return ToMojoCommand(command_id, accelerators_[command_id],
-                       default_accelerators_[command_id]);
+                       default_accelerators_[command_id], system_managed_);
 }
 
 void AcceleratorService::Shutdown() {
@@ -251,12 +277,23 @@ std::vector<int> AcceleratorService::AssignAccelerator(
     int command_id,
     const ui::Accelerator& accelerator) {
   std::vector<int> modified_commands = {command_id};
+  Accelerators& default_accelerators = default_accelerators_;
+  auto& system_managed = system_managed_;
 
   // Find any other commands with this accelerator and remove it from them.
   for (auto& [other_command_id, accelerators] : accelerators_) {
-    if (base::EraseIf(accelerators, [&accelerator](const auto& other) {
-          return ToCodesString(accelerator) == ToCodesString(other);
-        })) {
+    if (std::erase_if(
+            accelerators, [&accelerator, &system_managed, &default_accelerators,
+                           other_command_id](const auto& other) {
+              bool is_default_accelerator =
+                  base::Contains(default_accelerators[other_command_id], other);
+              // Note: We don't erase system managed default accelerators, as
+              // the system can register the same accelerator for multiple
+              // commands, and we don't want resetting one to reset the other.
+              return !(system_managed.contains(other) &&
+                       is_default_accelerator) &&
+                     ToCodesString(accelerator) == ToCodesString(other);
+            })) {
       pref_manager_.RemoveAccelerator(other_command_id, accelerator);
       modified_commands.push_back(other_command_id);
     }
@@ -270,7 +307,7 @@ std::vector<int> AcceleratorService::AssignAccelerator(
 void AcceleratorService::UnassignAccelerator(
     int command_id,
     const ui::Accelerator& accelerator) {
-  base::Erase(accelerators_[command_id], accelerator);
+  std::erase(accelerators_[command_id], accelerator);
   pref_manager_.RemoveAccelerator(command_id, accelerator);
 }
 
@@ -278,6 +315,7 @@ void AcceleratorService::NotifyCommandsChanged(
     const std::vector<int>& modified_ids) {
   Accelerators changed;
   auto event = mojom::CommandsEvent::New();
+  const auto& system_managed = system_managed_;
 
   for (const auto& command_id : modified_ids) {
     const auto& changed_command = accelerators_[command_id];
@@ -285,8 +323,16 @@ void AcceleratorService::NotifyCommandsChanged(
     event->addedOrUpdated[command_id] = ToMojoCommand(
         command_id, changed_command,
         it == default_accelerators_.end() ? std::vector<ui::Accelerator>()
-                                          : it->second);
-    changed[command_id] = changed_command;
+                                          : it->second,
+        system_managed_);
+
+    // Make sure system managed commands aren't registered with the Browser - as
+    // that might break these commands being triggered from the system.
+    base::ranges::copy_if(
+        changed_command, std::back_inserter(changed[command_id]),
+        [&system_managed](const ui::Accelerator& accelerator) {
+          return !system_managed.contains(accelerator);
+        });
   }
 
   for (const auto& listener : mojo_listeners_) {

@@ -3,19 +3,35 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include <optional>
+
 #include "third_party/blink/renderer/core/loader/mixed_content_checker.h"
 
 namespace blink {
 
 namespace {
 
+// These template specialisations are required because not all `T`s passed to
+// `IsOnion` have a `Host` method that returns a `String`. Recently,
+// `KURL.Host()` has been converted to return a `StringView`, which doesn't
+// offer an `EndsWith` method.
+template <typename T>
+String GetHost(const T& obj) {
+  return obj.Host();
+}
+
+template <>
+String GetHost(const KURL& obj) {
+  return obj.Host().ToString();
+}
+
 template <typename T>
 bool IsOnion(const T& obj) {
-  constexpr const char kOnion[] = ".onion";
-  return obj.Host().EndsWith(kOnion) && (obj.Protocol() == url::kHttpsScheme ||
-                                         obj.Protocol() == url::kHttpScheme ||
-                                         obj.Protocol() == url::kWsScheme ||
-                                         obj.Protocol() == url::kWssScheme);
+  return GetHost(obj).EndsWith(".onion") &&
+         (obj.Protocol() == url::kHttpsScheme ||
+          obj.Protocol() == url::kHttpScheme ||
+          obj.Protocol() == url::kWsScheme ||
+          obj.Protocol() == url::kWssScheme);
 }
 
 }  // namespace
@@ -35,11 +51,11 @@ bool IsOnion(const T& obj) {
 
 namespace blink {
 // static
-absl::optional<bool> MixedContentChecker::IsMixedContentForOnion(
+std::optional<bool> MixedContentChecker::IsMixedContentForOnion(
     const SecurityOrigin* security_origin,
     const KURL& resource_url) {
   if (!IsOnion(*security_origin)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   if (IsOnion(resource_url)) {
     // onion -> onion: not blocked

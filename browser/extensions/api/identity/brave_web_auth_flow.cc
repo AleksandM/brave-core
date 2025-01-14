@@ -6,10 +6,10 @@
 #include "brave/browser/extensions/api/identity/brave_web_auth_flow.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/strings/string_piece.h"
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "chrome/browser/extensions/api/identity/identity_api.h"
@@ -28,7 +28,7 @@ BraveWebAuthFlow::BraveWebAuthFlow() {}
 BraveWebAuthFlow::~BraveWebAuthFlow() {}
 
 // static
-absl::optional<std::string> BraveWebAuthFlow::token_for_testing_;
+std::optional<std::string> BraveWebAuthFlow::token_for_testing_;
 // static
 void BraveWebAuthFlow::SetTokenForTesting(const std::string& token) {
   token_for_testing_ = token;
@@ -41,7 +41,8 @@ void BraveWebAuthFlow::StartWebAuthFlow(
     CompleteFunctionWithResultCallback complete_with_result_callback,
     const std::string& oauth2_client_id,
     ExtensionTokenKey token_key,
-    bool interactive) {
+    bool interactive,
+    bool user_gesture) {
   profile_ = profile;
   complete_with_error_callback_ = std::move(complete_with_error_callback);
   complete_with_result_callback_ = std::move(complete_with_result_callback);
@@ -77,7 +78,7 @@ void BraveWebAuthFlow::StartWebAuthFlow(
   web_auth_flow_ = std::make_unique<WebAuthFlow>(
       this, profile_, google_oauth_url,
       interactive ? WebAuthFlow::INTERACTIVE : WebAuthFlow::SILENT,
-      WebAuthFlow::LAUNCH_WEB_AUTH_FLOW);
+      user_gesture);
   web_auth_flow_->Start();
 }
 
@@ -98,7 +99,6 @@ void BraveWebAuthFlow::OnAuthFlowFailure(WebAuthFlow::Failure failure) {
       break;
     default:
       NOTREACHED() << "Unexpected error from web auth flow: " << failure;
-      break;
   }
   if (web_auth_flow_) {
     web_auth_flow_.release()->DetachDelegateAndDelete();

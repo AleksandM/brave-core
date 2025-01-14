@@ -12,15 +12,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-class ChromeBrowserState;
+class ProfileIOS;
 
 @interface IpfsAPIImpl : NSObject <IpfsAPI>
-@property(nonatomic, nullable) NSURL* nftIpfsGateway;
-@property(nonatomic, nullable) NSURL* ipfsGateway;
-
 - (nullable NSURL*)resolveGatewayUrlFor:(NSURL*)input;
 - (nullable NSURL*)resolveGatewayUrlForNft:(NSURL*)input;
-- (instancetype)initWithBrowserState:(ChromeBrowserState*)mainBrowserState;
+- (instancetype)initWithBrowserState:(ProfileIOS*)profile;
 - (instancetype)init NS_UNAVAILABLE;
 @end
 

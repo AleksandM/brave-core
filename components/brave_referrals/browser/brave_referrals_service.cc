@@ -12,46 +12,45 @@
 #include "base/environment.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
-#include "base/functional/callback_helpers.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
-#include "base/path_service.h"
+#include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
-#include "base/system/sys_info.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
+#include "brave/brave_domains/service_domains.h"
 #include "brave/components/brave_referrals/common/pref_names.h"
 #include "brave/components/constants/network_constants.h"
 #include "brave/components/constants/pref_names.h"
-#include "brave_base/random.h"
+#include "brave/vendor/brave_base/random.h"
+#include "build/build_config.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
-#include "components/url_matcher/url_matcher.h"
-#include "components/url_matcher/url_util.h"
-#include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/common/referrer.h"
 #include "net/base/load_flags.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/simple_url_loader.h"
-#include "services/network/public/mojom/fetch_api.mojom-shared.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
+#if BUILDFLAG(IS_MAC)
+#include "base/apple/bundle_locations.h"
+#include "brave/components/brave_referrals/browser/file_extended_attribute.h"
+#endif  // BUILDFLAG(IS_MAC)
+
 // Perform finalization checks once a day.
-const int kFinalizationChecksFrequency = 60 * 60 * 24;
+constexpr int kFinalizationChecksFrequency = 60 * 60 * 24;
 
 // Report initialization once a day (after initial failure).
-const int kReportInitializationFrequency = 60 * 60 * 24;
+constexpr int kReportInitializationFrequency = 60 * 60 * 24;
 
 // Maximum size of the referral server response in bytes.
-const int kMaxReferralServerResponseSizeBytes = 1024 * 1024;
+constexpr int kMaxReferralServerResponseSizeBytes = 1024 * 1024;
 
 // Default promo code, used when no promoCode file exists on first
 // run.
-const char kDefaultPromoCode[] = "BRV001";
+constexpr char kDefaultPromoCode[] = "BRV001";
 
 namespace brave {
 
@@ -62,62 +61,6 @@ BraveReferralsService::ReferralInitializedCallback*
 
 base::FilePath g_promo_file_path;
 
-using URLMatcherKey = base::flat_set<std::string>;
-using URLMatcherMap =
-    base::flat_map<URLMatcherKey, std::unique_ptr<url_matcher::URLMatcher>>;
-
-URLMatcherMap& GetURLMatcherMap() {
-  static base::NoDestructor<URLMatcherMap> matcher_map;
-  return *matcher_map;
-}
-
-base::Value::Dict CreateReferralHeader(
-    const char partner_name[],
-    const std::vector<std::string>& partner_domains) {
-  auto& matcher_map = GetURLMatcherMap();
-  URLMatcherKey key(partner_domains.begin(), partner_domains.end());
-  if (!base::Contains(matcher_map, key)) {
-    matcher_map[key] = std::make_unique<url_matcher::URLMatcher>();
-    auto& matcher = matcher_map[key];
-
-    url_matcher::URLMatcherConditionSet::Vector condition_sets;
-    base::MatcherStringPattern::ID id = 0u;
-    static_assert(std::is_arithmetic_v<decltype(id)>,
-                  "We'll use post-increment operator on |id| assuming that "
-                  "it's arithmetic type");
-    for (const auto& domain : partner_domains) {
-      condition_sets.push_back(
-          {url_matcher::util::CreateConditionSet(matcher.get(), id++,
-                                                 /*scheme*/ std::string(),
-                                                 /*host*/ domain,
-                                                 /*match_subdomains*/ true,
-                                                 /*port*/ 0,
-                                                 /*path*/ std::string(),
-                                                 /*query*/ std::string(),
-                                                 /*allow*/ true)});
-    }
-    // This operation is known to be expensive. So we cache the matcher.
-    matcher->AddConditionSets(condition_sets);
-  }
-
-  DCHECK(!matcher_map.at(key)->IsEmpty());
-
-  base::Value::Dict headers_dict;
-  base::Value::List domains;
-  for (const auto& header : partner_domains)
-    domains.Append(header);
-  headers_dict.Set("domains", std::move(domains));
-
-  constexpr double expiration_ms = 31536000000.0;
-  headers_dict.Set("expiration", expiration_ms);
-
-  base::Value::Dict headers_sub_dict;
-  headers_sub_dict.Set(kBravePartnerHeader, partner_name);
-  headers_dict.Set("headers", std::move(headers_sub_dict));
-
-  return headers_dict;
-}
-
 void DeletePromoCodeFile(const base::FilePath& promo_code_file) {
   if (!base::DeleteFile(promo_code_file)) {
     LOG(ERROR) << "Failed to delete referral promo code file "
@@ -125,8 +68,45 @@ void DeletePromoCodeFile(const base::FilePath& promo_code_file) {
   }
 }
 
+#if BUILDFLAG(IS_MAC)
+std::string ReadPromoCodeFromXattr() {
+  static constexpr char kRefCodeAttr[] = "com.brave.refcode";
+  base::FilePath bundle_path = base::apple::OuterBundlePath();
+  std::vector<char> value;
+  int result_errno =
+      brave::GetFileExtendedAttribute(bundle_path, kRefCodeAttr, &value);
+  if (result_errno == ENOATTR) {
+    VLOG(0) << "Could not get promo code from " << bundle_path
+            << ". The extended attribute " << kRefCodeAttr << " was not found.";
+  } else if (result_errno != 0) {
+    VLOG(0) << "Could not get promo code from " << bundle_path
+            << ". An error occurred getting value for attribute "
+            << kRefCodeAttr << ". Error code: " << result_errno << ".";
+  } else {
+    std::string promo_code(value.begin(), value.end());
+    base::TrimWhitespaceASCII(promo_code, base::TRIM_ALL, &promo_code);
+    if (promo_code.empty()) {
+      VLOG(0) << "Promo code value from " << bundle_path
+              << "'s extended attribute " << kRefCodeAttr << " is empty.";
+    } else {
+      DVLOG(1) << "Promo code from " << kRefCodeAttr << ": " << promo_code;
+      return promo_code;
+    }
+  }
+
+  return "";
+}
+#endif  // BUILDFLAG(IS_MAC)
+
 std::string ReadPromoCode(const base::FilePath& promo_code_file) {
   std::string promo_code;
+
+#if BUILDFLAG(IS_MAC)
+  promo_code = ReadPromoCodeFromXattr();
+  if (!promo_code.empty()) {
+    return promo_code;
+  }
+#endif  // BUILDFLAG(IS_MAC)
 
   if (!base::PathExists(promo_code_file)) {
     return kDefaultPromoCode;
@@ -150,79 +130,17 @@ std::string ReadPromoCode(const base::FilePath& promo_code_file) {
 std::string BuildReferralEndpoint(const std::string& path) {
   std::unique_ptr<base::Environment> env(base::Environment::Create());
   std::string referral_server;
-  std::string proto = "https";
   env->GetVar("BRAVE_REFERRALS_SERVER", &referral_server);
-  if (referral_server.empty())
-    referral_server = kBraveReferralsServer;
-  if (env->HasVar("BRAVE_REFERRALS_LOCAL"))
-    proto = "http";
+  if (referral_server.empty()) {
+    auto referral_domain = brave_domains::GetServicesDomain("usage-ping");
+    referral_server = base::StrCat(
+        {url::kHttpsScheme, url::kStandardSchemeSeparator, referral_domain});
+  }
 
-  return base::StringPrintf("%s://%s%s", proto.c_str(), referral_server.c_str(),
-                            path.c_str());
+  return referral_server + path;
 }
 
 }  // namespace
-
-BraveReferralsHeaders::BraveReferralsHeaders() {
-  // NOTE TO READER: This header is for partners to determine the browser is
-  // Brave without creating webcompat issues by creating a new user-agent.
-  // All Brave users send the exact same header and so this cannot be used for
-  // tracking individual users. See
-  // https://github.com/brave/brave-browser/wiki/Custom-Headers for more
-  // information. Custom headers are deprecated and new partners use the
-  // navigator.brave.isBrave() JavaScript API.
-  constexpr char kPartnerGrammarlyName[] = "grammarly";
-
-  referral_headers_.push_back(CreateReferralHeader(
-      kPartnerGrammarlyName, {"www.grammarly.com", "grammarly.com",
-                              "static.grammarly.com", "gnar.grammarly.com"}));
-}
-
-bool BraveReferralsHeaders::GetMatchingReferralHeaders(
-    const base::Value::Dict** request_headers_dict,
-    const GURL& url) {
-  return GetMatchingReferralHeaders(referral_headers_, request_headers_dict,
-                                    url);
-}
-
-template <typename Iter>
-bool BraveReferralsHeaders::GetMatchingReferralHeaders(
-    const Iter& referral_headers_list,
-    const base::Value::Dict** request_headers_dict,
-    const GURL& url) {
-  if (!url.SchemeIsHTTPOrHTTPS())
-    return false;
-
-  // If the domain for this request matches one of our target domains,
-  // set the associated custom headers.
-  for (const auto& headers_value : referral_headers_list) {
-    const auto* domains_list = headers_value.FindList("domains");
-    if (!domains_list) {
-      LOG(WARNING) << "Failed to retrieve 'domains' key from referral headers";
-      continue;
-    }
-    const auto* headers_dict = headers_value.FindDict("headers");
-    if (!headers_dict) {
-      LOG(WARNING) << "Failed to retrieve 'headers' key from referral headers";
-      continue;
-    }
-
-    URLMatcherKey key;
-    for (const auto& domain_value : *domains_list)
-      key.insert(domain_value.GetString());
-
-    const auto& matcher_map = GetURLMatcherMap();
-    DCHECK(matcher_map.count(key) && matcher_map.at(key))
-        << "URLMatcher for domain list should have been added.";
-    DCHECK(!matcher_map.at(key)->IsEmpty())
-        << "URLMatcher doesn't have proper match condition sets";
-    if (!matcher_map.at(key)->MatchURL(url).empty()) {
-      *request_headers_dict = headers_dict;
-      return true;
-    }
-  }
-  return false;
-}
 
 BraveReferralsService::BraveReferralsService(PrefService* pref_service,
                                              const std::string& api_key,
@@ -339,11 +257,6 @@ void BraveReferralsService::OnReferralInitLoadComplete(
         << "Failed to locate download_id in referral initialization response"
         << ", payload: " << *response_body;
     return;
-  }
-
-  const base::Value* headers = root.Find("headers");
-  if (headers) {
-    pref_service_->Set(kReferralHeaders, *headers);
   }
   pref_service_->SetString(kReferralDownloadID, *download_id);
 
@@ -611,7 +524,7 @@ void BraveReferralsService::GetSafetynetStatusResult(
     const std::string& result_string,
     const bool attestation_passed) {
   if (pref_service_->GetString(kSafetynetStatus).empty()) {
-    NOTREACHED() << "Failed to get safetynet status";
+    // The device could not support SafetyNet.
     pref_service_->SetString(kSafetynetStatus, "not verified");
   }
   CheckForReferralFinalization();
@@ -703,7 +616,6 @@ void RegisterPrefsForBraveReferralsService(PrefRegistrySimple* registry) {
   registry->RegisterTimePref(kReferralTimestamp, base::Time());
   registry->RegisterTimePref(kReferralAttemptTimestamp, base::Time());
   registry->RegisterIntegerPref(kReferralAttemptCount, 0);
-  registry->RegisterListPref(kReferralHeaders);
 #if BUILDFLAG(IS_ANDROID)
   registry->RegisterTimePref(kReferralAndroidFirstRunTimestamp, base::Time());
   registry->RegisterStringPref(kSafetynetStatus, std::string());

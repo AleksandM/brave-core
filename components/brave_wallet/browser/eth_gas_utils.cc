@@ -3,18 +3,23 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(https://github.com/brave/brave-browser/issues/41661): Remove this and
+// convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "brave/components/brave_wallet/browser/eth_gas_utils.h"
 
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 #include "base/check.h"
 #include "base/logging.h"
 #include "brave/components/brave_wallet/common/hex_utils.h"
 
-namespace brave_wallet {
-
-namespace eth {
+namespace brave_wallet::eth {
 
 // Scale the base fee by 33% to get a suggested value. This is done to account
 // for sufficient fluctionations in the base fee, so that the transaction will
@@ -27,16 +32,16 @@ namespace eth {
 // Note that base fee is not part of the RLP. Any excees base fee is refunded,
 // so the user will not be charged more than the base fee of the block that
 // includes the transaction.
-absl::optional<uint256_t> ScaleBaseFeePerGas(const std::string& value) {
+std::optional<uint256_t> ScaleBaseFeePerGas(const std::string& value) {
   uint256_t value_uint256;
   if (!HexValueToUint256(value, &value_uint256)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // We use "double" math and this is unlikely to get hit, so return
-  // absl::nullopt if the value is too big.
+  // std::nullopt if the value is too big.
   if (value_uint256 > kMaxSafeIntegerUint64) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Compiler crashes without these 2 casts :(
@@ -154,6 +159,4 @@ bool GetSuggested1559Fees(const std::vector<std::string>& base_fee_per_gas,
   return true;
 }
 
-}  // namespace eth
-
-}  // namespace brave_wallet
+}  // namespace brave_wallet::eth

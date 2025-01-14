@@ -7,13 +7,15 @@
 
 #include <algorithm>
 #include <map>
+#include <optional>
 
 #include "base/check.h"
+#include "base/containers/fixed_flat_map.h"
+#include "base/containers/span.h"
 #include "base/logging.h"
-#include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_constants.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
@@ -21,41 +23,43 @@
 #include "brave/components/brave_wallet/common/fil_address.h"
 #include "brave/components/brave_wallet/common/hash_utils.h"
 #include "brave/components/brave_wallet/common/hex_utils.h"
+#include "third_party/abseil-cpp/absl/strings/str_format.h"
 
 namespace brave_wallet {
 
 namespace {
+
+constexpr auto kIdToVersionMappings =
+    base::MakeFixedFlatMap<std::string_view, std::string_view>({
+        {"0x1", "ERC20"},
+        {"0x38", "BEP20"},
+        {"0x63564c40", "HRC20"},
+        {"0x64", "XDAI"},
+        {"0x7a", "FUSE"},
+        {"0x89", "MATIC"},
+        {"0xa", "OP"},
+        {"0xa4b1", "AETH"},
+        {"0xa86a", "AVAX"},
+        {"0xfa", "FANTOM"},
+    });
 
 bool IsValidHostLabelCharacter(char c, bool is_first_char) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
          (c >= '0' && c <= '9') || (!is_first_char && c == '-') || c == '_';
 }
 
-absl::optional<std::string> ChainIdToVersion(const std::string& symbol,
-                                             const std::string chain_id) {
-  static base::NoDestructor<std::map<std::string, std::string>> mapping({
-      {"0x1", "ERC20"},
-      {"0x38", "BEP20"},
-      {"0x63564c40", "HRC20"},
-      {"0x64", "XDAI"},
-      {"0x7a", "FUSE"},
-      {"0x89", "MATIC"},
-      {"0xa", "OP"},
-      {"0xa4b1", "AETH"},
-      {"0xa86a", "AVAX"},
-      {"0xfa", "FANTOM"},
-  });
-
+std::optional<std::string_view> ChainIdToVersion(std::string_view symbol,
+                                                 std::string_view chain_id) {
   // Special case for crypto.FTM.version.OPERA.address.
   if (symbol == "FTM" && chain_id == "0xfa") {
     return "OPERA";
   }
 
-  auto it = mapping->find(chain_id);
-  if (it != mapping->end()) {
-    return it->second;
+  auto it = kIdToVersionMappings.find(chain_id);
+  if (it == kIdToVersionMappings.end()) {
+    return std::nullopt;
   }
-  return absl::nullopt;
+  return it->second;
 }
 
 }  // namespace
@@ -64,21 +68,21 @@ namespace filforwarder {
 
 constexpr uint8_t kFilForwarderSelector[] = {0xd9, 0x48, 0xd4, 0x68};
 
-absl::optional<std::vector<uint8_t>> Forward(const FilAddress& fil_address) {
+std::optional<std::vector<uint8_t>> Forward(const FilAddress& fil_address) {
   if (fil_address.IsEmpty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return eth_abi::TupleEncoder()
       .AddBytes(fil_address.GetBytes())
-      .EncodeWithSelector(base::make_span(kFilForwarderSelector));
+      .EncodeWithSelector(base::span(kFilForwarderSelector));
 }
 
 }  // namespace filforwarder
 
 namespace erc20 {
 
-bool Transfer(const std::string& to_address,
+bool Transfer(std::string_view to_address,
               uint256_t amount,
               std::string* data) {
   const std::string function_hash =
@@ -96,7 +100,7 @@ bool Transfer(const std::string& to_address,
   return ConcatHexStrings(hex_strings, data);
 }
 
-bool BalanceOf(const std::string& address, std::string* data) {
+bool BalanceOf(std::string_view address, std::string* data) {
   const std::string function_hash = GetFunctionHash("balanceOf(address)");
   std::string params;
   if (!brave_wallet::PadHexEncodedParameter(address, &params)) {
@@ -105,7 +109,7 @@ bool BalanceOf(const std::string& address, std::string* data) {
   return brave_wallet::ConcatHexStrings(function_hash, params, data);
 }
 
-bool Approve(const std::string& spender_address,
+bool Approve(std::string_view spender_address,
              uint256_t amount,
              std::string* data) {
   const std::string function_hash = GetFunctionHash("approve(address,uint256)");
@@ -122,8 +126,8 @@ bool Approve(const std::string& spender_address,
   return ConcatHexStrings(hex_strings, data);
 }
 
-bool Allowance(const std::string& owner_address,
-               const std::string& spender_address,
+bool Allowance(std::string_view owner_address,
+               std::string_view spender_address,
                std::string* data) {
   const std::string function_hash =
       GetFunctionHash("allowance(address,address)");
@@ -147,8 +151,8 @@ bool Allowance(const std::string& owner_address,
 namespace erc721 {
 
 bool TransferFromOrSafeTransferFrom(bool is_safe_transfer_from,
-                                    const std::string& from,
-                                    const std::string& to,
+                                    std::string_view from,
+                                    std::string_view to,
                                     uint256_t token_id,
                                     std::string* data) {
   const std::string function_hash =
@@ -202,8 +206,8 @@ bool TokenUri(uint256_t token_id, std::string* data) {
 
 namespace erc1155 {
 
-bool SafeTransferFrom(const std::string& from,
-                      const std::string& to,
+bool SafeTransferFrom(std::string_view from,
+                      std::string_view to,
                       uint256_t token_id,
                       uint256_t value,
                       std::string* data) {
@@ -256,7 +260,7 @@ bool SafeTransferFrom(const std::string& from,
   return ConcatHexStrings(hex_strings, data);
 }
 
-bool BalanceOf(const std::string& owner_address,
+bool BalanceOf(std::string_view owner_address,
                uint256_t token_id,
                std::string* data) {
   const std::string function_hash =
@@ -288,11 +292,12 @@ bool Uri(uint256_t token_id, std::string* data) {
 
 namespace erc165 {
 
-bool SupportsInterface(const std::string& interface_id, std::string* data) {
+bool SupportsInterface(std::string_view interface_id, std::string* data) {
   if (!IsValidHexString(interface_id) || interface_id.length() != 10) {
     return false;
   }
-  std::string padded_interface_id = interface_id + std::string(56, '0');
+  std::string padded_interface_id =
+      base::StrCat({interface_id, std::string(56, '0')});
 
   const std::string function_hash =
       GetFunctionHash("supportsInterface(bytes4)");
@@ -309,35 +314,35 @@ std::vector<uint8_t> SupportsInterface(eth_abi::Span4 interface) {
 
 namespace unstoppable_domains {
 
-absl::optional<std::string> GetMany(const std::vector<std::string>& keys,
-                                    const std::string& domain) {
+std::optional<std::string> GetMany(std::string_view domain,
+                                   base::span<const std::string_view> keys) {
   const std::string function_hash =
       GetFunctionHash("getMany(string[],uint256)");
 
   std::string offset_for_array;
   if (!PadHexEncodedParameter(Uint256ValueToHex(64), &offset_for_array)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string tokenID = ToHex(Namehash(domain));
 
   std::string encoded_keys;
   if (!EncodeStringArray(keys, &encoded_keys)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string data;
   std::vector<std::string> hex_strings = {function_hash, offset_for_array,
                                           tokenID, encoded_keys};
   if (!ConcatHexStrings(hex_strings, &data)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return data;
 }
 
-std::vector<std::string> MakeEthLookupKeyList(const std::string& symbol,
-                                              const std::string& chain_id) {
+std::vector<std::string> MakeEthLookupKeyList(std::string_view symbol,
+                                              std::string_view chain_id) {
   auto upper_symbol = base::ToUpperASCII(symbol);
   std::vector<std::string> lookup_keys;
   // crypto.<TICKER>.version.<VERSION>.address
@@ -345,15 +350,13 @@ std::vector<std::string> MakeEthLookupKeyList(const std::string& symbol,
     if (!(upper_symbol == "ETH" && version == "ERC20")) {
       // No such key as 'crypto.ETH.version.ERC20.address'. 'crypto.ETH.address'
       // would be used instead.
-      lookup_keys.push_back(base::StringPrintf("crypto.%s.version.%s.address",
-                                               upper_symbol.c_str(),
-                                               version->c_str()));
+      lookup_keys.push_back(absl::StrFormat("crypto.%s.version.%s.address",
+                                            upper_symbol, *version));
     }
   }
   // crypto.<TICKER>.address
   if (symbol != "ETH") {
-    lookup_keys.push_back(
-        base::StringPrintf("crypto.%s.address", upper_symbol.c_str()));
+    lookup_keys.push_back(absl::StrFormat("crypto.%s.address", upper_symbol));
   }
 
   // crypto.ETH.address
@@ -362,13 +365,12 @@ std::vector<std::string> MakeEthLookupKeyList(const std::string& symbol,
   return lookup_keys;
 }
 
-std::vector<std::string> MakeSolLookupKeyList(const std::string& symbol) {
+std::vector<std::string> MakeSolLookupKeyList(std::string_view symbol) {
   std::vector<std::string> lookup_keys;
   // crypto.<TICKER>.version.SOLANA.address
   if (symbol != "SOL") {
-    lookup_keys.push_back(
-        base::StringPrintf("crypto.%s.version.SOLANA.address",
-                           base::ToUpperASCII(symbol).c_str()));
+    lookup_keys.push_back(absl::StrFormat("crypto.%s.version.SOLANA.address",
+                                          base::ToUpperASCII(symbol)));
   }
 
   // crypto.SOL.address
@@ -386,10 +388,10 @@ std::vector<std::string> MakeFilLookupKeyList() {
   return lookup_keys;
 }
 
-std::vector<uint8_t> GetWalletAddr(const std::string& domain,
+std::vector<uint8_t> GetWalletAddr(std::string_view domain,
                                    mojom::CoinType coin,
-                                   const std::string& symbol,
-                                   const std::string& chain_id) {
+                                   std::string_view symbol,
+                                   std::string_view chain_id) {
   std::vector<std::string> key_list;
   switch (coin) {
     case mojom::CoinType::ETH:
@@ -402,7 +404,7 @@ std::vector<uint8_t> GetWalletAddr(const std::string& domain,
       key_list = MakeFilLookupKeyList();
       break;
     default:
-      NOTREACHED();
+      NOTREACHED() << coin;
   }
 
   // getMany(string[],uint256)
@@ -416,7 +418,7 @@ std::vector<uint8_t> GetWalletAddr(const std::string& domain,
 
 namespace ens {
 
-std::string Resolver(const std::string& domain) {
+std::string Resolver(std::string_view domain) {
   const std::string function_hash = GetFunctionHash("resolver(bytes32)");
   std::string tokenID = ToHex(Namehash(domain));
   std::vector<std::string> hex_strings = {function_hash, tokenID};
@@ -426,24 +428,10 @@ std::string Resolver(const std::string& domain) {
   return data;
 }
 
-bool ContentHash(const std::string& domain, std::string* data) {
-  const std::string function_hash = GetFunctionHash("contenthash(bytes32)");
-  std::string tokenID = ToHex(Namehash(domain));
-  std::vector<std::string> hex_strings = {function_hash, tokenID};
-  return ConcatHexStrings(hex_strings, data);
-}
-
-bool Addr(const std::string& domain, std::string* data) {
-  const std::string function_hash = GetFunctionHash("addr(bytes32)");
-  std::string tokenID = ToHex(Namehash(domain));
-  std::vector<std::string> hex_strings = {function_hash, tokenID};
-  return ConcatHexStrings(hex_strings, data);
-}
-
 // https://docs.ens.domains/ens-improvement-proposals/ensip-10-wildcard-resolution#specification
 // Similar to chromium's `DNSDomainFromDot` but without length limitation and
 // support of terminal dot.
-absl::optional<std::vector<uint8_t>> DnsEncode(const std::string& dotted_name) {
+std::optional<std::vector<uint8_t>> DnsEncode(std::string_view dotted_name) {
   std::vector<uint8_t> result;
   result.resize(dotted_name.size() + 2);
   result.front() = '.';  // Placeholder for first label length.
@@ -455,12 +443,12 @@ absl::optional<std::vector<uint8_t>> DnsEncode(const std::string& dotted_name) {
     if (result[i] == '.') {
       size_t label_len = i - last_dot_pos - 1;
       if (label_len == 0 || label_len > 63) {
-        return absl::nullopt;
+        return std::nullopt;
       }
       result[last_dot_pos] = static_cast<uint8_t>(label_len);
       last_dot_pos = i;
     } else if (!IsValidHostLabelCharacter(result[i], i - last_dot_pos == 1)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
   DCHECK_EQ(last_dot_pos, result.size() - 1);
@@ -472,28 +460,28 @@ absl::optional<std::vector<uint8_t>> DnsEncode(const std::string& dotted_name) {
 
 namespace balance_scanner {
 
-absl::optional<std::string> TokensBalance(
-    const std::string& owner_address,
+std::optional<std::string> TokensBalance(
+    std::string_view owner_address,
     const std::vector<std::string>& contract_addresses) {
   const std::string function_hash =
       GetFunctionHash("tokensBalance(address,address[])");
   std::string padded_address;
   if (!brave_wallet::PadHexEncodedParameter(owner_address, &padded_address)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Indicate the next value that encodes the length of the address[] is 64
   // bytes
   std::string offset_for_array;
   if (!PadHexEncodedParameter(Uint256ValueToHex(64), &offset_for_array)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // Encode the length of the address[] as 64 bytes
   std::string array_length;
   if (!PadHexEncodedParameter(Uint256ValueToHex(contract_addresses.size()),
                               &array_length)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   std::string data;
@@ -506,13 +494,13 @@ absl::optional<std::string> TokensBalance(
     std::string padded_contract_address;
     if (!brave_wallet::PadHexEncodedParameter(contract_address,
                                               &padded_contract_address)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     hex_strings.push_back(padded_contract_address);
   }
 
   if (!ConcatHexStrings(hex_strings, &data)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return data;

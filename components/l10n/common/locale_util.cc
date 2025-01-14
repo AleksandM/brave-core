@@ -5,6 +5,8 @@
 
 #include "brave/components/l10n/common/locale_util.h"
 
+#include <optional>
+
 #include "brave/components/l10n/common/default_locale.h"
 #include "brave/components/l10n/common/locale_subtag_info.h"
 #include "brave/components/l10n/common/locale_subtag_parser_util.h"
@@ -22,7 +24,7 @@ const std::string& GetDefaultLocaleString() {
   return DefaultLocaleString();
 }
 
-std::string GetISOLanguageCode(const std::string& locale) {
+std::string GetISOLanguageCode(std::string_view locale) {
   std::string language = ParseLocaleSubtags(locale).language;
   if (language.empty()) {
     return kFallbackLanguageCode;
@@ -35,20 +37,20 @@ std::string GetDefaultISOLanguageCodeString() {
   return GetISOLanguageCode(GetDefaultLocaleString());
 }
 
-absl::optional<std::string> GetISOScriptCode(const std::string& locale) {
+std::optional<std::string> GetISOScriptCode(std::string_view locale) {
   std::string script = ParseLocaleSubtags(locale).script;
   if (script.empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return script;
 }
 
-absl::optional<std::string> GetDefaultISOScriptCodeString() {
+std::optional<std::string> GetDefaultISOScriptCodeString() {
   return GetISOScriptCode(GetDefaultLocaleString());
 }
 
-std::string GetISOCountryCode(const std::string& locale) {
+std::string GetISOCountryCode(std::string_view locale) {
   std::string country = ParseLocaleSubtags(locale).country;
   if (country.empty()) {
     return kFallbackCountryCode;
@@ -61,29 +63,29 @@ std::string GetDefaultISOCountryCodeString() {
   return GetISOCountryCode(GetDefaultLocaleString());
 }
 
-absl::optional<std::string> GetCharSet(const std::string& locale) {
+std::optional<std::string> GetCharSet(std::string_view locale) {
   std::string charset = ParseLocaleSubtags(locale).charset;
   if (charset.empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return charset;
 }
 
-absl::optional<std::string> GetDefaultCharSetString() {
+std::optional<std::string> GetDefaultCharSetString() {
   return GetCharSet(GetDefaultLocaleString());
 }
 
-absl::optional<std::string> GetVariant(const std::string& locale) {
+std::optional<std::string> GetVariant(std::string_view locale) {
   std::string variant_code = ParseLocaleSubtags(locale).variant;
   if (variant_code.empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return variant_code;
 }
 
-absl::optional<std::string> GetDefaultVariantString() {
+std::optional<std::string> GetDefaultVariantString() {
   return GetVariant(GetDefaultLocaleString());
 }
 

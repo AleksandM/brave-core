@@ -1,0 +1,12 @@
+diff --git a/ios/chrome/browser/flags/about_flags.mm b/ios/chrome/browser/flags/about_flags.mm
+index 3a3cfe3bf6234535fcfaff93bfe299be8db86a73..a67bb82fc7778d446203ce11c346458e9b0a8f26 100644
+--- a/ios/chrome/browser/flags/about_flags.mm
++++ b/ios/chrome/browser/flags/about_flags.mm
+@@ -1232,6 +1232,7 @@ const FeatureEntry::FeatureVariation kNewFeedPositioningVariations[] = {
+ //
+ // When adding a new choice, add it to the end of the list.
+ const flags_ui::FeatureEntry kFeatureEntries[] = {
++    BRAVE_ABOUT_FLAGS_FEATURE_ENTRIES
+     {"in-product-help-demo-mode-choice",
+      flag_descriptions::kInProductHelpDemoModeName,
+      flag_descriptions::kInProductHelpDemoModeDescription, flags_ui::kOsIos,

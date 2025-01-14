@@ -1,12 +1,12 @@
 diff --git a/chrome/browser/ui/android/appmenu/internal/java/src/org/chromium/chrome/browser/ui/appmenu/AppMenu.java b/chrome/browser/ui/android/appmenu/internal/java/src/org/chromium/chrome/browser/ui/appmenu/AppMenu.java
-index fbbc57577be59a8bc7cd4045b622331214237600..76d23b34a5249898f3ac694acf5672b690cbe741 100644
+index cb99c614ad359c388a7aa7c3373d5b12f35e6f47..04701c28d745809d3ee6574f059c954fe2261c1c 100644
 --- a/chrome/browser/ui/android/appmenu/internal/java/src/org/chromium/chrome/browser/ui/appmenu/AppMenu.java
 +++ b/chrome/browser/ui/android/appmenu/internal/java/src/org/chromium/chrome/browser/ui/appmenu/AppMenu.java
-@@ -220,6 +220,7 @@ class AppMenu implements OnItemClickListener, OnKeyListener, AppMenuClickHandler
-             mPopup.setAnimationStyle(
-                     isMenuIconAtStart ? R.style.StartIconMenuAnim : R.style.EndIconMenuAnim);
-         }
-+        if (!isByPermanentButton) mPopup.setAnimationStyle(BraveAppMenu.getAnimationStyle());
- 
-         // Turn off window animations for low end devices.
-         if (SysUtils.isLowEndDevice()) mPopup.setAnimationStyle(0);
+@@ -306,6 +306,7 @@ class AppMenu implements OnItemClickListener, OnKeyListener, AppMenuClickHandler
+                 anchorView,
+                 groupDividerResourceId,
+                 anchorViewOffset);
++        if (this instanceof BraveAppMenu) ((BraveAppMenu) this).updatePopup(mPopup, isByPermanentButton);
+         int[] popupPosition =
+                 getPopupPosition(
+                         mTempLocation,

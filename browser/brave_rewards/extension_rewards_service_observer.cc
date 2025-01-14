@@ -38,11 +38,21 @@ void ExtensionRewardsServiceObserver::OnRewardsInitialized(
   event_router->BroadcastEvent(std::move(event));
 }
 
-void ExtensionRewardsServiceObserver::OnRewardsWalletUpdated() {
+void ExtensionRewardsServiceObserver::OnRewardsWalletCreated() {
   if (auto* event_router = extensions::EventRouter::Get(profile_)) {
     event_router->BroadcastEvent(std::make_unique<extensions::Event>(
         extensions::events::BRAVE_START,
-        extensions::api::brave_rewards::OnRewardsWalletUpdated::kEventName,
+        extensions::api::brave_rewards::OnRewardsWalletCreated::kEventName,
+        base::Value::List()));
+  }
+}
+
+void ExtensionRewardsServiceObserver::OnTermsOfServiceUpdateAccepted() {
+  if (auto* event_router = extensions::EventRouter::Get(profile_)) {
+    event_router->BroadcastEvent(std::make_unique<extensions::Event>(
+        extensions::events::BRAVE_START,
+        extensions::api::brave_rewards::OnTermsOfServiceUpdateAccepted::
+            kEventName,
         base::Value::List()));
   }
 }
@@ -77,78 +87,6 @@ void ExtensionRewardsServiceObserver::OnPanelPublisherInfo(
   event_router->BroadcastEvent(std::move(event));
 }
 
-void ExtensionRewardsServiceObserver::OnFetchPromotions(
-    RewardsService* rewards_service,
-    const brave_rewards::mojom::Result result,
-    const std::vector<brave_rewards::mojom::PromotionPtr>& list) {
-  auto* event_router = extensions::EventRouter::Get(profile_);
-  if (!event_router) {
-    return;
-  }
-
-  std::vector<extensions::api::brave_rewards::Promotion> promotions;
-
-  for (const auto& item : list) {
-    extensions::api::brave_rewards::Promotion promotion;
-    promotion.promotion_id = item->id;
-    promotion.type = static_cast<int>(item->type);
-    promotion.status = static_cast<int>(item->status);
-    promotion.created_at = item->created_at;
-    promotion.claimable_until = item->claimable_until;
-    promotion.expires_at = item->expires_at;
-    promotion.amount = item->approximate_value;
-    promotions.emplace_back(std::move(promotion));
-  }
-
-  std::unique_ptr<extensions::Event> event(new extensions::Event(
-      extensions::events::BRAVE_START,
-      extensions::api::brave_rewards::OnPromotions::kEventName,
-      extensions::api::brave_rewards::OnPromotions::Create(
-          static_cast<int>(result), promotions)));
-  event_router->BroadcastEvent(std::move(event));
-}
-
-void ExtensionRewardsServiceObserver::OnPromotionFinished(
-    RewardsService* rewards_service,
-    const brave_rewards::mojom::Result result,
-    brave_rewards::mojom::PromotionPtr promotion) {
-  auto* event_router = extensions::EventRouter::Get(profile_);
-  if (!event_router || result != brave_rewards::mojom::Result::LEDGER_OK) {
-    return;
-  }
-
-  extensions::api::brave_rewards::OnPromotionFinish::
-        Promotion promotion_api;
-
-  promotion_api.promotion_id = promotion->id;
-  promotion_api.type = static_cast<int>(promotion->type);
-  promotion_api.status = static_cast<int>(promotion->status);
-  promotion_api.expires_at = promotion->expires_at;
-  promotion_api.amount = promotion->approximate_value;
-
-  std::unique_ptr<extensions::Event> event(new extensions::Event(
-      extensions::events::BRAVE_START,
-      extensions::api::brave_rewards::OnPromotionFinish::kEventName,
-      extensions::api::brave_rewards::OnPromotionFinish::Create(
-          static_cast<int>(result), promotion_api)));
-  event_router->BroadcastEvent(std::move(event));
-}
-
-void ExtensionRewardsServiceObserver::OnAdsEnabled(
-    RewardsService* rewards_service,
-    bool ads_enabled) {
-  auto* event_router = extensions::EventRouter::Get(profile_);
-  if (!event_router) {
-    return;
-  }
-
-  std::unique_ptr<extensions::Event> event(new extensions::Event(
-      extensions::events::BRAVE_START,
-      extensions::api::brave_rewards::OnAdsEnabled::kEventName,
-      extensions::api::brave_rewards::OnAdsEnabled::Create(ads_enabled)));
-  event_router->BroadcastEvent(std::move(event));
-}
-
 void ExtensionRewardsServiceObserver::OnPublisherListNormalized(
     RewardsService* rewards_service,
     std::vector<brave_rewards::mojom::PublisherInfoPtr> list) {
@@ -160,6 +98,7 @@ void ExtensionRewardsServiceObserver::OnPublisherListNormalized(
   std::vector<extensions::api::brave_rewards::OnPublisherListNormalized::
         PublishersType> publishers;
 
+  publishers.reserve(list.size());
   for (const auto& item : list) {
     extensions::api::brave_rewards::OnPublisherListNormalized::PublishersType
         publisher;
@@ -268,18 +207,14 @@ void ExtensionRewardsServiceObserver::OnExternalWalletLoggedOut() {
   }
 }
 
-void ExtensionRewardsServiceObserver::OnUnblindedTokensReady(
-      brave_rewards::RewardsService* rewards_service) {
-  auto* event_router = extensions::EventRouter::Get(profile_);
-  if (!event_router) {
-    return;
+void ExtensionRewardsServiceObserver::OnExternalWalletDisconnected() {
+  if (auto* event_router = extensions::EventRouter::Get(profile_)) {
+    event_router->BroadcastEvent(std::make_unique<extensions::Event>(
+        extensions::events::BRAVE_START,
+        extensions::api::brave_rewards::OnExternalWalletDisconnected::
+            kEventName,
+        base::Value::List()));
   }
-
-  std::unique_ptr<extensions::Event> event(new extensions::Event(
-      extensions::events::BRAVE_START,
-      extensions::api::brave_rewards::OnUnblindedTokensReady::kEventName,
-      base::Value::List()));
-  event_router->BroadcastEvent(std::move(event));
 }
 
 void ExtensionRewardsServiceObserver::OnCompleteReset(const bool success) {

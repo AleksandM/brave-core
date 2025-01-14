@@ -5,8 +5,11 @@
 
 #include "brave/ios/browser/api/brave_wallet/brave_wallet_api.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/sys_string_conversions.h"
 #include "brave/components/brave_wallet/browser/blockchain_registry.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_p3a.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/ethereum_provider_impl.h"
 #include "brave/components/brave_wallet/browser/solana_provider_impl.h"
 #include "brave/components/brave_wallet/resources/grit/brave_wallet_script_generated.h"
@@ -14,13 +17,12 @@
 #include "brave/ios/browser/api/brave_wallet/brave_wallet_provider_delegate_ios+private.h"
 #include "brave/ios/browser/api/brave_wallet/brave_wallet_provider_delegate_ios.h"
 #include "brave/ios/browser/brave_wallet/brave_wallet_service_factory.h"
-#include "brave/ios/browser/brave_wallet/json_rpc_service_factory.h"
-#include "brave/ios/browser/brave_wallet/keyring_service_factory.h"
-#include "brave/ios/browser/brave_wallet/tx_service_factory.h"
 #include "components/grit/brave_components_resources.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state_manager.h"
-#include "ios/chrome/browser/content_settings/host_content_settings_map_factory.h"
+#include "ios/chrome/browser/content_settings/model/host_content_settings_map_factory.h"
+#include "ios/chrome/browser/shared/model/profile/profile_ios.h"
+#include "ios/chrome/browser/shared/model/profile/profile_manager_ios.h"
+#include "ios/web/public/thread/web_thread.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "ui/base/resource/resource_bundle.h"
 
 BraveWalletProviderScriptKey const BraveWalletProviderScriptKeyEthereum =
@@ -36,16 +38,19 @@ BraveWalletProviderScriptKey const BraveWalletProviderScriptKeyWalletStandard =
 #error "This file requires ARC support."
 #endif
 
+@implementation BraveWallet
+@end
+
 @implementation BraveWalletAPI {
-  ChromeBrowserState* _mainBrowserState;  // NOT OWNED
+  raw_ptr<ProfileIOS> _profile;  // NOT OWNED
   NSMutableDictionary<NSNumber* /* BraveWalletCoinType */,
                       NSDictionary<BraveWalletProviderScriptKey, NSString*>*>*
       _providerScripts;
 }
 
-- (instancetype)initWithBrowserState:(ChromeBrowserState*)mainBrowserState {
+- (instancetype)initWithBrowserState:(ProfileIOS*)profile {
   if ((self = [super init])) {
-    _mainBrowserState = mainBrowserState;
+    _profile = profile;
     _providerScripts = [[NSMutableDictionary alloc] init];
   }
   return self;
@@ -60,83 +65,55 @@ BraveWalletProviderScriptKey const BraveWalletProviderScriptKeyWalletStandard =
 - (nullable id<BraveWalletEthereumProvider>)
     ethereumProviderWithDelegate:(id<BraveWalletProviderDelegate>)delegate
                isPrivateBrowsing:(bool)isPrivateBrowsing {
-  auto* browserState = _mainBrowserState;
+  DCHECK_CURRENTLY_ON(web::WebThread::UI);
+  auto* profile = _profile.get();
   if (isPrivateBrowsing) {
-    browserState = browserState->GetOffTheRecordChromeBrowserState();
-  }
-
-  auto* json_rpc_service =
-      brave_wallet::JsonRpcServiceFactory::GetServiceForState(browserState);
-  if (!json_rpc_service) {
-    return nil;
-  }
-
-  auto* tx_service =
-      brave_wallet::TxServiceFactory::GetServiceForState(browserState);
-  if (!tx_service) {
-    return nil;
-  }
-
-  auto* keyring_service =
-      brave_wallet::KeyringServiceFactory::GetServiceForState(browserState);
-  if (!keyring_service) {
-    return nil;
+    profile = profile->GetOffTheRecordProfile();
   }
 
   auto* brave_wallet_service =
-      brave_wallet::BraveWalletServiceFactory::GetServiceForState(browserState);
+      brave_wallet::BraveWalletServiceFactory::GetServiceForState(profile);
   if (!brave_wallet_service) {
     return nil;
   }
 
   auto provider = std::make_unique<brave_wallet::EthereumProviderImpl>(
-      ios::HostContentSettingsMapFactory::GetForBrowserState(browserState),
-      json_rpc_service, tx_service, keyring_service, brave_wallet_service,
+      ios::HostContentSettingsMapFactory::GetForProfile(profile),
+      brave_wallet_service,
       std::make_unique<brave_wallet::BraveWalletProviderDelegateBridge>(
           delegate),
-      browserState->GetPrefs());
-  return [[BraveWalletEthereumProviderOwnedImpl alloc]
-      initWithEthereumProvider:std::move(provider)];
+      profile->GetPrefs());
+  return [[BraveWalletEthereumProviderMojoImpl alloc]
+      initWithEthereumProviderImpl:std::move(provider)];
 }
 
 - (nullable id<BraveWalletSolanaProvider>)
     solanaProviderWithDelegate:(id<BraveWalletProviderDelegate>)delegate
              isPrivateBrowsing:(bool)isPrivateBrowsing {
-  auto* browserState = _mainBrowserState;
+  DCHECK_CURRENTLY_ON(web::WebThread::UI);
+  auto* profile = _profile.get();
   if (isPrivateBrowsing) {
-    browserState = browserState->GetOffTheRecordChromeBrowserState();
-  }
-
-  auto* keyring_service =
-      brave_wallet::KeyringServiceFactory::GetServiceForState(browserState);
-  if (!keyring_service) {
-    return nil;
+    profile = profile->GetOffTheRecordProfile();
   }
 
   auto* brave_wallet_service =
-      brave_wallet::BraveWalletServiceFactory::GetServiceForState(browserState);
+      brave_wallet::BraveWalletServiceFactory::GetServiceForState(profile);
   if (!brave_wallet_service) {
     return nil;
   }
 
-  auto* tx_service =
-      brave_wallet::TxServiceFactory::GetServiceForState(browserState);
-  if (!tx_service) {
-    return nil;
-  }
-
-  auto* json_rpc_service =
-      brave_wallet::JsonRpcServiceFactory::GetServiceForState(browserState);
-  if (!json_rpc_service) {
+  auto* host_content_settings_map =
+      ios::HostContentSettingsMapFactory::GetForProfile(profile);
+  if (!host_content_settings_map) {
     return nil;
   }
 
   auto provider = std::make_unique<brave_wallet::SolanaProviderImpl>(
-      keyring_service, brave_wallet_service, tx_service, json_rpc_service,
+      *host_content_settings_map, brave_wallet_service,
       std::make_unique<brave_wallet::BraveWalletProviderDelegateBridge>(
           delegate));
-  return [[BraveWalletSolanaProviderOwnedImpl alloc]
-      initWithSolanaProvider:std::move(provider)];
+  return [[BraveWalletSolanaProviderMojoImpl alloc]
+      initWithSolanaProviderImpl:std::move(provider)];
 }
 
 - (NSString*)resourceForID:(int)resource_id {
@@ -180,6 +157,9 @@ BraveWalletProviderScriptKey const BraveWalletProviderScriptKeyWalletStandard =
       case BraveWalletCoinTypeBtc:
         // Currently not supported
         return {std::make_pair(@"", 0)};
+      case BraveWalletCoinTypeZec:
+        // Currently not supported
+        return {std::make_pair(@"", 0)};
     }
     return {std::make_pair(@"", 0)};
   }
@@ -192,6 +172,19 @@ BraveWalletProviderScriptKey const BraveWalletProviderScriptKeyWalletStandard =
   }
   _providerScripts[@(coinType)] = [scripts copy];
   return scripts;
+}
+
+- (nullable id<BraveWalletBraveWalletP3A>)walletP3A {
+  auto* service =
+      brave_wallet::BraveWalletServiceFactory::GetServiceForState(_profile);
+  if (!service) {
+    return nil;
+  }
+
+  mojo::PendingRemote<brave_wallet::mojom::BraveWalletP3A> pending_remote;
+  service->Bind(pending_remote.InitWithNewPipeAndPassReceiver());
+  return [[BraveWalletBraveWalletP3AMojoImpl alloc]
+      initWithBraveWalletP3A:std::move(pending_remote)];
 }
 
 @end

@@ -16,8 +16,8 @@ class PrefService;
 class DontAskAgainCheckbox;
 
 class WindowClosingConfirmDialogView : public views::DialogDelegateView {
+  METADATA_HEADER(WindowClosingConfirmDialogView, views::DialogDelegateView)
  public:
-  METADATA_HEADER(WindowClosingConfirmDialogView);
 
   static void Show(Browser* browser,
                    base::OnceCallback<void(bool)> response_callback);
@@ -44,7 +44,7 @@ class WindowClosingConfirmDialogView : public views::DialogDelegateView {
   void OnClosing();
 
   // views::DialogDelegate overrides:
-  ui::ModalType GetModalType() const override;
+  ui::mojom::ModalType GetModalType() const override;
   bool ShouldShowCloseButton() const override;
   bool ShouldShowWindowTitle() const override;
 

@@ -12,15 +12,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-namespace history {
-class HistoryService;
-class WebHistoryService;
-}
+class ProfileIOS;
 
 @interface BraveHistoryAPI (Private)
-- (instancetype)initWithHistoryService:(history::HistoryService*)historyService
-                     webHistoryService:
-                         (history::WebHistoryService*)webHistoryService;
+- (instancetype)initWithBrowserState:(ProfileIOS*)profile;
 @end
 
 NS_ASSUME_NONNULL_END

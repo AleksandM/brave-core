@@ -1,10 +1,10 @@
 diff --git a/chrome/browser/ui/android/toolbar/BUILD.gn b/chrome/browser/ui/android/toolbar/BUILD.gn
-index ee748f063ab80ca864e5ee6fcf9fe428c0481c97..b4542235b2180c8ec2c8d2fd40e993d232fa99bd 100644
+index fe63e2315c1ff1e35a97852241152b6a86666dbd..2fc920ce7c2ec330889dee641d9c3aa0438caa04 100644
 --- a/chrome/browser/ui/android/toolbar/BUILD.gn
 +++ b/chrome/browser/ui/android/toolbar/BUILD.gn
-@@ -116,6 +116,7 @@ android_library("java") {
-     "java/src/org/chromium/chrome/browser/toolbar/top/ViewShiftingActionBarDelegate.java",
-     "java/src/org/chromium/chrome/browser/toolbar/top/VisibleUrlText.java",
+@@ -112,6 +112,7 @@ android_library("java") {
+     "java/src/org/chromium/chrome/browser/toolbar/top/tab_strip/StripVisibilityState.java",
+     "java/src/org/chromium/chrome/browser/toolbar/top/tab_strip/TabStripTransitionCoordinator.java",
    ]
 +  sources += brave_browser_ui_android_toolbar_sources
  

@@ -3,18 +3,23 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-#include "chrome/browser/ui/webui/help/version_updater_mac.h"
+#include "brave/chromium_src/chrome/browser/ui/webui/help/version_updater_mac.h"
 
-#include "base/mac/foundation_util.h"
+#include <memory>
+
+#include "base/apple/foundation_util.h"
+#include "base/memory/ptr_util.h"
+#include "base/memory/raw_ptr.h"
 #include "base/strings/escape.h"
+#include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "brave/browser/mac/keystone_glue.h"
+#include "brave/browser/mac_features.h"
 #include "brave/browser/sparkle_buildflags.h"
 #include "brave/components/l10n/common/localization_util.h"
-#include "chrome/browser/mac/keystone_glue.h"
 #include "chrome/browser/obsolete_system/obsolete_system.h"
-#include "chrome/browser/updater/browser_updater_helper_client_mac.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -23,14 +28,14 @@
 #endif
 
 // KeystoneObserver is a simple notification observer for Keystone status
-// updates. It will be created and managed by VersionUpdaterMac.
+// updates. It will be created and managed by SparkleVersionUpdater.
 @interface KeystoneObserver : NSObject {
  @private
-  VersionUpdaterMac* versionUpdater_;  // Weak.
+  raw_ptr<SparkleVersionUpdater> versionUpdater_;  // Weak.
 }
 
 // Initialize an observer with an updater. The updater owns this object.
-- (id)initWithUpdater:(VersionUpdaterMac*)updater;
+- (id)initWithUpdater:(SparkleVersionUpdater*)updater;
 
 // Notification callback, called with the status of keystone operations.
 - (void)handleStatusNotification:(NSNotification*)notification;
@@ -39,7 +44,7 @@
 
 @implementation KeystoneObserver
 
-- (id)initWithUpdater:(VersionUpdaterMac*)updater {
+- (id)initWithUpdater:(SparkleVersionUpdater*)updater {
   if ((self = [super init])) {
     versionUpdater_ = updater;
     NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
@@ -52,8 +57,7 @@
 }
 
 - (void)dealloc {
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
-  [super dealloc];
+  [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
 - (void)handleStatusNotification:(NSNotification*)notification {
@@ -62,22 +66,15 @@
 
 @end  // @implementation KeystoneObserver
 
-
-VersionUpdater* VersionUpdater::Create(
-    content::WebContents* web_contents) {
-  return new VersionUpdaterMac;
-}
-
-VersionUpdaterMac::VersionUpdaterMac()
+SparkleVersionUpdater::SparkleVersionUpdater()
     : keystone_observer_([[KeystoneObserver alloc] initWithUpdater:this]) {
   show_promote_button_ = false;
 }
 
-VersionUpdaterMac::~VersionUpdaterMac() {
-}
+SparkleVersionUpdater::~SparkleVersionUpdater() {}
 
-void VersionUpdaterMac::CheckForUpdate(StatusCallback status_callback,
-                                       PromoteCallback promote_callback) {
+void SparkleVersionUpdater::CheckForUpdate(StatusCallback status_callback,
+                                           PromoteCallback promote_callback) {
   status_callback_ = std::move(status_callback);
 
 #if BUILDFLAG(ENABLE_SPARKLE)
@@ -118,16 +115,16 @@ void VersionUpdaterMac::CheckForUpdate(StatusCallback status_callback,
 #endif
 }
 
-void VersionUpdaterMac::PromoteUpdater() {
+void SparkleVersionUpdater::PromoteUpdater() {
   NOTIMPLEMENTED();
 }
 
-void VersionUpdaterMac::UpdateStatus(NSDictionary* dictionary) {
-  AutoupdateStatus sparkle_status = static_cast<AutoupdateStatus>(
-      [base::mac::ObjCCastStrict<NSNumber>(
+void SparkleVersionUpdater::UpdateStatus(NSDictionary* dictionary) {
+  AutoupdateStatus sparkle_status =
+      static_cast<AutoupdateStatus>([base::apple::ObjCCastStrict<NSNumber>(
           [dictionary objectForKey:kAutoupdateStatusStatus]) intValue]);
-  std::string error_messages = base::SysNSStringToUTF8(
-      base::mac::ObjCCastStrict<NSString>(
+  std::string error_messages =
+      base::SysNSStringToUTF8(base::apple::ObjCCastStrict<NSString>(
           [dictionary objectForKey:kAutoupdateStatusErrorMessages]));
 
   std::u16string message;
@@ -169,13 +166,13 @@ void VersionUpdaterMac::UpdateStatus(NSDictionary* dictionary) {
     case kAutoupdateCheckFailed:
     case kAutoupdateInstallFailed:
       status = FAILED;
-      message = l10n_util::GetStringFUTF16Int(IDS_UPGRADE_ERROR,
-                                              sparkle_status);
+      message =
+          l10n_util::GetStringFUTF16Int(IDS_UPGRADE_ERROR, sparkle_status);
       break;
 
     default:
+      // SparkleGlue only posts the above values.
       NOTREACHED();
-      return;
   }
 
   // If there are any detailed error messages being passed along by Keystone,
@@ -198,11 +195,24 @@ void VersionUpdaterMac::UpdateStatus(NSDictionary* dictionary) {
     }
   }
 
-  if (!status_callback_.is_null())
+  if (!status_callback_.is_null()) {
     status_callback_.Run(status, 0, false, false, std::string(), 0, message);
+  }
 }
 
-
-void VersionUpdaterMac::UpdateShowPromoteButton() {
+void SparkleVersionUpdater::UpdateShowPromoteButton() {
   NOTIMPLEMENTED();
 }
+
+#define WrapUnique(X)                 \
+  WrapUnique(brave::ShouldUseOmaha4() \
+                 ? X                  \
+                 : static_cast<VersionUpdater*>(new SparkleVersionUpdater()))
+#include "src/chrome/browser/ui/webui/help/version_updater_mac.mm"
+#undef WrapUnique
+
+#if BUILDFLAG(ENABLE_SPARKLE)
+void SparkleVersionUpdater::GetIsSparkleForTesting(bool& result) const {
+  result = true;
+}
+#endif

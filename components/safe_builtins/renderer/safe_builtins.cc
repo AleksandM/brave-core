@@ -8,6 +8,8 @@
 #include <string>
 
 #include "base/check.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/notreached.h"
 #include "base/strings/stringprintf.h"
 #include "v8/include/v8-context.h"
@@ -25,10 +27,10 @@ namespace brave {
 
 namespace {
 
-const char kClassName[] = "brave::SafeBuiltins";
+constexpr char kClassName[] = "brave::SafeBuiltins";
 
 // see //extensions/renderer/safe_builtins.cc for details
-const char kScript[] =
+constexpr char kScript[] =
     "(function() {\n"
     "'use strict';\n"
     "native function Apply();\n"
@@ -70,7 +72,8 @@ const char kScript[] =
     "            ['hasOwnProperty'],\n"
     "            ['create', 'defineProperty', 'freeze',\n"
     "             'getOwnPropertyDescriptor', 'getPrototypeOf', 'keys',\n"
-    "             'assign', 'setPrototypeOf', 'defineProperties']);\n"
+    "             'assign', 'setPrototypeOf', 'defineProperties',\n"
+    "             'entries']);\n"
     "saveBuiltin(Function,\n"
     "            ['apply', 'bind', 'call']);\n"
     "saveBuiltin(Array,\n"
@@ -153,7 +156,10 @@ class ExtensionImpl : public v8::Extension {
     if (name->StringEquals(ToV8StringUnsafe(isolate, "Save"))) {
       return v8::FunctionTemplate::New(isolate, Save);
     }
-    NOTREACHED() << std::string(*v8::String::Utf8Value(isolate, name));
+    SCOPED_CRASH_KEY_STRING64(
+        "GetNativeFunctionTemplate", "name",
+        std::string(*v8::String::Utf8Value(isolate, name)));
+    base::debug::DumpWithoutCrashing();
     return v8::Local<v8::FunctionTemplate>();
   }
 

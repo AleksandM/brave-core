@@ -5,6 +5,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
+#include "base/test/bind.h"
+#include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_service.h"
@@ -66,38 +68,51 @@ class TestBraveWalletServiceObserver
 class BraveWalletServiceTest : public InProcessBrowserTest {
  public:
   BraveWalletServiceTest()
-      : https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {
+      : https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {}
+
+  void SetUp() override {
+    InProcessBrowserTest::SetUp();
     feature_list_.InitAndEnableFeature(
         brave_wallet::features::kNativeBraveWalletFeature);
+  }
 
-    brave::RegisterPathProvider();
+  void SetUpOnMainThread() override {
+    InProcessBrowserTest::SetUpOnMainThread();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     https_server_.SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
     https_server_.ServeFilesFromDirectory(test_data_dir);
     EXPECT_TRUE(https_server_.Start());
-  }
-
-  void SetUpOnMainThread() override {
-    InProcessBrowserTest::SetUpOnMainThread();
     host_resolver()->AddRule("*", "127.0.0.1");
     wallet_service_ = brave_wallet::BraveWalletServiceFactory::GetInstance()
                           ->GetServiceForContext(browser()->profile());
   }
 
+  void TestIsPrivateWindow(BraveWalletService* wallet_service,
+                           bool expected_result) {
+    base::MockCallback<base::OnceCallback<void(bool)>> callback;
+    EXPECT_CALL(callback, Run(expected_result)).Times(1);
+
+    wallet_service->IsPrivateWindow(callback.Get());
+  }
+
   BraveWalletService* wallet_service() { return wallet_service_; }
+  BraveWalletService* incognito_wallet_service() {
+    return brave_wallet::BraveWalletServiceFactory::GetInstance()
+        ->GetServiceForContext(
+            CreateIncognitoBrowser(browser()->profile())->profile());
+  }
   const net::EmbeddedTestServer* https_server() const { return &https_server_; }
 
  private:
-  raw_ptr<BraveWalletService> wallet_service_ = nullptr;
+  raw_ptr<BraveWalletService, DanglingUntriaged> wallet_service_ = nullptr;
   net::EmbeddedTestServer https_server_;
   base::test::ScopedFeatureList feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(BraveWalletServiceTest, ActiveOrigin) {
   GURL url = https_server()->GetURL("a.test", "/simple.html");
-  mojom::OriginInfoPtr expected_origin_info =
-      MakeOriginInfo(url::Origin::Create(url));
+  auto expected_origin_info = MakeOriginInfo(url::Origin::Create(url));
   TestBraveWalletServiceObserver observer;
   wallet_service()->AddObserver(observer.GetReceiver());
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
@@ -143,6 +158,13 @@ IN_PROC_BROWSER_TEST_F(BraveWalletServiceTest, ActiveOrigin) {
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(callback_called);
   EXPECT_EQ(observer.active_origin_info(), expected_origin_info);
+}
+
+IN_PROC_BROWSER_TEST_F(BraveWalletServiceTest, IsPrivateWindow) {
+  TestIsPrivateWindow(wallet_service(), false);
+  wallet_service()->SetPrivateWindowsEnabled(true);
+  TestIsPrivateWindow(incognito_wallet_service(), true);
+  TestIsPrivateWindow(wallet_service(), false);
 }
 
 }  // namespace brave_wallet

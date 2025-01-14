@@ -5,15 +5,18 @@
 
 #include "brave/components/brave_ads/core/internal/segments/segment_util.h"
 
+#include <utility>
 #include <vector>
 
 #include "base/check.h"
 #include "base/containers/flat_set.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_split.h"
+#include "brave/components/brave_ads/core/internal/ads_core/ads_core_util.h"
 #include "brave/components/brave_ads/core/internal/catalog/catalog_info.h"
-#include "brave/components/brave_ads/core/internal/deprecated/client/client_state_manager.h"
-#include "brave/components/brave_ads/core/internal/deprecated/client/preferences/filtered_category_info.h"
+#include "brave/components/brave_ads/core/internal/segments/segment_alias.h"
+#include "brave/components/brave_ads/core/internal/user_engagement/reactions/reactions.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads {
 
@@ -40,13 +43,10 @@ SegmentList GetSegments(const CatalogInfo& catalog) {
       for (const auto& segment : creative_set.segments) {
         CHECK(!segment.name.empty());
 
-        if (exists.find(segment.name) != std::cend(exists)) {
-          continue;
+        const auto [_, inserted] = exists.insert(segment.name);
+        if (inserted) {
+          segments.push_back(segment.name);
         }
-
-        segments.push_back(segment.name);
-
-        exists.insert(segment.name);
       }
     }
   }
@@ -74,7 +74,7 @@ SegmentList GetParentSegments(const SegmentList& segments) {
     const std::string parent_segment = GetParentSegment(segment);
     CHECK(!parent_segment.empty());
 
-    if (exists.find(parent_segment) != std::cend(exists)) {
+    if (exists.contains(parent_segment)) {
       continue;
     }
 
@@ -98,28 +98,32 @@ bool HasChildSegment(const std::string& segment) {
 bool ShouldFilterSegment(const std::string& segment) {
   CHECK(!segment.empty());
 
-  const FilteredCategoryList& filtered_segments =
-      ClientStateManager::GetInstance().GetFilteredCategories();
+  const ReactionMap& segment_reactions = GetReactions().Segments();
 
-  if (filtered_segments.empty()) {
-    return false;
+  {
+    // Filter matching segment, i.e. "technology & computing-linux".
+    const auto iter = base::ranges::find(
+        segment_reactions, segment,
+        &std::pair<const std::string, mojom::ReactionType>::first);
+    if (iter != segment_reactions.cend() &&
+        iter->second == mojom::ReactionType::kDisliked) {
+      return true;
+    }
   }
 
-  const auto iter = base::ranges::find_if(
-      filtered_segments,
-      [&segment](const FilteredCategoryInfo& filtered_segment) {
-        if (HasChildSegment(filtered_segment.name)) {
-          // Filter against child, i.e. "technology &
-          // computing-linux"
-          return segment == filtered_segment.name;
-        }
+  {
+    // Filter matching parent segment, i.e. "technology & computing".
+    const std::string parent_segment = GetParentSegment(segment);
+    const auto iter = base::ranges::find(
+        segment_reactions, parent_segment,
+        &std::pair<const std::string, mojom::ReactionType>::first);
+    if (iter != segment_reactions.cend() &&
+        iter->second == mojom::ReactionType::kDisliked) {
+      return true;
+    }
+  }
 
-        // Filter against parent, i.e. "technology & computing"
-        return GetParentSegment(segment) ==
-               GetParentSegment(filtered_segment.name);
-      });
-
-  return iter != filtered_segments.cend();
+  return false;
 }
 
 }  // namespace brave_ads

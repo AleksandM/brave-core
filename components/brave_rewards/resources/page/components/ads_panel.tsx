@@ -5,16 +5,11 @@
 
 import * as React from 'react'
 
+import { AdsHistory } from '../lib/types'
 import { useActions, useRewardsData } from '../lib/redux_hooks'
 import { LocaleContext, formatMessage } from '../../shared/lib/locale_context'
 import { getProviderPayoutStatus } from '../../shared/lib/provider_payout_status'
-import { adsPerHourOptions } from '../../shared/lib/ads_options'
-import * as Rewards from '../lib/types'
-
-import {
-  externalWalletFromExtensionData,
-  isExternalWalletProviderAllowed
-} from '../../shared/lib/external_wallet'
+import { externalWalletFromExtensionData } from '../../shared/lib/external_wallet'
 
 import {
   SettingsPanel,
@@ -25,6 +20,7 @@ import {
 } from './settings_panel'
 
 import { ModalShowAdsHistory } from '../../ui/components'
+import { AdsControlView } from './ads_control_view'
 import { PaymentStatusView } from '../../shared/components/payment_status_view'
 import { NewTabLink } from '../../shared/components/new_tab_link'
 import { EarningsRange } from '../../shared/components/earnings_range'
@@ -33,6 +29,8 @@ import { AlertIcon } from './icons/alert_icon'
 
 import * as urls from '../../shared/lib/rewards_urls'
 import * as style from './ads_panel.style'
+
+const adsFaqURL = 'https://support.brave.com/hc/en-us/articles/360026361072-Brave-Ads-FAQ'
 
 export function AdsPanel () {
   const { getString } = React.useContext(LocaleContext)
@@ -47,7 +45,7 @@ export function AdsPanel () {
     parameters: state.parameters,
     userType: state.userType,
     modalAdsHistory: state.ui.modalAdsHistory,
-    showAdsSettings: state.ui.adsSettings,
+    showAdsSettings: state.ui.adsSettings
   }))
 
   React.useEffect(() => {
@@ -58,13 +56,7 @@ export function AdsPanel () {
 
   const { adsData } = data
 
-  const canEnable = adsData.adsIsSupported && adsData.adsUIEnabled
   const externalWallet = externalWalletFromExtensionData(data.externalWallet)
-
-  const canConnectAccount = data.externalWalletProviderList.some((provider) => {
-    const regionInfo = data.parameters.walletProviderRegions[provider] || null
-    return isExternalWalletProviderAllowed(data.currentCountryCode, regionInfo)
-  })
 
   const toggleModal = () => {
     if (data.modalAdsHistory) {
@@ -74,38 +66,31 @@ export function AdsPanel () {
     }
   }
 
-  const onEnabledChange = (enabled: boolean) => {
-    actions.onAdsSettingSave('adsEnabled', enabled)
-  }
-
-  const onShowConfigChange = (showConfig: boolean) => {
-    if (showConfig) {
-      actions.onAdsSettingsOpen()
-    } else {
-      actions.onAdsSettingsClose()
+  const onShowConfigChange = () => {
+    if (!adsData.shouldAllowAdsSubdivisionTargeting) {
+      return undefined
     }
-  }
-
-  const settingSelectHandler = (key: string) => {
-    return (event: React.FormEvent<HTMLSelectElement>) => {
-      actions.onAdsSettingSave(key, Number(event.currentTarget.value) || 0)
+    return (showConfig: boolean) => {
+      if (showConfig) {
+        actions.onAdsSettingsOpen()
+      } else {
+        actions.onAdsSettingsClose()
+      }
     }
   }
 
   function renderDescription () {
     return (
       <style.description>
+        {getString('adsDescription')}
         {
-          formatMessage(getString('adsDesc'), {
-            tags: {
-              $1: (content) => (
-                <NewTabLink key='link' href={urls.aboutBATURL}>
-                  {content}
-                </NewTabLink>
-              )
-            }
-          })
+          data.userType !== 'unconnected' &&
+            (' ' + getString('adsDescriptionEarn'))
         }
+        {' '}
+        <NewTabLink href={adsFaqURL}>
+          {getString('learnMore')}
+        </NewTabLink>
       </style.description>
     )
   }
@@ -156,7 +141,7 @@ export function AdsPanel () {
     const description = (
       <>
         {getString('adsSubdivisionTargetingDescription')}&nbsp;
-        <NewTabLink href='https://support.brave.com/hc/en-us/articles/360026361072-Brave-Ads-FAQ'>
+        <NewTabLink href={adsFaqURL}>
           {getString('adsSubdivisionTargetingLearn')}
         </NewTabLink>
       </>
@@ -166,7 +151,7 @@ export function AdsPanel () {
       <>
         <PanelItem
           label={getString('adsSubdivisionTargetingTitle')}
-          description={description}
+          details={description}
         >
           <select value={adsData.adsSubdivisionTargeting} onChange={onChange}>
             {
@@ -184,60 +169,7 @@ export function AdsPanel () {
     return (
       <>
         <ConfigHeader />
-        <PanelItem label={getString('adsPerHour')}>
-          <select
-            value={adsData.adsPerHour}
-            onChange={settingSelectHandler('adsPerHour')}
-          >
-            {
-              adsPerHourOptions.map((n) => (
-                <option key={`num-per-hour-${n}`} value={n}>
-                  {getString(`adsPerHour${n}`)}
-                </option>
-              ))
-            }
-          </select>
-        </PanelItem>
         {renderSubdivisionSelect()}
-      </>
-    )
-  }
-
-  function renderTerms () {
-    if (!canEnable) {
-      return null
-    }
-
-    return (
-      <style.terms>
-        {
-          formatMessage(getString('tosAndPp'), {
-            placeholders: {
-              $1: getString('adsTitle')
-            },
-            tags: {
-              $2: (content) => (
-                <NewTabLink key='terms' href={urls.termsOfServiceURL}>
-                  {content}
-                </NewTabLink>
-              ),
-              $4: (content) => (
-                <NewTabLink key='privacy' href={urls.privacyPolicyURL}>
-                  {content}
-                </NewTabLink>
-              )
-            }
-          })
-        }
-      </style.terms>
-    )
-  }
-
-  function renderDisabled () {
-    return (
-      <>
-        {renderTerms()}
-        {renderDescription()}
       </>
     )
   }
@@ -264,67 +196,24 @@ export function AdsPanel () {
     )
   }
 
-  function renderNotSupportedNotice () {
-    if (adsData.adsIsSupported) {
-      return null
-    }
-
-    return (
-      <style.notSupported>
-        <style.notSupportedIcon>
-          <AlertIcon />
-        </style.notSupportedIcon>
-        <div>
-          {getString('adsNotSupportedRegion')}
-        </div>
-      </style.notSupported>
-    )
-  }
-
-  function renderLimited () {
-    if (!canConnectAccount) {
-      return (
-        <>
-          {renderDescription()}
-          <style.connectUnavailable>
-            <div>
-              {getString('connectAccountNoProviders')}
-            </div>
-            <div>
-              <NewTabLink href={urls.supportedWalletRegionsURL}>
-                {getString('learnMore')}
-              </NewTabLink>
-            </div>
-          </style.connectUnavailable>
-        </>
-      )
-    }
-
+  function renderConnectAcount () {
     const onConnect = () => { actions.onModalConnectOpen() }
 
     return (
-      <>
-        {renderDescription()}
-        <style.connect>
-          {
-            formatMessage(getString('connectAccountText'), {
-              tags: {
-                $1: (content) => <strong key='bold'>{content}</strong>
-              }
-            })
-          }
-          <style.connectAction>
-            <button onClick={onConnect}>
-              {getString('rewardsConnectAccount')}<ArrowNextIcon />
-            </button>
-          </style.connectAction>
-        </style.connect>
-        <style.showHistory>
-          <button onClick={toggleModal}>
-            {getString('openAdsHistory')}
+      <style.connect>
+        {
+          formatMessage(getString('connectAccountText'), {
+            tags: {
+              $1: (content) => <strong key='bold'>{content}</strong>
+            }
+          })
+        }
+        <style.connectAction>
+          <button onClick={onConnect}>
+            {getString('rewardsConnectAccount')}<ArrowNextIcon />
           </button>
-        </style.showHistory>
-      </>
+        </style.connectAction>
+      </style.connect>
     )
   }
 
@@ -351,38 +240,71 @@ export function AdsPanel () {
     )
   }
 
-  function renderContent () {
-    if (!adsData.adsEnabled || !canEnable) {
-      return renderDisabled()
-    }
-
-    if (data.userType === 'unconnected') {
-      return renderLimited()
-    }
-
+  function renderPaymentItems () {
     const providerPayoutStatus = getProviderPayoutStatus(
       data.parameters.payoutStatus,
       externalWallet ? externalWallet.provider : null)
 
     return (
       <>
-        {renderDescription()}
         <style.paymentStatus>
-            <PaymentStatusView
-              minEarnings={adsData.adsMinEarningsLastMonth}
-              maxEarnings={adsData.adsMaxEarningsLastMonth}
-              nextPaymentDate={adsData.adsNextPaymentDate}
-              providerPayoutStatus={providerPayoutStatus}
-            />
-          </style.paymentStatus>
-        <PanelItem label={getString('adsCurrentEarnings')}>
-          {renderEarnings()}
-        </PanelItem>
+          {
+            data.userType === 'connected' &&
+              <PaymentStatusView
+                minEarnings={adsData.adsMinEarningsLastMonth}
+                maxEarnings={adsData.adsMaxEarningsLastMonth}
+                nextPaymentDate={adsData.adsNextPaymentDate}
+                providerPayoutStatus={providerPayoutStatus}
+              />
+          }
+        </style.paymentStatus>
+        <style.earningsRow>
+          <PanelItem label={getString('adsCurrentEarnings')}>
+            {renderEarnings()}
+          </PanelItem>
+        </style.earningsRow>
         <PanelItem label={getString('adsPaymentDate')}>
           <MonthDay date={new Date(adsData.adsNextPaymentDate)} />
         </PanelItem>
-        <PanelItem label={getString('adsNotificationsReceived')}>
-          {adsData.adsReceivedThisMonth}
+      </>
+    )
+  }
+
+  function renderContent () {
+    if (!adsData.adsIsSupported) {
+      return (
+        <>
+          {renderDescription()}
+          <style.notSupported>
+            <style.notSupportedIcon>
+              <AlertIcon />
+            </style.notSupportedIcon>
+            <div>
+              {getString('adsNotSupportedRegion')}
+            </div>
+          </style.notSupported>
+        </>
+      )
+    }
+
+    return (
+      <>
+        {renderDescription()}
+        {
+          data.userType === 'unconnected'
+            ? renderConnectAcount()
+            : renderPaymentItems()
+        }
+        <PanelItem
+          label={getString('adsTotalReceivedLabel')}
+          details={<AdsControlView />}
+        >
+          <style.totalAdsCount>
+            {
+              Object.values(adsData.adTypesReceivedThisMonth)
+                .reduce((total, count) => total + count, 0)
+            }
+          </style.totalAdsCount>
         </PanelItem>
         <style.showHistory>
           <button onClick={toggleModal}>
@@ -398,14 +320,14 @@ export function AdsPanel () {
       return null
     }
 
-    const groupedHistory: Rewards.AdsHistory[] = []
+    const groupedHistory: AdsHistory[] = []
 
     for (const history of data.adsHistory) {
       const flooredDate = new Date(history.timestampInMilliseconds)
       flooredDate.setHours(0, 0, 0, 0)
       const flooredDateString = flooredDate.toLocaleDateString()
 
-      for (const { uuid, adContent, categoryContent } of history.adDetailRows) {
+      for (const { uuid, createdAt, adContent, categoryContent } of history.adDetailRows) {
         let { brand } = adContent
         if (brand.length > 50) {
           brand = brand.substring(0, 50) + '...'
@@ -418,27 +340,20 @@ export function AdsPanel () {
 
         const detailRow = {
           uuid,
+          createdAt,
           adContent: {
             ...adContent,
             brand,
             brandInfo,
-            onThumbUpPress: () => actions.toggleAdThumbUp(adContent),
-            onThumbDownPress: () => actions.toggleAdThumbDown(adContent),
-            onMenuSave: () => actions.toggleSavedAd(adContent),
-            onMenuFlag: () => actions.toggleFlaggedAd(adContent)
+            onThumbUpPress: () => actions.toggleAdThumbUp(detailRow),
+            onThumbDownPress: () => actions.toggleAdThumbDown(detailRow),
+            onMenuSave: () => actions.toggleSavedAd(detailRow),
+            onMenuFlag: () => actions.toggleFlaggedAd(detailRow)
           },
           categoryContent: {
             ...categoryContent,
-            onOptIn: () => {
-              actions.toggleAdOptIn(
-                categoryContent.category,
-                categoryContent.optAction)
-            },
-            onOptOut: () => {
-              actions.toggleAdOptOut(
-                categoryContent.category,
-                categoryContent.optAction)
-            }
+            onOptIn: () => actions.toggleAdOptIn(detailRow),
+            onOptOut: () => actions.toggleAdOptOut(detailRow)
           }
         }
 
@@ -485,13 +400,11 @@ export function AdsPanel () {
         {renderNeedsUpdateNotice()}
         <PanelHeader
           title={getString('adsTitle')}
-          enabled={canEnable && adsData.adsEnabled}
+          enabled={true}
           showConfig={data.showAdsSettings}
-          onShowConfigChange={onShowConfigChange}
-          onEnabledChange={canEnable ? onEnabledChange : undefined}
+          onShowConfigChange={onShowConfigChange()}
         />
         {data.showAdsSettings ? renderConfig() : renderContent()}
-        {renderNotSupportedNotice()}
       </style.root>
     </SettingsPanel>
   )

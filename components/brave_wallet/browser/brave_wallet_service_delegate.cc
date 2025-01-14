@@ -5,22 +5,25 @@
 
 #include "brave/components/brave_wallet/browser/brave_wallet_service_delegate.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
+#include "base/types/expected.h"
 
 namespace brave_wallet {
 
 void BraveWalletServiceDelegate::IsExternalWalletInstalled(
     mojom::ExternalWalletType type,
     IsExternalWalletInstalledCallback callback) {
+  NOTIMPLEMENTED();
   std::move(callback).Run(false);
 }
 
 void BraveWalletServiceDelegate::IsExternalWalletInitialized(
     mojom::ExternalWalletType type,
     IsExternalWalletInitializedCallback callback) {
+  NOTIMPLEMENTED();
   std::move(callback).Run(false);
 }
 
@@ -28,40 +31,40 @@ void BraveWalletServiceDelegate::GetImportInfoFromExternalWallet(
     mojom::ExternalWalletType type,
     const std::string& password,
     GetImportInfoCallback callback) {
-  std::move(callback).Run(false, ImportInfo(), ImportError::kInternalError);
+  NOTIMPLEMENTED();
+  std::move(callback).Run(base::unexpected(ImportError::kInternalError));
 }
 
-void BraveWalletServiceDelegate::AddPermission(mojom::CoinType coin,
+bool BraveWalletServiceDelegate::AddPermission(mojom::CoinType coin,
                                                const url::Origin& origin,
-                                               const std::string& account,
-                                               AddPermissionCallback callback) {
-  std::move(callback).Run(false);
+                                               const std::string& account) {
+  NOTIMPLEMENTED();
+  return false;
 }
 
-void BraveWalletServiceDelegate::HasPermission(mojom::CoinType coin,
+bool BraveWalletServiceDelegate::HasPermission(mojom::CoinType coin,
                                                const url::Origin& origin,
-                                               const std::string& account,
-                                               HasPermissionCallback callback) {
-  std::move(callback).Run(false, false);
+                                               const std::string& account) {
+  NOTIMPLEMENTED();
+  return false;
 }
 
-void BraveWalletServiceDelegate::ResetPermission(
-    mojom::CoinType coin,
-    const url::Origin& origin,
-    const std::string& account,
-    ResetPermissionCallback callback) {
-  std::move(callback).Run(false);
+bool BraveWalletServiceDelegate::ResetPermission(mojom::CoinType coin,
+                                                 const url::Origin& origin,
+                                                 const std::string& account) {
+  NOTIMPLEMENTED();
+  return false;
 }
 
-void BraveWalletServiceDelegate::IsPermissionDenied(
-    mojom::CoinType coin,
-    const url::Origin& origin,
-    IsPermissionDeniedCallback callback) {
-  std::move(callback).Run(false);
+bool BraveWalletServiceDelegate::IsPermissionDenied(mojom::CoinType coin,
+                                                    const url::Origin& origin) {
+  NOTIMPLEMENTED();
+  return false;
 }
 
-mojom::OriginInfoPtr BraveWalletServiceDelegate::GetActiveOrigin() {
-  return MakeOriginInfo(url::Origin());
+std::optional<url::Origin> BraveWalletServiceDelegate::GetActiveOrigin() {
+  NOTIMPLEMENTED();
+  return std::nullopt;
 }
 
 void BraveWalletServiceDelegate::ClearWalletUIStoragePartition() {}
@@ -69,6 +72,7 @@ void BraveWalletServiceDelegate::ClearWalletUIStoragePartition() {}
 void BraveWalletServiceDelegate::GetWebSitesWithPermission(
     mojom::CoinType coin,
     GetWebSitesWithPermissionCallback callback) {
+  NOTIMPLEMENTED();
   std::move(callback).Run(std::vector<std::string>());
 }
 
@@ -76,6 +80,7 @@ void BraveWalletServiceDelegate::ResetWebSitePermission(
     mojom::CoinType coin,
     const std::string& formed_website,
     ResetWebSitePermissionCallback callback) {
+  NOTIMPLEMENTED();
   std::move(callback).Run(false);
 }
 

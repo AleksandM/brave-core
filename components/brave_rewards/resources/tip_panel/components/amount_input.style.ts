@@ -5,7 +5,7 @@
 
 import styled from 'styled-components'
 
-import * as leo from '@brave/leo/tokens/css'
+import * as leo from '@brave/leo/tokens/css/variables'
 
 import * as mixins from '../../shared/lib/css_mixins'
 
@@ -42,7 +42,7 @@ export const selector = styled.div`
   }
 
   button.selected {
-    background: ${leo.color.container.interactiveBackground};
+    background: ${leo.color.container.background};
     color: ${leo.color.text.interactive};
   }
 `

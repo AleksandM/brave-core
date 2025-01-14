@@ -5,7 +5,7 @@
 
 import styled from 'styled-components'
 
-import * as leo from '@brave/leo/tokens/css'
+import * as leo from '@brave/leo/tokens/css/variables'
 
 export const root = styled.div`
   display: flex;
@@ -16,7 +16,7 @@ export const root = styled.div`
   --toggle-button-height: 24px;
   --toggle-button-width: 40px;
   --toggle-button-handle-margin: 2px;
-  --toggle-button-color: ${leo.color.interaction.buttonPrimaryBackground};
+  --toggle-button-color: ${leo.color.button.background};
 `
 
 export const label = styled.div`

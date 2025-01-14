@@ -22,8 +22,7 @@ namespace brave {
 // WrapSource and args for SafeCallFunction.
 v8::MaybeLocal<v8::Value> LoadScriptWithSafeBuiltins(
     blink::WebLocalFrame* web_frame,
-    const std::string& script,
-    const std::string& name);
+    const std::string& script);
 
 }  //  namespace brave
 

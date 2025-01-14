@@ -1,14 +1,14 @@
 diff --git a/chrome/browser/resources/settings/settings_shared.css b/chrome/browser/resources/settings/settings_shared.css
-index c6c56b2a7a8d3706322b8233ad59a569b5a3f45d..0a8ba51fd9ee04eb5389b03a2d8d7534e8e16aec 100644
+index 009cd5cf423be1c0bacdcb264065782b6878e71c..a0a2cb915e9fe4e3fe8188367a858eff38134999 100644
 --- a/chrome/browser/resources/settings/settings_shared.css
 +++ b/chrome/browser/resources/settings/settings_shared.css
-@@ -9,7 +9,8 @@
+@@ -8,7 +8,8 @@
+  * #import=//resources/cr_elements/cr_shared_vars.css.js
   * #import=//resources/cr_elements/search_highlight_style.css.js
   * #import=./settings_vars.css.js
- <if expr='not chromeos_ash'>
 - * #include=cr-shared-style search-highlight-style
 + * #import=//resources/brave/page_specific/settings/br_settings_shared.css.js
 + * #include=cr-shared-style search-highlight-style br-settings-shared
- </if>
- <if expr='chromeos_ash'>
-  * #import=//resources/cr_elements/chromeos/cros_color_overrides.css.js
+  * #css_wrapper_metadata_end */
+ 
+ /* Common styles for Material Design settings. */

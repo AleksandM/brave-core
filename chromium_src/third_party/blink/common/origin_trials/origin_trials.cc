@@ -5,24 +5,22 @@
 
 #include "third_party/blink/public/common/origin_trials/origin_trials.h"
 
+#include <string_view>
+
 #include "base/containers/contains.h"
 
-namespace blink {
-namespace origin_trials {
-bool IsTrialValid_ChromiumImpl(base::StringPiece trial_name);
-}  // namespace origin_trials
-}  // namespace blink
+namespace blink::origin_trials {
+bool IsTrialValid_ChromiumImpl(std::string_view trial_name);
+}  // namespace blink::origin_trials
 
 #define IsTrialValid IsTrialValid_ChromiumImpl
 #include "../gen/third_party/blink/common/origin_trials/origin_trials.cc"
 #undef IsTrialValid
 
-namespace blink {
-namespace origin_trials {
+namespace blink::origin_trials {
 
-bool IsTrialDisabledInBrave(base::StringPiece trial_name) {
+bool IsTrialDisabledInBrave(std::string_view trial_name) {
   // When updating also update the array in the overload below.
-  // clang-format off
   static const char* const kBraveDisabledTrialNames[] = {
       "AdInterestGroupAPI",
       "DeviceAttributes",
@@ -31,12 +29,10 @@ bool IsTrialDisabledInBrave(base::StringPiece trial_name) {
       "FencedFrames",
       "Fledge",
       "Parakeet",
-      "PrivacySandboxAdsAPIs",
       "SignedExchangeSubresourcePrefetch",
       "SubresourceWebBundles",
       "TrustTokens",
   };
-  // clang-format on
 
   if (base::Contains(kBraveDisabledTrialNames, trial_name)) {
     // Check if this is still a valid trial name in Chromium. If not, it needs
@@ -48,31 +44,24 @@ bool IsTrialDisabledInBrave(base::StringPiece trial_name) {
   return false;
 }
 
-bool IsTrialDisabledInBrave(OriginTrialFeature feature) {
+bool IsTrialDisabledInBrave(blink::mojom::OriginTrialFeature feature) {
   // When updating also update the array in the overload above.
-  // clang-format off
-  static const OriginTrialFeature kBraveDisabledTrialFeatures[] =
-      {   // NOLINT
-          OriginTrialFeature::kAdInterestGroupAPI,
-          OriginTrialFeature::kDeviceAttributes,
-          OriginTrialFeature::kDigitalGoods,
-          OriginTrialFeature::kFencedFrames,
-          OriginTrialFeature::kFledge,
-          OriginTrialFeature::kParakeet,
-          OriginTrialFeature::kPrivacySandboxAdsAPIs,
-          OriginTrialFeature::kPrivateStateTokens,
+  static const blink::mojom::OriginTrialFeature kBraveDisabledTrialFeatures[] =
+      {
+          blink::mojom::OriginTrialFeature::kAdInterestGroupAPI,
+          blink::mojom::OriginTrialFeature::kDigitalGoods,
+          blink::mojom::OriginTrialFeature::kParakeet,
+          blink::mojom::OriginTrialFeature::kPrivateStateTokens,
       };
-  // clang-format on
 
   return base::Contains(kBraveDisabledTrialFeatures, feature);
 }
 
-bool IsTrialValid(base::StringPiece trial_name) {
+bool IsTrialValid(std::string_view trial_name) {
   if (IsTrialDisabledInBrave(trial_name))
     return false;
 
   return IsTrialValid_ChromiumImpl(trial_name);
 }
 
-}  // namespace origin_trials
-}  // namespace blink
+}  // namespace blink::origin_trials

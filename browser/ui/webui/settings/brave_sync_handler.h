@@ -11,9 +11,7 @@
 #include "base/scoped_observation.h"
 #include "base/values.h"
 #include "chrome/browser/ui/webui/settings/settings_page_ui_handler.h"
-#include "chrome/services/qrcode_generator/public/cpp/qrcode_generator_service.h"
-#include "chrome/services/qrcode_generator/public/mojom/qrcode_generator.mojom.h"
-#include "components/sync/protocol/sync_protocol_error.h"
+#include "components/sync/engine/sync_protocol_error.h"
 #include "components/sync_device_info/device_info_tracker.h"
 
 namespace syncer {
@@ -49,6 +47,7 @@ class BraveSyncHandler : public settings::SettingsPageUIHandler,
   void HandleReset(const base::Value::List& args);
   void HandleDeleteDevice(const base::Value::List& args);
   void HandlePermanentlyDeleteAccount(const base::Value::List& args);
+  void HandleSyncGetWordsCount(const base::Value::List& args);
 
   void OnResetDone(base::Value callback_id);
   void OnAccountPermanentlyDeleted(base::Value callback_id,
@@ -60,15 +59,6 @@ class BraveSyncHandler : public settings::SettingsPageUIHandler,
   syncer::BraveSyncServiceImpl* GetSyncService() const;
   syncer::DeviceInfoTracker* GetDeviceInfoTracker() const;
   syncer::LocalDeviceInfoProvider* GetLocalDeviceInfoProvider() const;
-
-  // Callback for the request to the OOP service to generate a new image.
-  void OnCodeGeneratorResponse(
-      base::Value callback_id,
-      const qrcode_generator::mojom::GenerateQRCodeResponsePtr response);
-
-  // Remote to service instance to generate QR code images.
-  mojo::Remote<qrcode_generator::mojom::QRCodeGeneratorService>
-      qr_code_service_remote_;
 
   raw_ptr<Profile> profile_ = nullptr;
 

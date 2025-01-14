@@ -8,17 +8,20 @@
 
 #include <vector>
 
-#include "brave/components/brave_rewards/core/ledger_callbacks.h"
+#include "brave/components/brave_rewards/core/rewards_callbacks.h"
 
 namespace brave_rewards::internal {
-class LedgerImpl;
+class RewardsEngine;
 
 namespace publisher {
 
+using RefreshPublisherStatusCallback =
+    base::OnceCallback<void(std::vector<mojom::PublisherInfoPtr>)>;
+
 // Refreshes the publisher status for each entry in the specified list
-void RefreshPublisherStatus(LedgerImpl& ledger,
+void RefreshPublisherStatus(RewardsEngine& engine,
                             std::vector<mojom::PublisherInfoPtr>&& info_list,
-                            GetRecurringTipsCallback callback);
+                            RefreshPublisherStatusCallback callback);
 
 }  // namespace publisher
 }  // namespace brave_rewards::internal

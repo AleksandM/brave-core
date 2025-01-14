@@ -5,26 +5,25 @@
 #include "brave/components/brave_rewards/core/state/state_migration_v8.h"
 
 #include <string>
+#include <utility>
 
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/state/state_keys.h"
 
-namespace brave_rewards::internal {
-namespace state {
+namespace brave_rewards::internal::state {
 
-StateMigrationV8::StateMigrationV8(LedgerImpl& ledger) : ledger_(ledger) {}
+StateMigrationV8::StateMigrationV8(RewardsEngine& engine) : engine_(engine) {}
 
 StateMigrationV8::~StateMigrationV8() = default;
 
-void StateMigrationV8::Migrate(LegacyResultCallback callback) {
-  const bool enabled = ledger_->GetState<bool>("enabled");
+void StateMigrationV8::Migrate(ResultCallback callback) {
+  const bool enabled = engine_->GetState<bool>("enabled");
 
   if (!enabled) {
-    ledger_->SetState(kAutoContributeEnabled, false);
+    engine_->SetState(kAutoContributeEnabled, false);
   }
 
-  callback(mojom::Result::LEDGER_OK);
+  std::move(callback).Run(mojom::Result::OK);
 }
 
-}  // namespace state
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::state

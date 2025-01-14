@@ -7,6 +7,9 @@
 
 #include <utility>
 
+#include "base/strings/strcat.h"
+#include "brave/components/p3a/constellation_helper.h"
+#include "brave/components/p3a/metric_log_type.h"
 #include "brave/components/p3a/network_annotations.h"
 #include "brave/components/p3a/p3a_config.h"
 #include "net/base/load_flags.h"
@@ -16,6 +19,29 @@
 #include "services/network/public/mojom/url_response_head.mojom.h"
 
 namespace p3a {
+
+namespace {
+
+constexpr char kBraveP3AHeader[] = "X-Brave-P3A";
+constexpr char kBraveP3AVersionHeader[] = "Brave-P3A-Version";
+constexpr char kBraveP3AConstellationThresholdHeader[] =
+    "Brave-P3A-Constellation-Threshold";
+
+constexpr size_t kCurrentP3AVersionValue = 3;
+
+GURL GetConstellationUploadURL(const P3AConfig* config,
+                               MetricLogType log_type,
+                               const std::string& upload_type) {
+  std::string path;
+  if (upload_type == kP3ACreativeUploadType) {
+    path = "creative";
+  } else {
+    path = MetricLogTypeToString(log_type);
+  }
+  return GURL(base::StrCat({config->p3a_constellation_upload_host, "/", path}));
+}
+
+}  // namespace
 
 Uploader::Uploader(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
@@ -30,27 +56,36 @@ Uploader::~Uploader() = default;
 void Uploader::UploadLog(const std::string& compressed_log_data,
                          const std::string& upload_type,
                          bool is_constellation,
+                         bool is_nebula,
                          MetricLogType log_type) {
   auto resource_request = std::make_unique<network::ResourceRequest>();
   if (upload_type == kP2AUploadType) {
     resource_request->url = config_->p2a_json_upload_url;
     resource_request->headers.SetHeader("X-Brave-P2A", "?1");
-  } else if (upload_type == kP3AUploadType) {
-    resource_request->url = is_constellation
-                                ? config_->p3a_constellation_upload_url
-                                : config_->p3a_json_upload_url;
-    resource_request->headers.SetHeader("X-Brave-P3A", "?1");
-  } else if (upload_type == kP3ACreativeUploadType) {
-    resource_request->url = config_->p3a_creative_upload_url;
-    resource_request->headers.SetHeader("X-Brave-P3A", "?1");
   } else {
-    NOTREACHED();
+    if (is_constellation) {
+      resource_request->url =
+          GetConstellationUploadURL(config_, log_type, upload_type);
+      resource_request->headers.SetHeader(
+          kBraveP3AVersionHeader,
+          base::NumberToString(kCurrentP3AVersionValue));
+
+      const size_t threshold =
+          is_nebula ? kNebulaThreshold : kConstellationDefaultThreshold;
+      resource_request->headers.SetHeader(kBraveP3AConstellationThresholdHeader,
+                                          base::NumberToString(threshold));
+    } else {
+      resource_request->url = upload_type == kP3ACreativeUploadType
+                                  ? config_->p3a_creative_upload_url
+                                  : config_->p3a_json_upload_url;
+    }
+    resource_request->headers.SetHeader(kBraveP3AHeader, "?1");
   }
 
   resource_request->credentials_mode = network::mojom::CredentialsMode::kOmit;
   resource_request->method = "POST";
 
-#if defined(IS_OFFICIAL_BUILD)
+#if defined(OFFICIAL_BUILD)
   CHECK(!resource_request->url.is_empty() &&
         resource_request->url.SchemeIsHTTPOrHTTPS());
 #else
@@ -62,10 +97,12 @@ void Uploader::UploadLog(const std::string& compressed_log_data,
   }
 #endif
 
-  url_loaders_[log_type] = network::SimpleURLLoader::Create(
+  base::flat_map<MetricLogType, std::unique_ptr<network::SimpleURLLoader>>&
+      url_loaders = GetURLLoaders(is_constellation);
+  url_loaders[log_type] = network::SimpleURLLoader::Create(
       std::move(resource_request),
       GetP3AUploadAnnotation(upload_type, is_constellation));
-  network::SimpleURLLoader* url_loader = url_loaders_[log_type].get();
+  network::SimpleURLLoader* url_loader = url_loaders[log_type].get();
 
   url_loader->AttachStringForUpload(
       compressed_log_data,
@@ -82,14 +119,25 @@ void Uploader::OnUploadComplete(
     MetricLogType log_type,
     scoped_refptr<net::HttpResponseHeaders> headers) {
   int response_code = -1;
-  network::SimpleURLLoader* url_loader = url_loaders_[log_type].get();
+  base::flat_map<MetricLogType, std::unique_ptr<network::SimpleURLLoader>>&
+      url_loaders = GetURLLoaders(is_constellation);
+  network::SimpleURLLoader* url_loader = url_loaders[log_type].get();
 
   if (headers) {
     response_code = headers->response_code();
   }
   bool is_ok = url_loader->NetError() == net::OK;
-  url_loaders_.erase(log_type);
+  url_loaders.erase(log_type);
   upload_callback_.Run(is_ok, response_code, is_constellation, log_type);
+}
+
+base::flat_map<MetricLogType, std::unique_ptr<network::SimpleURLLoader>>&
+Uploader::GetURLLoaders(bool is_constellation) {
+  if (is_constellation) {
+    return constellation_url_loaders_;
+  } else {
+    return json_url_loaders_;
+  }
 }
 
 }  // namespace p3a

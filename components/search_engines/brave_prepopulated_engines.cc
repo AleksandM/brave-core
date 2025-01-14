@@ -11,27 +11,43 @@
 
 namespace TemplateURLPrepopulateData {
 
-// IMPORTANT! Make sure to bump this value if you make changes to the
-// engines below or add/remove engines.
-const int kBraveCurrentDataVersion = 25;
-// DO NOT CHANGE THIS ONE. Used for backfilling kBraveDefaultSearchVersion.
-const int kBraveFirstTrackedDataVersion = 6;
-
 namespace {
 
-PrepopulatedEngine MakeBravePrepopulatedEngine(const wchar_t* const name,
-                                               const wchar_t* const keyword,
+PrepopulatedEngine MakeBravePrepopulatedEngine(const char16_t* const name,
+                                               const char16_t* const keyword,
                                                const char* const favicon_url,
                                                const char* const search_url,
                                                const char* const encoding,
                                                const char* const suggest_url,
                                                SearchEngineType type,
                                                const int id) {
-  return {name,    keyword, favicon_url, search_url, encoding, suggest_url,
-          nullptr, nullptr, nullptr,     nullptr,    nullptr,  nullptr,
-          nullptr, nullptr, nullptr,     nullptr,    nullptr,  nullptr,
-          nullptr, nullptr, nullptr,     0,          nullptr,  0,
-          type,    nullptr, nullptr,     id};
+  return {name,
+          keyword,
+          favicon_url,
+          search_url,
+          encoding,
+          suggest_url,
+          /*image_url=*/nullptr,
+          /*image_translate_url=*/nullptr,
+          /*new_tab_url=*/nullptr,
+          /*contextual_search_url=*/nullptr,
+          /*logo_url=*/nullptr,
+          /*doodle_url=*/nullptr,
+          /*search_url_post_params=*/nullptr,
+          /*suggest_url_post_params=*/nullptr,
+          /*image_url_post_params=*/nullptr,
+          /*side_search_param=*/nullptr,
+          /*side_image_search_param=*/nullptr,
+          /*image_translate_source_language_param_key=*/nullptr,
+          /*image_translate_target_language_param_key=*/nullptr,
+          /*image_search_branding_label=*/nullptr,
+          /*search_intent_params=*/{},
+          /*alternate_urls=*/{},
+          type,
+          /*preconnect_to_search_url=*/nullptr,
+          /*prefetch_likely_navigations=*/nullptr,
+          id,
+          /*regulatory_extensions=*/{}};
 }
 
 // Maps BravePrepopulatedEngineID to Chromium's PrepopulatedEngine.
@@ -52,8 +68,8 @@ const std::map<BravePrepopulatedEngineID, const PrepopulatedEngine*>
 };
 
 PrepopulatedEngine ModifyEngineParams(const PrepopulatedEngine& engine,
-                                      const wchar_t* const name,
-                                      const wchar_t* const keyword,
+                                      const char16_t* const name,
+                                      const char16_t* const keyword,
                                       const char* const search_url,
                                       const char* const suggest_url,
                                       const char* const image_url,
@@ -79,9 +95,7 @@ PrepopulatedEngine ModifyEngineParams(const PrepopulatedEngine& engine,
           engine.image_translate_target_language_param_key,
           engine.image_search_branding_label,
           engine.search_intent_params,
-          engine.search_intent_params_size,
           engine.alternate_urls,
-          engine.alternate_urls_size,
           engine.type,
           engine.preconnect_to_search_url,
           engine.prefetch_likely_navigations,
@@ -91,8 +105,8 @@ PrepopulatedEngine ModifyEngineParams(const PrepopulatedEngine& engine,
 }  // namespace
 
 const PrepopulatedEngine duckduckgo = MakeBravePrepopulatedEngine(
-    L"DuckDuckGo",
-    L":d",
+    u"DuckDuckGo",
+    u":d",
     "https://duckduckgo.com/favicon.ico",
     "https://duckduckgo.com/?q={searchTerms}&t=brave",
     "UTF-8",
@@ -120,8 +134,8 @@ const PrepopulatedEngine duckduckgo_au_nz_ie =
 
 #if BUILDFLAG(IS_ANDROID)
 const PrepopulatedEngine duckduckgo_lite = MakeBravePrepopulatedEngine(
-    L"DuckDuckGo Lite",
-    L":dl",
+    u"DuckDuckGo Lite",
+    u":dl",
     "https://duckduckgo.com/favicon.ico",
     "https://duckduckgo.com/lite/?q={searchTerms}&t=brave",
     "UTF-8",
@@ -133,7 +147,7 @@ const PrepopulatedEngine duckduckgo_lite = MakeBravePrepopulatedEngine(
 const PrepopulatedEngine brave_ecosia =
     ModifyEngineParams(ecosia,
                        nullptr,
-                       L":e",
+                       u":e",
                        "https://www.ecosia.org/search?tt="
 #if BUILDFLAG(IS_ANDROID)
                        "42b8ae98"
@@ -146,8 +160,8 @@ const PrepopulatedEngine brave_ecosia =
                        PREPOPULATED_ENGINE_ID_ECOSIA);
 
 const PrepopulatedEngine qwant = MakeBravePrepopulatedEngine(
-    L"Qwant",
-    L":q",
+    u"Qwant",
+    u":q",
     "https://www.qwant.com/favicon.ico",
     "https://www.qwant.com/?q={searchTerms}&client=brz-brave",
     "UTF-8",
@@ -156,8 +170,8 @@ const PrepopulatedEngine qwant = MakeBravePrepopulatedEngine(
     PREPOPULATED_ENGINE_ID_QWANT);
 
 const PrepopulatedEngine startpage = MakeBravePrepopulatedEngine(
-    L"Startpage",
-    L":sp",
+    u"Startpage",
+    u":sp",
     "https://www.startpage.com/favicon.ico",
     "https://www.startpage.com/do/"
     "search?q={searchTerms}&segment=startpage.brave",
@@ -169,7 +183,7 @@ const PrepopulatedEngine startpage = MakeBravePrepopulatedEngine(
 
 const PrepopulatedEngine brave_yandex =
     ModifyEngineParams(yandex_com,
-                       L"Yandex",
+                       u"Yandex",
                        nullptr,
                        "https://yandex.ru/search/?clid="
 #if BUILDFLAG(IS_ANDROID)
@@ -184,8 +198,8 @@ const PrepopulatedEngine brave_yandex =
                        PREPOPULATED_ENGINE_ID_YANDEX);
 
 const PrepopulatedEngine brave_search = MakeBravePrepopulatedEngine(
-    L"Brave",
-    L":br",
+    u"Brave",
+    u":br",
     "https://cdn.search.brave.com/serp/favicon.ico",
     "https://search.brave.com/search?q={searchTerms}&source="
 #if BUILDFLAG(IS_ANDROID)
@@ -194,14 +208,20 @@ const PrepopulatedEngine brave_search = MakeBravePrepopulatedEngine(
     "desktop",
 #endif
     "UTF-8",
-    "https://search.brave.com/api/suggest?q={searchTerms}",
+    "https://search.brave.com/api/"
+    "suggest?q={searchTerms}&rich=true&source="
+#if BUILDFLAG(IS_ANDROID)
+    "android",
+#else
+    "desktop",
+#endif
     SEARCH_ENGINE_OTHER,
     PREPOPULATED_ENGINE_ID_BRAVE);
 
 const PrepopulatedEngine brave_search_tor = ModifyEngineParams(
     brave_search,
     nullptr,
-    L":search.brave4u7jddbv7cyviptqjc7jusxh72uik7zt6adtckl5f4nwy2v72qd.onion",
+    u":search.brave4u7jddbv7cyviptqjc7jusxh72uik7zt6adtckl5f4nwy2v72qd.onion",
     "https://"
     "search.brave4u7jddbv7cyviptqjc7jusxh72uik7zt6adtckl5f4nwy2v72qd.onion/"
     "search?q={searchTerms}",
@@ -213,7 +233,7 @@ const PrepopulatedEngine brave_search_tor = ModifyEngineParams(
 
 const PrepopulatedEngine brave_bing = ModifyEngineParams(
     bing,
-    nullptr,
+    u"Bing",
     nullptr,
     "https://www.bing.com/search?q={searchTerms}",
     "https://www.bing.com/osjson.aspx?query={searchTerms}&language={language}",

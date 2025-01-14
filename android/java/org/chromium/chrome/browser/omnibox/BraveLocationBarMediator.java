@@ -12,16 +12,16 @@ import android.os.Build;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
-import org.chromium.base.supplier.OneshotSupplierImpl;
 import org.chromium.chrome.browser.lens.LensController;
 import org.chromium.chrome.browser.locale.LocaleManager;
-import org.chromium.chrome.browser.omnibox.voice.AssistantVoiceSearchService;
-import org.chromium.chrome.browser.privacy.settings.PrivacyPreferencesManager;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.tabmodel.TabModelSelector;
+import org.chromium.chrome.browser.theme.ThemeUtils;
 import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.components.search_engines.TemplateUrlService;
 import org.chromium.ui.base.WindowAndroid;
@@ -39,27 +39,43 @@ public class BraveLocationBarMediator extends LocationBarMediator {
     private boolean mIsLocationBarFocusedFromNtpScroll;
     private Context mContext;
     private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
-    private OneshotSupplierImpl<AssistantVoiceSearchService> mAssistantVoiceSearchServiceSupplier;
 
-    public BraveLocationBarMediator(@NonNull Context context,
+    public BraveLocationBarMediator(
+            @NonNull Context context,
             @NonNull LocationBarLayout locationBarLayout,
             @NonNull LocationBarDataProvider locationBarDataProvider,
+            @NonNull LocationBarEmbedderUiOverrides embedderUiOverrides,
             @NonNull ObservableSupplier<Profile> profileSupplier,
-            @NonNull PrivacyPreferencesManager privacyPreferencesManager,
             @NonNull OverrideUrlLoadingDelegate overrideUrlLoadingDelegate,
             @NonNull LocaleManager localeManager,
             @NonNull OneshotSupplier<TemplateUrlService> templateUrlServiceSupplier,
-            @NonNull BackKeyBehaviorDelegate backKeyBehavior, @NonNull WindowAndroid windowAndroid,
-            boolean isTablet, @NonNull SearchEngineLogoUtils searchEngineLogoUtils,
+            @NonNull BackKeyBehaviorDelegate backKeyBehavior,
+            @NonNull WindowAndroid windowAndroid,
+            boolean isTablet,
             @NonNull LensController lensController,
-            @NonNull SaveOfflineButtonState saveOfflineButtonState, @NonNull OmniboxUma omniboxUma,
+            @NonNull SaveOfflineButtonState saveOfflineButtonState,
+            @NonNull OmniboxUma omniboxUma,
             @NonNull BooleanSupplier isToolbarMicEnabledSupplier,
-            @NonNull OmniboxSuggestionsDropdownEmbedderImpl dropdownEmbedder) {
-        super(context, locationBarLayout, locationBarDataProvider, profileSupplier,
-                privacyPreferencesManager, overrideUrlLoadingDelegate, localeManager,
-                templateUrlServiceSupplier, backKeyBehavior, windowAndroid, isTablet,
-                searchEngineLogoUtils, lensController, saveOfflineButtonState, omniboxUma,
-                isToolbarMicEnabledSupplier, dropdownEmbedder);
+            @NonNull OmniboxSuggestionsDropdownEmbedderImpl dropdownEmbedder,
+            @Nullable ObservableSupplier<TabModelSelector> tabModelSelectorSupplier) {
+        super(
+                context,
+                locationBarLayout,
+                locationBarDataProvider,
+                embedderUiOverrides,
+                profileSupplier,
+                overrideUrlLoadingDelegate,
+                localeManager,
+                templateUrlServiceSupplier,
+                backKeyBehavior,
+                windowAndroid,
+                isTablet,
+                lensController,
+                saveOfflineButtonState,
+                omniboxUma,
+                isToolbarMicEnabledSupplier,
+                dropdownEmbedder,
+                tabModelSelectorSupplier);
     }
 
     public static Class<OmniboxUma> getOmniboxUmaClass() {
@@ -78,12 +94,8 @@ public class BraveLocationBarMediator extends LocationBarMediator {
         return LocaleManager.class;
     }
 
-    public static Class<PrivacyPreferencesManager> getPrivacyPreferencesManagerClass() {
-        return PrivacyPreferencesManager.class;
-    }
-
     public static Class<OmniboxSuggestionsDropdownEmbedderImpl>
-    getOmniboxSuggestionsDropdownEmbedderImplClass() {
+            getOmniboxSuggestionsDropdownEmbedderImplClass() {
         return OmniboxSuggestionsDropdownEmbedderImpl.class;
     }
 
@@ -99,21 +111,11 @@ public class BraveLocationBarMediator extends LocationBarMediator {
         updateQRButtonColors();
     }
 
-    @Override
-    public void onAssistantVoiceSearchServiceChanged() {
-        super.onAssistantVoiceSearchServiceChanged();
-        updateQRButtonColors();
-    }
-
     void updateQRButtonColors() {
-        AssistantVoiceSearchService assistantVoiceSearchService =
-                mAssistantVoiceSearchServiceSupplier.get();
-        if (assistantVoiceSearchService == null) return;
-
         if (mLocationBarLayout instanceof BraveLocationBarLayout) {
             ((BraveLocationBarLayout) mLocationBarLayout)
-                    .setQRButtonTint(assistantVoiceSearchService.getButtonColorStateList(
-                            mBrandedColorScheme, mContext));
+                    .setQRButtonTint(
+                            ThemeUtils.getThemedToolbarIconTint(mContext, mBrandedColorScheme));
         }
     }
 
@@ -138,7 +140,7 @@ public class BraveLocationBarMediator extends LocationBarMediator {
     }
 
     protected boolean shouldShowDeleteButton() {
-        assert (false);
+        assert false;
         return false;
     }
 

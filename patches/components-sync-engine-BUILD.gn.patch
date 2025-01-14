@@ -1,8 +1,8 @@
 diff --git a/components/sync/engine/BUILD.gn b/components/sync/engine/BUILD.gn
-index 87f53c818fa4efce2d3ca9ee61ff008684363c43..2e6a5266b24cebb8762ca3d11c2c792290ccfe01 100644
+index 76a4c598f7f35b76001515c7fddabbecf67d916a..8400f76b4ad575726bfb8c724118e5f2246d3108 100644
 --- a/components/sync/engine/BUILD.gn
 +++ b/components/sync/engine/BUILD.gn
-@@ -156,6 +156,7 @@ static_library("engine") {
+@@ -163,6 +163,7 @@ static_library("engine") {
      "traffic_logger.h",
      "update_handler.h",
    ]

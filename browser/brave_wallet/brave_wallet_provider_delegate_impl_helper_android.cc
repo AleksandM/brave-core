@@ -23,6 +23,16 @@ void ShowPanel(content::WebContents*) {
   Java_BraveWalletProviderDelegateImplHelper_showPanel(env);
 }
 
+void ShowWalletBackup() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  Java_BraveWalletProviderDelegateImplHelper_showWalletBackup(env);
+}
+
+void UnlockWallet() {
+  JNIEnv* env = base::android::AttachCurrentThread();
+  Java_BraveWalletProviderDelegateImplHelper_unlockWallet(env);
+}
+
 void ShowWalletOnboarding(content::WebContents*) {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_BraveWalletProviderDelegateImplHelper_showWalletOnboarding(env);
@@ -31,7 +41,7 @@ void ShowWalletOnboarding(content::WebContents*) {
 void ShowAccountCreation(content::WebContents*,
                          brave_wallet::mojom::CoinType coin_type) {
   JNIEnv* env = base::android::AttachCurrentThread();
-  Java_BraveWalletProviderDelegateImplHelper_ShowAccountCreation(
+  Java_BraveWalletProviderDelegateImplHelper_showAccountCreation(
       env, static_cast<int>(coin_type));
 }
 
@@ -58,9 +68,10 @@ static void JNI_BraveWalletProviderDelegateImplHelper_IsSolanaConnected(
   content::RenderFrameHost* rfh = nullptr;
   content::WebContents* web_contents =
       content::WebContents::FromJavaWebContents(jweb_contents);
-  base::android::ScopedJavaGlobalRef callback =
+  base::android::ScopedJavaGlobalRef<jobject> callback =
       base::android::ScopedJavaGlobalRef<jobject>(jcallback);
-  const std::string account = ConvertJavaStringToUTF8(env, jaccount);
+  const std::string account =
+      base::android::ConvertJavaStringToUTF8(env, jaccount);
   if (!(rfh = web_contents->GetPrimaryMainFrame())) {
     base::android::RunBooleanCallbackAndroid(callback, false);
     return;

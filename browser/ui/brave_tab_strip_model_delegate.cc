@@ -5,16 +5,19 @@
 
 #include "brave/browser/ui/brave_tab_strip_model_delegate.h"
 
+#include "brave/browser/ui/tabs/brave_tab_prefs.h"
 #include "brave/browser/ui/tabs/features.h"
-#include "brave/browser/ui/tabs/shared_pinned_tab_service.h"
-#include "brave/browser/ui/tabs/shared_pinned_tab_service_factory.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
+#include "components/prefs/pref_service.h"
 
 namespace chrome {
 
 bool BraveTabStripModelDelegate::CanMoveTabsToWindow(
     const std::vector<int>& indices) {
-  if (!base::FeatureList::IsEnabled(tabs::features::kBraveSharedPinnedTabs)) {
+  if (!base::FeatureList::IsEnabled(tabs::features::kBraveSharedPinnedTabs) ||
+      !browser_->profile()->GetPrefs()->GetBoolean(
+          brave_tabs::kSharedPinnedTab)) {
     return BrowserTabStripModelDelegate::CanMoveTabsToWindow(indices);
   }
 
@@ -22,20 +25,6 @@ bool BraveTabStripModelDelegate::CanMoveTabsToWindow(
   return base::ranges::none_of(indices, [this](const auto& index) {
     return browser_->tab_strip_model()->IsTabPinned(index);
   });
-}
-
-void BraveTabStripModelDelegate::CacheWebContents(
-    const std::vector<std::unique_ptr<TabStripModel::DetachedWebContents>>&
-        web_contents) {
-  BrowserTabStripModelDelegate::CacheWebContents(web_contents);
-  if (!base::FeatureList::IsEnabled(tabs::features::kBraveSharedPinnedTabs)) {
-    return;
-  }
-
-  auto* shared_pinned_tab_service =
-      SharedPinnedTabServiceFactory::GetForProfile(browser_->profile());
-  DCHECK(shared_pinned_tab_service);
-  shared_pinned_tab_service->CacheWebContentsIfNeeded(browser_, web_contents);
 }
 
 }  // namespace chrome

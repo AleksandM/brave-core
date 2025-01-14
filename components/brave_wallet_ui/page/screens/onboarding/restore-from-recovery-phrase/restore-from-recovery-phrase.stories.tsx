@@ -5,63 +5,50 @@
 
 import * as React from 'react'
 
+import { Meta } from '@storybook/react'
 import { WalletPageStory } from '../../../../stories/wrappers/wallet-page-story-wrapper'
+import { OnboardingRestoreFromExtension } from './restore-from-extension'
 import { OnboardingRestoreFromRecoveryPhrase } from './restore-from-recovery-phrase'
 
-export const _OnboardingRestoreFromRecoveryPhrase = () => {
-  return <WalletPageStory>
-    <OnboardingRestoreFromRecoveryPhrase restoreFrom='seed' />
-  </WalletPageStory>
+export const _OnboardingRestoreFromRecoveryPhrase = {
+  render: () => {
+    return (
+      <WalletPageStory>
+        <OnboardingRestoreFromRecoveryPhrase />
+      </WalletPageStory>
+    )
+  },
+  title: 'Restore From Recovery Phrase'
+
 }
 
-_OnboardingRestoreFromRecoveryPhrase.story = {
-  name: 'Restore From Recovery Phrase'
+export default {
+  component: OnboardingRestoreFromExtension,
+  render: (args) => {
+    return <WalletPageStory>
+      <OnboardingRestoreFromExtension restoreFrom={args.restoreFrom} />
+    </WalletPageStory>
+  }
+} as Meta<typeof OnboardingRestoreFromExtension>
+
+
+export const RestoreFromRecoveryPhrase = {
+  render: () => {
+    return <WalletPageStory>
+      <OnboardingRestoreFromRecoveryPhrase />
+    </WalletPageStory>
+  }
 }
 
-export const _OnboardingRestoreFromMetaMaskExtension = () => {
-  return <WalletPageStory
-    pageStateOverride={{
-      isMetaMaskInitialized: true,
-      isImportWalletsCheckComplete: true
-    }}
-  >
-    <OnboardingRestoreFromRecoveryPhrase restoreFrom='metamask' />
-  </WalletPageStory>
+export const RestoreFromMetamaskWallet = {
+  args: {
+    restoreFrom: 'metamask'
+  }
 }
 
-_OnboardingRestoreFromMetaMaskExtension.story = {
-  name: 'Restore From MetaMask (Extension)'
+export const RestoreFromLegacyWallet = {
+  args: {
+    restoreFrom: 'legacy'
+  }
 }
 
-export const _OnboardingRestoreFromMetaMaskSeed = () => {
-  return <WalletPageStory
-    pageStateOverride={{
-      isMetaMaskInitialized: false,
-      isImportWalletsCheckComplete: true
-    }}
-  >
-    <OnboardingRestoreFromRecoveryPhrase restoreFrom='metamask-seed' />
-  </WalletPageStory>
-}
-
-_OnboardingRestoreFromMetaMaskSeed.story = {
-  name: 'Restore From MetaMask (Seed)'
-}
-
-export const _OnboardingRestoreFromLegacyWallet = () => {
-  return <WalletPageStory
-    pageStateOverride={{
-      isMetaMaskInitialized: false,
-      isImportWalletsCheckComplete: true,
-      isCryptoWalletsInitialized: true
-    }}
-  >
-    <OnboardingRestoreFromRecoveryPhrase restoreFrom='legacy' />
-  </WalletPageStory>
-}
-
-_OnboardingRestoreFromLegacyWallet.story = {
-  name: 'Restore From Legacy Wallet'
-}
-
-export default _OnboardingRestoreFromRecoveryPhrase

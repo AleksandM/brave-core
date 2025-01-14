@@ -6,19 +6,20 @@
 #include <string>
 
 #include "base/test/scoped_feature_list.h"
-#include "brave/sandbox/win/src/module_file_name_interception.h"
 #include "chrome/test/base/in_process_browser_test.h"
-#include "chrome/test/base/ui_test_utils.h"
 #include "content/public/test/browser_test.h"
+#include "sandbox/policy/features.h"
 
 // This header is private to //content/browser and can be used only from
 // content_browser_tests, but we don't have such target, so we workaround it
 // with `nogncheck`.
 #include "content/browser/gpu/gpu_process_host.h"  // nogncheck
 
+using sandbox::policy::features::kModuleFileNamePatch;
+
 namespace {
 
-void NonBlockingDelay(const base::TimeDelta& delay) {
+void NonBlockingDelay(base::TimeDelta delay) {
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitWhenIdleClosure(), delay);
@@ -41,9 +42,9 @@ class ModuleFileNameBrowserTest : public InProcessBrowserTest,
  public:
   ModuleFileNameBrowserTest() {
     if (GetParam()) {
-      feature_list_.InitAndEnableFeature(sandbox::kModuleFileNamePatch);
+      feature_list_.InitAndEnableFeature(kModuleFileNamePatch);
     } else {
-      feature_list_.InitAndDisableFeature(sandbox::kModuleFileNamePatch);
+      feature_list_.InitAndDisableFeature(kModuleFileNamePatch);
     }
   }
 
@@ -65,14 +66,15 @@ IN_PROC_BROWSER_TEST_P(ModuleFileNameBrowserTest, CheckPath) {
 
   WCHAR main_path[MAX_PATH] = {0};
   GetModuleFileNameW(nullptr, main_path, MAX_PATH);
-  EXPECT_TRUE(base::EndsWith(main_path, L"brave_browser_tests.exe"))
+  EXPECT_TRUE(
+      std::wstring_view(main_path).ends_with(L"brave_browser_tests.exe"))
       << main_path;
 
-  constexpr const size_t kInterceptedFunctions = 4u;
+  static constexpr size_t kInterceptedFunctions = 4u;
 #if !defined(ADDRESS_SANITIZER)
-  constexpr const size_t kExpectedReplacements = 4u;
+  static constexpr size_t kExpectedReplacements = 4u;
 #else
-  constexpr const size_t kExpectedReplacements = 3u;
+  static constexpr size_t kExpectedReplacements = 3u;
 #endif
 
   if (GetParam()) {

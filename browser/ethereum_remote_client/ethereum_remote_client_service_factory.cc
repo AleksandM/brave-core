@@ -43,16 +43,17 @@ EthereumRemoteClientServiceFactory::EthereumRemoteClientServiceFactory()
 EthereumRemoteClientServiceFactory::~EthereumRemoteClientServiceFactory() =
     default;
 
-KeyedService* EthereumRemoteClientServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+EthereumRemoteClientServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new EthereumRemoteClientService(
+  return std::make_unique<EthereumRemoteClientService>(
       context, std::make_unique<EthereumRemoteClientDelegateImpl>());
 }
 
 content::BrowserContext*
 EthereumRemoteClientServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return GetBrowserContextRedirectedInIncognito(context);
 }
 
 bool EthereumRemoteClientServiceFactory::ServiceIsCreatedWithBrowserContext()

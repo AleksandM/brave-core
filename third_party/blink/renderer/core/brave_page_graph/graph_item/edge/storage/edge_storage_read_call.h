@@ -12,14 +12,15 @@
 
 namespace brave_page_graph {
 
-class NodeScript;
+class NodeActor;
 class NodeStorage;
 
 class EdgeStorageReadCall final : public EdgeStorage {
  public:
   EdgeStorageReadCall(GraphItemContext* context,
-                      NodeScript* out_node,
+                      NodeActor* out_node,
                       NodeStorage* in_node,
+                      const FrameId& frame_id,
                       const String& key);
   ~EdgeStorageReadCall() override;
 

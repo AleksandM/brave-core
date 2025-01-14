@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* Copyright (c) 2018 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
@@ -40,7 +41,6 @@ export const newTabInitialState: NewTab.ApplicationState = {
     torCircuitEstablished: false,
     torInitProgress: '',
     isTor: false,
-    isQwant: false,
     stats: {
       adsBlockedStat: 0,
       javascriptBlockedStat: 0,
@@ -59,9 +59,6 @@ export const getMockChrome = () => {
   let mock = {
     send: (methodName: string, ...args: any[]) => undefined,
     getVariableValue: () => undefined,
-    braveRewards: {
-      getPublisherData: (id: number, url: string, favicon: string) => undefined
-    },
     runtime: {
       onMessage: new ChromeEvent(),
       onConnect: new ChromeEvent(),
@@ -166,6 +163,26 @@ export const getMockChrome = () => {
     }
   }
   return mock
+}
+
+export const getMockLoadTimeData = () => {
+  return {
+    getString(key) {
+      if (key === 'braveWalletLedgerBridgeUrl') {
+        return 'chrome-untrusted://ledger-bridge'
+      }
+      return key
+    },
+    getBoolean() {
+      return true
+    },
+    getInteger() {
+      return 2
+    },
+    getStringF(key) {
+      return key
+    }
+  }
 }
 
 export const window = () => {

@@ -14,8 +14,8 @@ namespace brave_ads {
 namespace {
 
 double GetUnreconciledEarningsForDateRange(const TransactionList& transactions,
-                                           const base::Time from_time,
-                                           const base::Time to_time) {
+                                           base::Time from_time,
+                                           base::Time to_time) {
   double earnings = 0.0;
 
   for (const auto& transaction : transactions) {
@@ -29,8 +29,8 @@ double GetUnreconciledEarningsForDateRange(const TransactionList& transactions,
 }
 
 double GetReconciledEarningsForDateRange(const TransactionList& transactions,
-                                         const base::Time from_time,
-                                         const base::Time to_time) {
+                                         base::Time from_time,
+                                         base::Time to_time) {
   double earnings = 0.0;
 
   for (const auto& transaction : transactions) {
@@ -46,22 +46,23 @@ double GetReconciledEarningsForDateRange(const TransactionList& transactions,
 }  // namespace
 
 double GetUnreconciledEarnings(const TransactionList& transactions) {
-  const base::Time from_time = GetTimeInDistantPast();
-  const base::Time to_time = GetLocalTimeAtEndOfThisMonth();
+  const base::Time from_time = base::Time();
+  const base::Time to_time = LocalTimeAtEndOfThisMonth();
 
   return GetUnreconciledEarningsForDateRange(transactions, from_time, to_time);
 }
 
 double GetReconciledEarningsForThisMonth(const TransactionList& transactions) {
-  const base::Time from_time = GetLocalTimeAtBeginningOfThisMonth();
-  const base::Time to_time = GetLocalTimeAtEndOfThisMonth();
+  const base::Time from_time = LocalTimeAtBeginningOfThisMonth();
+  const base::Time to_time = LocalTimeAtEndOfThisMonth();
 
   return GetReconciledEarningsForDateRange(transactions, from_time, to_time);
 }
 
-double GetReconciledEarningsForLastMonth(const TransactionList& transactions) {
-  const base::Time from_time = GetLocalTimeAtBeginningOfLastMonth();
-  const base::Time to_time = GetLocalTimeAtEndOfLastMonth();
+double GetReconciledEarningsForPreviousMonth(
+    const TransactionList& transactions) {
+  const base::Time from_time = LocalTimeAtBeginningOfPreviousMonth();
+  const base::Time to_time = LocalTimeAtEndOfPreviousMonth();
 
   return GetReconciledEarningsForDateRange(transactions, from_time, to_time);
 }

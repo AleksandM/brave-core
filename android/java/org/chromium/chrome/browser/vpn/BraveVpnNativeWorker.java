@@ -7,9 +7,9 @@
 
 package org.chromium.chrome.browser.vpn;
 
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,19 +17,19 @@ import java.util.List;
 @JNINamespace("chrome::android")
 public class BraveVpnNativeWorker {
     private long mNativeBraveVpnNativeWorker;
-    private static final Object mLock = new Object();
-    private static BraveVpnNativeWorker mInstance;
+    private static final Object sLock = new Object();
+    private static BraveVpnNativeWorker sInstance;
 
     private List<BraveVpnObserver> mObservers;
 
     public static BraveVpnNativeWorker getInstance() {
-        synchronized (mLock) {
-            if (mInstance == null) {
-                mInstance = new BraveVpnNativeWorker();
-                mInstance.init();
+        synchronized (sLock) {
+            if (sInstance == null) {
+                sInstance = new BraveVpnNativeWorker();
+                sInstance.init();
             }
         }
-        return mInstance;
+        return sInstance;
     }
 
     private BraveVpnNativeWorker() {
@@ -42,6 +42,11 @@ public class BraveVpnNativeWorker {
         }
     }
 
+    /**
+     * A finalizer is required to ensure that the native object associated with this descriptor gets
+     * torn down, otherwise there would be a memory leak.
+     */
+    @SuppressWarnings("Finalize")
     @Override
     protected void finalize() {
         destroy();
@@ -55,13 +60,13 @@ public class BraveVpnNativeWorker {
     }
 
     public void addObserver(BraveVpnObserver observer) {
-        synchronized (mLock) {
+        synchronized (sLock) {
             mObservers.add(observer);
         }
     }
 
     public void removeObserver(BraveVpnObserver observer) {
-        synchronized (mLock) {
+        synchronized (sLock) {
             mObservers.remove(observer);
         }
     }
@@ -70,13 +75,6 @@ public class BraveVpnNativeWorker {
     private void setNativePtr(long nativePtr) {
         assert mNativeBraveVpnNativeWorker == 0;
         mNativeBraveVpnNativeWorker = nativePtr;
-    }
-
-    @CalledByNative
-    public void onGetAllServerRegions(String jsonServerRegions, boolean isSuccess) {
-        for (BraveVpnObserver observer : mObservers) {
-            observer.onGetAllServerRegions(jsonServerRegions, isSuccess);
-        }
     }
 
     @CalledByNative
@@ -123,22 +121,20 @@ public class BraveVpnNativeWorker {
     }
 
     @CalledByNative
-    public void onVerifyPurchaseToken(String jsonResponse, boolean isSuccess) {
+    public void onVerifyPurchaseToken(
+            String jsonResponse, String purchaseToken, String productId, boolean isSuccess) {
         for (BraveVpnObserver observer : mObservers) {
-            observer.onVerifyPurchaseToken(jsonResponse, isSuccess);
+            observer.onVerifyPurchaseToken(jsonResponse, purchaseToken, productId, isSuccess);
         }
-    }
-
-    public void getAllServerRegions() {
-        BraveVpnNativeWorkerJni.get().getAllServerRegions(mNativeBraveVpnNativeWorker);
     }
 
     public void getTimezonesForRegions() {
         BraveVpnNativeWorkerJni.get().getTimezonesForRegions(mNativeBraveVpnNativeWorker);
     }
 
-    public void getHostnamesForRegion(String region) {
-        BraveVpnNativeWorkerJni.get().getHostnamesForRegion(mNativeBraveVpnNativeWorker, region);
+    public void getHostnamesForRegion(String region, String regionPrecision) {
+        BraveVpnNativeWorkerJni.get()
+                .getHostnamesForRegion(mNativeBraveVpnNativeWorker, region, regionPrecision);
     }
 
     public void getWireguardProfileCredentials(
@@ -196,26 +192,58 @@ public class BraveVpnNativeWorker {
     @NativeMethods
     interface Natives {
         void init(BraveVpnNativeWorker caller);
+
         void destroy(long nativeBraveVpnNativeWorker, BraveVpnNativeWorker caller);
-        void getAllServerRegions(long nativeBraveVpnNativeWorker);
+
         void getTimezonesForRegions(long nativeBraveVpnNativeWorker);
-        void getHostnamesForRegion(long nativeBraveVpnNativeWorker, String region);
-        void getWireguardProfileCredentials(long nativeBraveVpnNativeWorker,
-                String subscriberCredential, String publicKey, String hostname);
-        void verifyCredentials(long nativeBraveVpnNativeWorker, String hostname, String clientId,
-                String subscriberCredential, String apiAuthToken);
-        void invalidateCredentials(long nativeBraveVpnNativeWorker, String hostname,
-                String clientId, String subscriberCredential, String apiAuthToken);
-        void getSubscriberCredential(long nativeBraveVpnNativeWorker, String productType,
-                String productId, String validationMethod, String purchaseToken,
+
+        void getHostnamesForRegion(
+                long nativeBraveVpnNativeWorker, String region, String regionPrecision);
+
+        void getWireguardProfileCredentials(
+                long nativeBraveVpnNativeWorker,
+                String subscriberCredential,
+                String publicKey,
+                String hostname);
+
+        void verifyCredentials(
+                long nativeBraveVpnNativeWorker,
+                String hostname,
+                String clientId,
+                String subscriberCredential,
+                String apiAuthToken);
+
+        void invalidateCredentials(
+                long nativeBraveVpnNativeWorker,
+                String hostname,
+                String clientId,
+                String subscriberCredential,
+                String apiAuthToken);
+
+        void getSubscriberCredential(
+                long nativeBraveVpnNativeWorker,
+                String productType,
+                String productId,
+                String validationMethod,
+                String purchaseToken,
                 String packageName);
-        void verifyPurchaseToken(long nativeBraveVpnNativeWorker, String purchaseToken,
-                String productId, String productType, String packageName);
+
+        void verifyPurchaseToken(
+                long nativeBraveVpnNativeWorker,
+                String purchaseToken,
+                String productId,
+                String productType,
+                String packageName);
+
         void reloadPurchasedState(long nativeBraveVpnNativeWorker);
+
         boolean isPurchasedUser(long nativeBraveVpnNativeWorker);
+
         void getSubscriberCredentialV12(long nativeBraveVpnNativeWorker);
+
         void reportBackgroundP3A(
                 long nativeBraveVpnNativeWorker, long sessionStartTimeMs, long sessionEndTimeMs);
+
         void reportForegroundP3A(long nativeBraveVpnNativeWorker);
     }
 }

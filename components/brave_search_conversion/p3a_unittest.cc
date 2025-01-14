@@ -10,8 +10,7 @@
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace brave_search_conversion {
-namespace p3a {
+namespace brave_search_conversion::p3a {
 
 struct ConversionTypeInfo {
   ConversionType type;
@@ -20,12 +19,24 @@ struct ConversionTypeInfo {
 
 const ConversionTypeInfo type_infos[] = {
     {
-        .type = ConversionType::kBanner,
-        .histogram_name = kSearchPromoBannerHistogramName,
+        .type = ConversionType::kBannerTypeB,
+        .histogram_name = kSearchPromoBannerBHistogramName,
     },
     {
-        .type = ConversionType::kButton,
-        .histogram_name = kSearchPromoButtonHistogramName,
+        .type = ConversionType::kBannerTypeC,
+        .histogram_name = kSearchPromoBannerCHistogramName,
+    },
+    {
+        .type = ConversionType::kBannerTypeD,
+        .histogram_name = kSearchPromoBannerDHistogramName,
+    },
+    {
+        .type = ConversionType::kDDGBannerTypeC,
+        .histogram_name = kSearchPromoDDGBannerCHistogramName,
+    },
+    {
+        .type = ConversionType::kDDGBannerTypeD,
+        .histogram_name = kSearchPromoDDGBannerDHistogramName,
     },
     {
         .type = ConversionType::kNTP,
@@ -72,7 +83,7 @@ TEST_F(BraveSearchConversionP3ATest, TestOmniboxTriggerAndDefaultEngine) {
     // Also should not record twice
     histogram_tester_.ExpectTotalCount(type_info.histogram_name, 2);
 
-    RecordDefaultEngineChange(GetPrefs());
+    RecordDefaultEngineConversion(GetPrefs());
 
     histogram_tester_.ExpectTotalCount(type_info.histogram_name, 3);
     histogram_tester_.ExpectBucketCount(type_info.histogram_name, 3, 1);
@@ -95,12 +106,42 @@ TEST_F(BraveSearchConversionP3ATest, TestOmniboxShownAndDefaultEngine) {
     // Should not record twice
     histogram_tester_.ExpectTotalCount(type_info.histogram_name, 1);
 
-    RecordDefaultEngineChange(GetPrefs());
+    RecordDefaultEngineConversion(GetPrefs());
 
     histogram_tester_.ExpectTotalCount(type_info.histogram_name, 2);
     histogram_tester_.ExpectBucketCount(type_info.histogram_name, 2, 1);
   }
 }
 
-}  // namespace p3a
-}  // namespace brave_search_conversion
+TEST_F(BraveSearchConversionP3ATest, TestQueriesBeforeChurn) {
+  histogram_tester_.ExpectTotalCount(kSearchQueriesBeforeChurnHistogramName, 0);
+
+  // user switches away from brave
+  RecordDefaultEngineChurn(GetPrefs());
+  histogram_tester_.ExpectUniqueSample(kSearchQueriesBeforeChurnHistogramName,
+                                       0, 1);
+
+  // user switches back to brave
+  RecordDefaultEngineConversion(GetPrefs());
+  for (size_t i = 0; i < 7; i++) {
+    RecordLocationBarQuery(GetPrefs());
+  }
+
+  histogram_tester_.ExpectTotalCount(kSearchQueriesBeforeChurnHistogramName, 1);
+
+  // user switches away from brave again
+  RecordDefaultEngineChurn(GetPrefs());
+  histogram_tester_.ExpectTotalCount(kSearchQueriesBeforeChurnHistogramName, 2);
+  histogram_tester_.ExpectBucketCount(kSearchQueriesBeforeChurnHistogramName, 4,
+                                      1);
+
+  // use switches away again, should not record since the user already churned
+  // before and they have not made any queries
+  RecordDefaultEngineConversion(GetPrefs());
+  RecordDefaultEngineChurn(GetPrefs());
+  histogram_tester_.ExpectTotalCount(kSearchQueriesBeforeChurnHistogramName, 2);
+  histogram_tester_.ExpectBucketCount(kSearchQueriesBeforeChurnHistogramName, 4,
+                                      1);
+}
+
+}  // namespace brave_search_conversion::p3a

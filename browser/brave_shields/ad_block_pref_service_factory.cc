@@ -5,11 +5,13 @@
 
 #include "brave/browser/brave_shields/ad_block_pref_service_factory.h"
 
+#include <memory>
 #include <utility>
 
 #include "base/no_destructor.h"
 #include "brave/browser/brave_browser_process.h"
-#include "brave/components/brave_shields/browser/ad_block_pref_service.h"
+#include "brave/components/brave_shields/content/browser/ad_block_pref_service.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/net/proxy_service_factory.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "chrome/browser/profiles/profile.h"
@@ -40,12 +42,14 @@ AdBlockPrefServiceFactory::AdBlockPrefServiceFactory()
 
 AdBlockPrefServiceFactory::~AdBlockPrefServiceFactory() = default;
 
-KeyedService* AdBlockPrefServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+AdBlockPrefServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
 
-  auto* service = new AdBlockPrefService(
-      g_brave_browser_process->ad_block_service(), profile->GetPrefs());
+  auto service = std::make_unique<AdBlockPrefService>(
+      g_brave_browser_process->ad_block_service(), profile->GetPrefs(),
+      g_browser_process->local_state());
 
   auto pref_proxy_config_tracker =
       ProxyServiceFactory::CreatePrefProxyConfigTrackerOfProfile(
@@ -59,7 +63,7 @@ KeyedService* AdBlockPrefServiceFactory::BuildServiceInstanceFor(
 
 content::BrowserContext* AdBlockPrefServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return GetBrowserContextRedirectedInIncognito(context);
 }
 
 bool AdBlockPrefServiceFactory::ServiceIsCreatedWithBrowserContext() const {

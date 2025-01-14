@@ -6,7 +6,6 @@
 import { configureStore } from '@reduxjs/toolkit'
 
 // async handlers
-import walletPageAsyncHandler from './async/wallet_page_async_handler'
 import walletAsyncHandler from '../common/async/handlers'
 
 // api
@@ -20,7 +19,13 @@ import pageReducer from './reducers/page_reducer'
 import uiReducer from '../common/slices/ui.slice'
 
 // utils
-import { setApiProxyFetcher } from '../common/async/base-query-cache'
+import {
+  makeBraveWalletServiceObserver,
+  makeBraveWalletServiceTokenObserver,
+  makeJsonRpcServiceObserver,
+  makeKeyringServiceObserver,
+  makeTxServiceObserver
+} from '../common/wallet_api_proxy_observers'
 
 export const store = configureStore({
   reducer: {
@@ -30,27 +35,23 @@ export const store = configureStore({
     ui: uiReducer,
     [walletApi.reducerPath]: walletApi.reducer
   },
-  middleware: (getDefaultMiddleware) => getDefaultMiddleware({
-    serializableCheck: false
-  }).concat(
-    walletAsyncHandler,
-    walletPageAsyncHandler,
-    walletApi.middleware
-  )
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: false
+    }).concat(walletAsyncHandler, walletApi.middleware)
 })
 
 export type WalletPageRootStore = typeof store
 export type RootStoreState = ReturnType<typeof store.getState>
 
 const proxy = getWalletPageApiProxy()
-proxy.addJsonRpcServiceObserver(store)
-proxy.addKeyringServiceObserver(store)
-proxy.addTxServiceObserver(store)
-proxy.addBraveWalletServiceObserver(store)
-proxy.addBraveWalletPinServiceObserver(store)
-proxy.addBraveWalletAutoPinServiceObserver(store)
-
-setApiProxyFetcher(getWalletPageApiProxy)
+proxy.addJsonRpcServiceObserver(makeJsonRpcServiceObserver(store))
+proxy.addKeyringServiceObserver(makeKeyringServiceObserver(store))
+proxy.addTxServiceObserver(makeTxServiceObserver(store))
+proxy.addBraveWalletServiceObserver(makeBraveWalletServiceObserver(store))
+proxy.addBraveWalletServiceTokenObserver(
+  makeBraveWalletServiceTokenObserver(store)
+)
 
 export const walletPageApiProxy = proxy
 

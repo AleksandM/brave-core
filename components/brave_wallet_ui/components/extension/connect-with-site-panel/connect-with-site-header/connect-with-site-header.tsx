@@ -4,16 +4,16 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
-import { create } from 'ethereum-blockies'
 
 // Types
-import { SerializableOriginInfo } from '../../../../constants/types'
+import { BraveWallet } from '../../../../constants/types'
 
 // Utils
 import { getLocale } from '../../../../../common/locale'
 
 // Components
-import { CreateSiteOrigin, Tooltip } from '../../../shared'
+import { CreateSiteOrigin } from '../../../shared/create-site-origin/index'
+import { Tooltip } from '../../../shared/tooltip/index'
 
 // Styled Components
 import {
@@ -34,8 +34,11 @@ import {
 import { AccountCircle } from '../select-account-item/select-account-item.style'
 import { HorizontalSpace, Column, Row } from '../../../shared/style'
 
+// Hooks
+import { useAddressOrb } from '../../../../common/hooks/use-orb'
+
 interface Props {
-  originInfo: SerializableOriginInfo
+  originInfo: BraveWallet.OriginInfo
   isReadyToConnect: boolean
   onBack: () => void
   address?: string
@@ -46,41 +49,38 @@ export const ConnectWithSiteHeader = (props: Props) => {
   const { originInfo, address, isReadyToConnect, isScrolled, onBack } = props
 
   // Memos
-  const orb = React.useMemo(() => {
-    return create({
-      seed: address?.toLowerCase() ?? '',
-      size: 8,
-      scale: 16
-    }).toDataURL()
-  }, [address])
+  const orb = useAddressOrb(address)
 
   return (
     <>
       <TitleWrapper
         isScrolled={isScrolled}
         isReadyToConnect={isReadyToConnect}
-        padding="12px 16px"
-        justifyContent="space-between"
+        padding='12px 16px'
+        justifyContent='space-between'
       >
         {isReadyToConnect ? (
           <BackButton onClick={onBack}>
-            <BackIcon name="arrow-left" />
+            <BackIcon name='arrow-left' />
           </BackButton>
         ) : (
-          <HorizontalSpace space="24px" />
+          <HorizontalSpace space='24px' />
         )}
         <Title>{getLocale('braveWalletConnectWallet')}</Title>
-        <HorizontalSpace space="24px" />
+        <HorizontalSpace space='24px' />
       </TitleWrapper>
 
       <StyledWrapper isScrolled={isScrolled}>
         <Column
           padding={`${isReadyToConnect ? '30px' : '24px'} 16px 24px 16px`}
           fullWidth={true}
-          alignItems="flex-start"
+          alignItems='flex-start'
         >
           {isReadyToConnect && (
-            <Row justifyContent="center" marginBottom={18}>
+            <Row
+              justifyContent='center'
+              marginBottom={18}
+            >
               <Tooltip
                 isAddress={true}
                 minWidth={120}
@@ -91,12 +91,10 @@ export const ConnectWithSiteHeader = (props: Props) => {
               </Tooltip>
               <GradientLine>
                 <LinkIconCircle>
-                  <LinkIcon name="link-normal" />
+                  <LinkIcon name='link-normal' />
                 </LinkIconCircle>
               </GradientLine>
-              <Tooltip
-                text={originInfo.eTldPlusOne}
-              >
+              <Tooltip text={originInfo.eTldPlusOne}>
                 <FavIcon
                   src={`chrome://favicon/size/64@1x/${originInfo.originSpec}`}
                   isReadyToConnect={isReadyToConnect}
@@ -106,12 +104,15 @@ export const ConnectWithSiteHeader = (props: Props) => {
           )}
 
           {!isReadyToConnect && (
-            <Row justifyContent="flex-start" marginBottom={16}>
+            <Row
+              justifyContent='flex-start'
+              marginBottom={16}
+            >
               <FavIcon
                 src={`chrome://favicon/size/64@1x/${originInfo.originSpec}`}
                 isReadyToConnect={isReadyToConnect}
               />
-              <Column alignItems="flex-start">
+              <Column alignItems='flex-start'>
                 <SiteName>{originInfo.eTldPlusOne}</SiteName>
                 <SiteURL>
                   <CreateSiteOrigin
@@ -123,8 +124,11 @@ export const ConnectWithSiteHeader = (props: Props) => {
             </Row>
           )}
 
-          <MessageBox padding="8px 16px" justifyContent="flex-start">
-            <InfoIcon name="info-filled" />
+          <MessageBox
+            padding='8px 16px'
+            justifyContent='flex-start'
+          >
+            <InfoIcon name='info-filled' />
             {getLocale('braveWalletConnectTrustWarning')}
           </MessageBox>
         </Column>

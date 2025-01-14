@@ -11,20 +11,20 @@
 #include <vector>
 
 #include "base/memory/raw_ref.h"
-#include "brave/components/brave_rewards/core/ledger_callbacks.h"
 #include "brave/components/brave_rewards/core/legacy/client_properties.h"
 #include "brave/components/brave_rewards/core/legacy/wallet_info_properties.h"
+#include "brave/components/brave_rewards/core/rewards_callbacks.h"
 
 namespace brave_rewards::internal {
 
-class LedgerImpl;
+class RewardsEngine;
 
 class LegacyBatState {
  public:
-  explicit LegacyBatState(LedgerImpl& ledger);
+  explicit LegacyBatState(RewardsEngine& engine);
   ~LegacyBatState();
 
-  void Load(LegacyResultCallback callback);
+  void Load(ResultCallback callback);
 
   bool GetRewardsMainEnabled() const;
 
@@ -44,14 +44,12 @@ class LegacyBatState {
 
   uint64_t GetCreationStamp() const;
 
-  bool GetInlineTipSetting(const std::string& key) const;
-
  private:
-  void OnLoad(LegacyResultCallback callback,
+  void OnLoad(ResultCallback callback,
               mojom::Result result,
               const std::string& data);
 
-  const raw_ref<LedgerImpl> ledger_;
+  const raw_ref<RewardsEngine> engine_;
   ClientProperties state_;
 };
 

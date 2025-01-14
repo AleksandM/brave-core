@@ -1,14 +1,14 @@
 // Copyright (c) 2021 The Brave Authors. All rights reserved.
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
-// you can obtain one at https://mozilla.org/MPL/2.0/.
+// You can obtain one at https://mozilla.org/MPL/2.0/.
+
 import * as React from 'react'
 
-import { getLocale } from '../../../../../common/locale'
-import { useSelector } from '../../state/hooks'
+import { getLocale } from '$web-common/locale'
 import * as S from './style'
-import Button from '$web-components/button'
-import getPanelBrowserAPI from '../../api/panel_browser_api'
+import { useSelector } from '../../state/hooks'
+import getPanelBrowserAPI, { ManageURLType } from '../../api/panel_browser_api'
 
 function SellPanel () {
   const productUrls = useSelector(state => state.productUrls)
@@ -21,7 +21,7 @@ function SellPanel () {
     getLocale('braveVpnFeature5')
   ]), [])
 
-  const handleClick = (intent: string) => {
+  const handleClick = (intent: ManageURLType) => {
     if (!productUrls) return
     getPanelBrowserAPI().panelHandler.openVpnUI(intent)
   }
@@ -29,32 +29,39 @@ function SellPanel () {
   return (
     <S.Box>
       <S.PanelContent>
+        <S.MainLogo name='product-vpn' />
         <S.PanelHeader role='banner'>
-          <S.MainLogo />
           <S.ProductTitle>{getLocale('braveVpn')}</S.ProductTitle>
           <S.PoweredBy>
             <span>{getLocale('braveVpnPoweredBy')}</span>
             <S.GuardianLogo />
           </S.PoweredBy>
         </S.PanelHeader>
-        <S.List>
+        <S.SellingPoints>
           {featureList.map((entry, i) => (
-            <li key={i}>
-              {entry}
-            </li>
+            <S.SellingPoint key={i}>
+              <S.SellingPointIcon name='shield-done' />
+              <S.SellingPointLabel>
+                {entry}
+              </S.SellingPointLabel>
+            </S.SellingPoint>
           ))}
-        </S.List>
+        </S.SellingPoints>
         <S.ActionArea>
-          <Button
-            isPrimary
-            isCallToAction
-            onClick={handleClick.bind(null, 'checkout')}
+          <S.ActionButton
+            slot='actions'
+            kind='filled'
+            size='large'
+            onClick={() => handleClick(ManageURLType.CHECKOUT)}
           >
             {getLocale('braveVpnBuy')}
-          </Button>
-          <a href="#" onClick={handleClick.bind(null, 'recover')}>
+          </S.ActionButton>
+          <S.ActionLink
+            href="#"
+            onClick={() => handleClick(ManageURLType.RECOVER)}
+          >
             {getLocale('braveVpnPurchased')}
-          </a>
+          </S.ActionLink>
         </S.ActionArea>
       </S.PanelContent>
       <S.SellGraphic />

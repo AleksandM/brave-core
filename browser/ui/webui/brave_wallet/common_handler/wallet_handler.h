@@ -6,9 +6,6 @@
 #ifndef BRAVE_BROWSER_UI_WEBUI_BRAVE_WALLET_COMMON_HANDLER_WALLET_HANDLER_H_
 #define BRAVE_BROWSER_UI_WEBUI_BRAVE_WALLET_COMMON_HANDLER_WALLET_HANDLER_H_
 
-#include <string>
-#include <vector>
-
 #include "base/memory/raw_ptr.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
@@ -18,7 +15,7 @@ class Profile;
 
 namespace brave_wallet {
 
-class KeyringService;
+class BraveWalletService;
 
 class WalletHandler : public mojom::WalletHandler {
  public:
@@ -33,12 +30,9 @@ class WalletHandler : public mojom::WalletHandler {
   void GetWalletInfo(GetWalletInfoCallback) override;
 
  private:
-  void OnGetWalletInfo(GetWalletInfoCallback callback,
-                       std::vector<mojom::KeyringInfoPtr> keyring_info);
-
   mojo::Receiver<mojom::WalletHandler> receiver_;
 
-  const raw_ptr<KeyringService> keyring_service_ = nullptr;
+  const raw_ptr<BraveWalletService> brave_wallet_service_ = nullptr;
 };
 
 }  // namespace brave_wallet

@@ -4,198 +4,91 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import { createReducer } from 'redux-act'
+
+// types
 import {
   BraveWallet,
+  HardwareWalletResponseCodeType,
   PanelState,
   PanelTypes,
-  SerializableAddSuggestTokenRequest,
-  SerializableDecryptRequest,
-  SerializableGetEncryptionPublicKeyRequest,
-  SerializableOriginInfo,
-  SerializableSignMessageRequest
+  TransactionInfoLookup
 } from '../../constants/types'
 import * as PanelActions from '../actions/wallet_panel_actions'
-import {
-  ShowConnectToSitePayload
-} from '../constants/action_types'
-import { PanelTitles } from '../../options/panel-titles'
-import { HardwareWalletResponseCodeType } from '../../common/hardware/types'
+import { ShowConnectToSitePayload } from '../constants/action_types'
 
-const defaultOriginInfo: SerializableOriginInfo = {
-  origin: {
-    scheme: '',
-    host: '',
-    port: 0,
-    nonceIfOpaque: undefined
-  },
+// options
+import { LOCAL_STORAGE_KEYS } from '../../common/constants/local-storage-keys'
+
+// utils
+import { isValidPanelNavigationOption } from '../../options/nav-options'
+
+const defaultOriginInfo: BraveWallet.OriginInfo = {
   originSpec: '',
   eTldPlusOne: ''
 }
 
+const persistedSelectedPanelType = window.localStorage.getItem(
+  LOCAL_STORAGE_KEYS.CURRENT_PANEL
+) as PanelTypes
+const selectedPanel = isValidPanelNavigationOption(persistedSelectedPanelType)
+  ? persistedSelectedPanelType
+  : 'main'
+
 const defaultState: PanelState = {
   hasInitialized: false,
   connectToSiteOrigin: defaultOriginInfo,
-  selectedPanel: 'main',
-  panelTitle: '',
+  selectedPanel,
   connectingAccounts: [],
-  addChainRequest: {
-    originInfo: defaultOriginInfo,
-    networkInfo: {
-      chainId: BraveWallet.MAINNET_CHAIN_ID,
-      chainName: 'Ethereum Mainnet',
-      activeRpcEndpointIndex: 0,
-      rpcEndpoints: [{ url: 'https://mainnet-infura.brave.com/' }],
-      blockExplorerUrls: [],
-      iconUrls: [],
-      symbol: 'ETH',
-      symbolName: 'Ethereum',
-      decimals: 18,
-      coin: BraveWallet.CoinType.ETH,
-      isEip1559: true
-    }
-  },
-  signMessageData: [{
-    originInfo: defaultOriginInfo,
-    id: -1,
-    address: '',
-    domain: '',
-    message: '',
-    isEip712: false,
-    domainHash: '',
-    primaryHash: '',
-    messageBytes: undefined,
-    coin: BraveWallet.CoinType.ETH,
-    chainId: ''
-  }],
-  signAllTransactionsRequests: [],
-  signTransactionRequests: [],
-  getEncryptionPublicKeyRequest: {
-    originInfo: defaultOriginInfo,
-    address: ''
-  },
-  decryptRequest: {
-    originInfo: defaultOriginInfo,
-    address: '',
-    unsafeMessage: ''
-  },
-  switchChainRequest: {
-    originInfo: defaultOriginInfo,
-    chainId: ''
-  },
   hardwareWalletCode: undefined,
-  suggestedTokenRequest: undefined,
   selectedTransactionId: undefined
 }
 
 export const createPanelReducer = (initialState: PanelState) => {
   const reducer = createReducer<PanelState>({}, initialState)
-  reducer.on(PanelActions.navigateTo.type, (state: PanelState, selectedPanel: PanelTypes) => {
-    const foundTitle = PanelTitles().find((title) => selectedPanel === title.id)
-    const panelTitle = foundTitle ? foundTitle.title : ''
-    return {
-      ...state,
-      selectedPanel,
-      lastSelectedPanel: state.selectedPanel,
-      panelTitle
+  reducer.on(
+    PanelActions.navigateTo.type,
+    (state: PanelState, selectedPanel: PanelTypes) => {
+      return {
+        ...state,
+        selectedPanel
+      }
     }
-  })
+  )
 
-  reducer.on(PanelActions.navigateBack.type, (state: PanelState) => {
-    const selectedPanel = state.lastSelectedPanel === undefined
-      ? state.selectedPanel
-      : state.lastSelectedPanel
-
-    const foundTitle = PanelTitles().find((title) => selectedPanel === title.id)
-    const panelTitle = foundTitle ? foundTitle.title : ''
-
-    return {
-      ...state,
-      selectedPanel,
-      lastSelectedPanel: state.selectedPanel,
-      panelTitle
+  reducer.on(
+    PanelActions.showConnectToSite.type,
+    (state: any, payload: ShowConnectToSitePayload) => {
+      return {
+        ...state,
+        connectToSiteOrigin: payload.originInfo,
+        connectingAccounts: payload.accounts
+      }
     }
-  })
+  )
 
-  reducer.on(PanelActions.showConnectToSite.type, (state: any, payload: ShowConnectToSitePayload) => {
-    return {
-      ...state,
-      connectToSiteOrigin: payload.originInfo,
-      connectingAccounts: payload.accounts
+  reducer.on(
+    PanelActions.setHardwareWalletInteractionError.type,
+    (state: any, payload?: HardwareWalletResponseCodeType) => {
+      return {
+        ...state,
+        hardwareWalletCode: payload
+      }
     }
-  })
-
-  reducer.on(PanelActions.addEthereumChain.type, (state: any, request: BraveWallet.AddChainRequest) => {
-    return {
-      ...state,
-      addChainRequest: request
-    }
-  })
-
-  reducer.on(PanelActions.switchEthereumChain.type, (state: any, request: BraveWallet.SwitchChainRequest) => {
-    return {
-      ...state,
-      switchChainRequest: request
-    }
-  })
-
-  reducer.on(PanelActions.getEncryptionPublicKey.type, (state: any, request: SerializableGetEncryptionPublicKeyRequest) => {
-    return {
-      ...state,
-      getEncryptionPublicKeyRequest: request
-    }
-  })
-
-  reducer.on(PanelActions.decrypt.type, (state: any, request: SerializableDecryptRequest) => {
-    return {
-      ...state,
-      decryptRequest: request
-    }
-  })
-
-  reducer.on(PanelActions.signMessage.type, (state, payload: SerializableSignMessageRequest[]) => {
-    return {
-      ...state,
-      signMessageData: payload
-    }
-  })
-
-  reducer.on(PanelActions.signTransaction.type, (state: PanelState, payload: BraveWallet.SignTransactionRequest[]): PanelState => {
-    return {
-      ...state,
-      signTransactionRequests: payload
-    }
-  })
-
-  reducer.on(PanelActions.signAllTransactions.type, (state: PanelState, payload: BraveWallet.SignAllTransactionsRequest[]): PanelState => {
-    return {
-      ...state,
-      signAllTransactionsRequests: payload
-    }
-  })
-
-  reducer.on(PanelActions.setHardwareWalletInteractionError.type, (state: any, payload?: HardwareWalletResponseCodeType) => {
-    return {
-      ...state,
-      hardwareWalletCode: payload
-    }
-  })
-
-  reducer.on(PanelActions.addSuggestToken.type, (state: PanelState, payload: SerializableAddSuggestTokenRequest): PanelState => {
-    return {
-      ...state,
-      suggestedTokenRequest: payload
-    }
-  })
+  )
 
   reducer.on(
     PanelActions.setSelectedTransactionId.type,
-    (state: PanelState, payload: string | undefined): PanelState => {
+    (
+      state: PanelState,
+      payload: TransactionInfoLookup | undefined
+    ): PanelState => {
       return {
         ...state,
         selectedTransactionId: payload
       }
     }
   )
+
   return reducer
 }
 

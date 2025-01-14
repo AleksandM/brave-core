@@ -11,16 +11,17 @@
 #include <string>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "base/scoped_multi_source_observation.h"
 #include "base/scoped_observation.h"
 #include "brave/components/brave_sync/time_limited_words.h"
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_observer.h"
-#include "components/sync/protocol/sync_protocol_error.h"
+#include "components/sync/engine/sync_protocol_error.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "components/sync_device_info/device_info_sync_service.h"
 #include "components/sync_device_info/device_info_tracker.h"
 
-class ChromeBrowserState;
+class ProfileIOS;
 struct SyncProtocolError;
 
 namespace syncer {
@@ -72,7 +73,7 @@ class BraveSyncServiceTracker : public syncer::SyncServiceObserver {
 
 class BraveSyncWorker : public syncer::SyncServiceObserver {
  public:
-  explicit BraveSyncWorker(ChromeBrowserState* browser_state_);
+  explicit BraveSyncWorker(ProfileIOS* profile_);
   BraveSyncWorker(const BraveSyncWorker&) = delete;
   BraveSyncWorker& operator=(const BraveSyncWorker&) = delete;
   ~BraveSyncWorker() override;
@@ -85,9 +86,9 @@ class BraveSyncWorker : public syncer::SyncServiceObserver {
   std::string GetHexSeedFromSyncCode(const std::string& code_words);
   std::string GetQrCodeJsonFromHexSeed(const std::string& hex_seed);
   brave_sync::QrCodeDataValidationResult GetQrCodeValidationResult(
-      const std::string json);
+      const std::string& json);
   brave_sync::TimeLimitedWords::ValidationStatus GetWordsValidationResult(
-      const std::string time_limited_words);
+      const std::string& time_limited_words);
   std::string GetWordsFromTimeLimitedWords(
       const std::string& time_limited_words);
   std::string GetTimeLimitedWordsFromWords(const std::string& words);
@@ -96,7 +97,7 @@ class BraveSyncWorker : public syncer::SyncServiceObserver {
   std::vector<std::unique_ptr<syncer::BraveDeviceInfo>> GetDeviceList();
   bool CanSyncFeatureStart();
   bool IsSyncFeatureActive();
-  bool IsFirstSetupComplete();
+  bool IsInitialSyncFeatureSetupComplete();
   bool SetSetupComplete();
   void ResetSync();
   void DeleteDevice(const std::string& device_guid);
@@ -118,7 +119,7 @@ class BraveSyncWorker : public syncer::SyncServiceObserver {
 
   std::string passphrase_;
 
-  ChromeBrowserState* browser_state_;  // NOT OWNED
+  raw_ptr<ProfileIOS> profile_;  // NOT OWNED
   base::ScopedMultiSourceObservation<syncer::SyncService,
                                      syncer::SyncServiceObserver>
       sync_service_observer_{this};

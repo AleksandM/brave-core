@@ -8,13 +8,11 @@
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/thread_test_helper.h"
-#include "brave/browser/brave_content_browser_client.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/chrome_content_client.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
@@ -27,25 +25,19 @@
 #include "media/base/media_switches.h"
 #include "net/dns/mock_host_resolver.h"
 
-const char kVideoPlaying[] = "Video playing";
-const char kVideoPlayingDetect[] =
+constexpr char kVideoPlaying[] = "Video playing";
+constexpr char kVideoPlayingDetect[] =
     "document.getElementById('status').textContent;";
-const char kEmbeddedTestServerDirectory[] = "autoplay";
+constexpr char kEmbeddedTestServerDirectory[] = "autoplay";
 
 class AutoplayBrowserTest : public InProcessBrowserTest {
  public:
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
 
-    content_client_ = std::make_unique<ChromeContentClient>();
-    content::SetContentClient(content_client_.get());
-    browser_content_client_ = std::make_unique<BraveContentBrowserClient>();
-    content::SetBrowserClientForTesting(browser_content_client_.get());
-
     host_resolver()->AddRule("*", "127.0.0.1");
     content::SetupCrossSiteRedirector(embedded_test_server());
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     test_data_dir = test_data_dir.AppendASCII(kEmbeddedTestServerDirectory);
@@ -61,11 +53,6 @@ class AutoplayBrowserTest : public InProcessBrowserTest {
     index_url_ = embedded_test_server()->GetURL("a.com", "/index.html");
     top_level_page_pattern_ =
         ContentSettingsPattern::FromString(index_url_.spec());
-  }
-
-  void TearDown() override {
-    browser_content_client_.reset();
-    content_client_.reset();
   }
 
   const GURL& index_url() { return index_url_; }
@@ -130,8 +117,6 @@ class AutoplayBrowserTest : public InProcessBrowserTest {
   GURL file_autoplay_method_url_;
   GURL file_autoplay_attr_url_;
   ContentSettingsPattern top_level_page_pattern_;
-  std::unique_ptr<ChromeContentClient> content_client_;
-  std::unique_ptr<BraveContentBrowserClient> browser_content_client_;
 };
 
 IN_PROC_BROWSER_TEST_F(AutoplayBrowserTest, AllowAutoplay) {

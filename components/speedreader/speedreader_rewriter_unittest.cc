@@ -42,13 +42,13 @@ class SpeedreaderRewriterTestBase : public ::testing::Test {
                           const std::string& theme = {},
                           const std::string& font = {},
                           const std::string& font_size = {},
-                          const std::string& content_style = {}) {
+                          const std::string& column_width = {}) {
     auto rewriter = speedreader_.MakeRewriter("https://test.com");
     rewriter->SetMinOutLength(100);
     rewriter->SetTheme(theme);
     rewriter->SetFontFamily(font);
     rewriter->SetFontSize(font_size);
-    rewriter->SetContentStyle(content_style);
+    rewriter->SetColumnWidth(column_width);
     const auto file_content = GetFileContent(file_name);
     rewriter->Write(file_content.data(), file_content.size());
     rewriter->End();
@@ -57,7 +57,16 @@ class SpeedreaderRewriterTestBase : public ::testing::Test {
 
   void CheckContent(const std::string& expected_content,
                     const std::string& filename) {
-    EXPECT_EQ(GetFileContent(filename), expected_content) << expected_content;
+    const auto check = GetFileContent(filename) == expected_content;
+    EXPECT_TRUE(check) << expected_content;
+#if DCHECK_IS_ON()
+    if (!check) {
+      const auto out_path =
+          current_process_dir_.AppendASCII(filename).AddExtensionASCII(
+              "actual");
+      base::WriteFile(out_path, expected_content);
+    }
+#endif
   }
 
   const base::FilePath& test_data_dir() const { return test_data_dir_; }
@@ -128,13 +137,12 @@ TEST_F(SpeedreaderRewriterThemeTest, SetFontSize) {
   CheckContent(out, expected_file);
 }
 
-TEST_F(SpeedreaderRewriterThemeTest, SetContentStyle) {
+TEST_F(SpeedreaderRewriterThemeTest, SetColumnWidth) {
   base::ScopedAllowBlockingForTesting allow_blocking;
 
   const std::string input_file = "meta_name_shortest_desc.html";
-  const std::string expected_file =
-      "meta_name_shortest_desc.content_style.html";
-  const auto out = ProcessPage(input_file, {}, {}, {}, "text-only");
+  const std::string expected_file = "meta_name_shortest_desc.column_width.html";
+  const auto out = ProcessPage(input_file, {}, {}, {}, "wide");
   CheckContent(out, expected_file);
 }
 
@@ -143,7 +151,7 @@ TEST_F(SpeedreaderRewriterThemeTest, SetAll) {
 
   const std::string input_file = "meta_name_shortest_desc.html";
   const std::string expected_file = "meta_name_shortest_desc.all.html";
-  const auto out = ProcessPage(input_file, "sepia", "serif", "70", "text-only");
+  const auto out = ProcessPage(input_file, "sepia", "serif", "70", "narrow");
   CheckContent(out, expected_file);
 }
 

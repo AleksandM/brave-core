@@ -1,18 +1,18 @@
-/* Copyright 2019 The Brave Authors. All rights reserved.
+/* Copyright (c) 2019 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "base/path_service.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/thread_test_helper.h"
 #include "brave/browser/extensions/brave_extension_functional_test.h"
-#include "brave/components/brave_shields/browser/https_everywhere_service.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/constants/url_constants.h"
 #include "chrome/browser/extensions/crx_installer.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/test/browser_test.h"
@@ -26,15 +26,6 @@ class BraveExtensionProviderTest : public extensions::ExtensionFunctionalTest {
 };
 
 namespace extensions {
-
-IN_PROC_BROWSER_TEST_F(BraveExtensionProviderTest, WhitelistedExtension) {
-  base::FilePath test_data_dir;
-  GetTestDataDir(&test_data_dir);
-  const extensions::Extension* extension = InstallExtension(
-      test_data_dir.AppendASCII("adblock-data").AppendASCII("adblock-default"),
-      1);
-  ASSERT_TRUE(extension);
-}
 
 // Load an extension page with an ad image, and make sure it is NOT blocked.
 // It would otherwise be blocked though if it wasn't an extension.
@@ -52,16 +43,11 @@ IN_PROC_BROWSER_TEST_F(BraveExtensionProviderTest,
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ASSERT_TRUE(content::WaitForLoadStop(contents));
   EXPECT_EQ(url, contents->GetURL());
 
-  bool as_expected = false;
-  ASSERT_TRUE(ExecuteScriptAndExtractBool(
-      contents,
-      "setExpectations(1, 0, 0, 0);"
-      "addImage('ad_banner.png')",
-      &as_expected));
-  EXPECT_TRUE(as_expected);
+  EXPECT_EQ(true, content::EvalJs(contents,
+                                  "setExpectations(1, 0, 0, 0);"
+                                  "addImage('ad_banner.png')"));
   EXPECT_EQ(browser()->profile()->GetPrefs()->GetUint64(kAdsBlocked), 0ULL);
 }
 
@@ -78,15 +64,10 @@ IN_PROC_BROWSER_TEST_F(BraveExtensionProviderTest, ExtensionsCanGetCookies) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ASSERT_TRUE(content::WaitForLoadStop(contents));
   EXPECT_EQ(url, contents->GetURL());
 
-  bool as_expected = false;
-  ASSERT_TRUE(ExecuteScriptAndExtractBool(
-      contents,
-      "canGetCookie('test', 'http://a.com')",
-      &as_expected));
-  EXPECT_TRUE(as_expected);
+  EXPECT_EQ(true,
+            content::EvalJs(contents, "canGetCookie('test', 'http://a.com')"));
 }
 
 IN_PROC_BROWSER_TEST_F(BraveExtensionProviderTest, ExtensionsCanSetCookies) {
@@ -102,15 +83,11 @@ IN_PROC_BROWSER_TEST_F(BraveExtensionProviderTest, ExtensionsCanSetCookies) {
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  ASSERT_TRUE(content::WaitForLoadStop(contents));
   EXPECT_EQ(url, contents->GetURL());
 
-  bool as_expected = false;
-  ASSERT_TRUE(ExecuteScriptAndExtractBool(
-      contents,
-      "canSetCookie('test', 'testval', 'http://a.com')",
-      &as_expected));
-  EXPECT_TRUE(as_expected);
+  EXPECT_EQ(true,
+            content::EvalJs(contents,
+                            "canSetCookie('test', 'testval', 'http://a.com')"));
 }
 
 }  // namespace extensions

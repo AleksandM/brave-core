@@ -33,14 +33,12 @@ UntrustedNftUI::UntrustedNftUI(content::WebUI* web_ui)
   }
 
   untrusted_source->SetDefaultResource(IDR_BRAVE_WALLET_NFT_DISPLAY_HTML);
-  untrusted_source->AddResourcePaths(
-      base::make_span(kNftDisplayGenerated, kNftDisplayGeneratedSize));
+  untrusted_source->AddResourcePaths(base::span(kNftDisplayGenerated));
   untrusted_source->AddFrameAncestor(GURL(kBraveUIWalletPageURL));
   untrusted_source->AddFrameAncestor(GURL(kBraveUIWalletPanelURL));
-  webui::SetupWebUIDataSource(
-      untrusted_source,
-      base::make_span(kNftDisplayGenerated, kNftDisplayGeneratedSize),
-      IDR_BRAVE_WALLET_NFT_DISPLAY_HTML);
+  webui::SetupWebUIDataSource(untrusted_source,
+                              base::span(kNftDisplayGenerated),
+                              IDR_BRAVE_WALLET_NFT_DISPLAY_HTML);
   untrusted_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
       std::string("script-src 'self' chrome-untrusted://resources;"));

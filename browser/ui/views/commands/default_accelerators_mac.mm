@@ -6,6 +6,7 @@
 #include "brave/browser/ui/views/commands/default_accelerators_mac.h"
 
 #import <Cocoa/Cocoa.h>
+#include <optional>
 
 #include "base/check.h"
 #include "base/containers/contains.h"
@@ -46,16 +47,50 @@ bool CanConvertToAcceleratorMapping(NSMenuItem* item) {
   }
 
   NSString* keyEquivalent = item.keyEquivalent;
-  return keyEquivalent != nil && [keyEquivalent length] > 0;
+  return keyEquivalent != nil && [keyEquivalent length] > 0 &&
+         [[keyEquivalent uppercaseString] length] > 0;
 }
 
-AcceleratorMapping ToAcceleratorMapping(NSMenuItem* item) {
+std::optional<AcceleratorMapping> ToAcceleratorMapping(NSMenuItem* item) {
+  bool keyEquivalentLocalizationEnabled = NO;
+  bool keyEquivalentMirroringEnabled = NO;
+
+  if (@available(macos 12.0, *)) {
+    keyEquivalentLocalizationEnabled =
+        item.allowsAutomaticKeyEquivalentLocalization;
+    keyEquivalentMirroringEnabled = item.allowsAutomaticKeyEquivalentMirroring;
+
+    // We can't parse keyEquivalent into keycode properly when it's unicode
+    // character. So before starting parsing, disable l10n for a while.
+    // https://github.com/brave/brave-browser/issues/31770
+    if (keyEquivalentLocalizationEnabled) {
+      // Setting this to NO will change allowsAutomaticKeyEquivalentMirroring to
+      // NO too.
+      // https://developer.apple.com/documentation/appkit/nsmenuitem/3787554-allowsautomatickeyequivalentloca?language=objc
+      item.allowsAutomaticKeyEquivalentLocalization = NO;
+    }
+  }
+
+  if (!CanConvertToAcceleratorMapping(item)) {
+    if (@available(macos 12.0, *)) {
+      item.allowsAutomaticKeyEquivalentLocalization =
+          keyEquivalentLocalizationEnabled;
+      item.allowsAutomaticKeyEquivalentMirroring =
+          keyEquivalentMirroringEnabled;
+    }
+    return std::nullopt;
+  }
+
   NSString* keyEquivalent = item.keyEquivalent;
   DVLOG(2) << __FUNCTION__ << item.tag << " > "
            << base::SysNSStringToUTF16(keyEquivalent);
 
-  const unsigned short charCode = [keyEquivalent characterAtIndex:0];
-  const int keyCode = ui::MacKeyCodeForWindowsKeyCode(
+  // The ui::KeybaordCode only contains the uppercase characters, we should
+  // capitalize them.
+  // https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/keyboard_codes_win.h;l=63;drc=3e1a26c44c024d97dc9a4c09bbc6a2365398ca2c
+  const unsigned short charCode =
+      [[keyEquivalent uppercaseString] characterAtIndex:0];
+  const int macKeyCode = ui::MacKeyCodeForWindowsKeyCode(
       static_cast<ui::KeyboardCode>(charCode), /*flags=*/0,
       /*us_keyboard_shifted_character=*/nullptr,
       /*keyboard_character=*/nullptr);
@@ -69,7 +104,7 @@ AcceleratorMapping ToAcceleratorMapping(NSMenuItem* item) {
                                      characters:keyEquivalent
                     charactersIgnoringModifiers:keyEquivalent
                                       isARepeat:NO
-                                        keyCode:keyCode];
+                                        keyCode:macKeyCode];
 
   auto modifiers = ui::EventFlagsFromModifiers(item.keyEquivalentModifierMask);
   if (item.keyEquivalentModifierMask & NSEventModifierFlagFunction) {
@@ -84,6 +119,7 @@ AcceleratorMapping ToAcceleratorMapping(NSMenuItem* item) {
     modifiers |= ui::EF_SHIFT_DOWN;
   }
 
+  const auto command_id = static_cast<int>(item.tag);
   // "Close Tab" and "Close Window" item's shortcuts are statically the same.
   // They are dynamically changed based on the context. e.g. has tab or not,
   // is pwa or not. And also the value is hard coded.
@@ -92,15 +128,21 @@ AcceleratorMapping ToAcceleratorMapping(NSMenuItem* item) {
   // the "Close Window" item.
   // TODO(sko) As the shortcut is hard coded in the file above, we might need to
   // forbid to adjust default key for IDC_CLOSE_TAB and IDC_CLOSE_WINDOW.
-  if (static_cast<int>(item.tag) == IDC_CLOSE_WINDOW &&
+  if (command_id == IDC_CLOSE_WINDOW &&
       (modifiers == ui::EF_COMMAND_DOWN &&
        [keyEquivalent isEqualToString:@"w"])) {
     modifiers |= ui::EF_SHIFT_DOWN;
   }
 
-  return {.keycode = ui::KeyboardCodeFromNSEvent(keyEvent),
-          .modifiers = modifiers,
-          .command_id = static_cast<int>(item.tag)};
+  if (@available(macos 12.0, *)) {
+    item.allowsAutomaticKeyEquivalentLocalization =
+        keyEquivalentLocalizationEnabled;
+    item.allowsAutomaticKeyEquivalentMirroring = keyEquivalentMirroringEnabled;
+  }
+
+  return AcceleratorMapping{.keycode = ui::KeyboardCodeFromNSEvent(keyEvent),
+                            .modifiers = modifiers,
+                            .command_id = command_id};
 }
 
 AcceleratorMapping ToAcceleratorMapping(const KeyboardShortcutData& data) {
@@ -137,9 +179,8 @@ void AccumulateAcceleratorsRecursively(
   CHECK(menu);
 
   for (NSMenuItem* item in [menu itemArray]) {
-    if (CanConvertToAcceleratorMapping(item)) {
-      (*accelerators)[static_cast<int>(item.tag)].push_back(
-          ToAcceleratorMapping(item));
+    if (auto mapping = ToAcceleratorMapping(item)) {
+      (*accelerators)[static_cast<int>(item.tag)].push_back(*mapping);
     }
 
     if (NSMenu* submenu = [item submenu];
@@ -174,7 +215,7 @@ std::vector<AcceleratorMapping> GetGlobalAccelerators() {
   // e.g. IDC_CLOSE_TAB is missing because it's dynamically added.
   for (const auto& [command_id, accelerator] :
        *AcceleratorsCocoa::GetInstance()) {
-    if (base::Contains(accelerator_map, command_id) ||
+    if (accelerator_map.contains(command_id) ||
         !CanConvertToAcceleratorMapping(command_id)) {
       continue;
     }

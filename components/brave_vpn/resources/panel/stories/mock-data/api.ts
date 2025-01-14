@@ -30,6 +30,7 @@ BraveVPN.setPanelBrowserApiForTesting({
     getAllRegions: () => Promise.resolve({ regions: mockRegionList }),
     getSelectedRegion: () => Promise.resolve({ currentRegion: mockRegionList[1] }),
     setSelectedRegion: doNothing,
+    clearSelectedRegion: doNothing,
     getProductUrls: () => Promise.resolve({
       urls: {
         feedback: 'https://example.com',
@@ -46,6 +47,11 @@ BraveVPN.setPanelBrowserApiForTesting({
     createSupportTicket: (email: string, subject: string, body: string) => Promise.resolve({
       success: true,
       response: 'OK'
-    })
+    }),
+    getOnDemandState: () => Promise.resolve({
+      available: true,
+      enabled: false
+    }),
+    enableOnDemand: (enable: boolean) => {}
   }
 })

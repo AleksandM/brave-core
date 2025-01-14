@@ -10,3 +10,8 @@
 a[href] {
   text-decoration: none !important;
 }
+
+.content-settings-header{
+  padding-top: var(--leo-spacing-2xl) !important;
+}
+

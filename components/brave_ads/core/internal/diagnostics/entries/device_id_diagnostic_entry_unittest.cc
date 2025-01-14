@@ -5,30 +5,27 @@
 
 #include "brave/components/brave_ads/core/internal/diagnostics/entries/device_id_diagnostic_entry.h"
 
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
+#include "brave/components/brave_ads/core/internal/common/test/mock_test_util.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_constants.h"
 #include "brave/components/brave_ads/core/internal/diagnostics/diagnostic_entry_types.h"
-#include "brave/components/brave_ads/core/internal/global_state/global_state.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds.*
 
 namespace brave_ads {
 
-class BraveAdsDeviceIdDiagnosticEntryTest : public UnitTestBase {};
+class BraveAdsDeviceIdDiagnosticEntryTest : public test::TestBase {};
 
 TEST_F(BraveAdsDeviceIdDiagnosticEntryTest, GetValue) {
   // Arrange
-  auto& sys_info = GlobalState::GetInstance()->SysInfo();
-  sys_info.device_id =
-      "21b4677de1a9b4a197ab671a1481d3fcb24f826a4358a05aafbaee5a9a51b57e";
+  test::MockDeviceId();
 
-  // Act
   const DeviceIdDiagnosticEntry diagnostic_entry;
 
-  // Assert
+  // Act & Assert
   EXPECT_EQ(DiagnosticEntryType::kDeviceId, diagnostic_entry.GetType());
   EXPECT_EQ("Device Id", diagnostic_entry.GetName());
-  EXPECT_EQ("21b4677de1a9b4a197ab671a1481d3fcb24f826a4358a05aafbaee5a9a51b57e",
-            diagnostic_entry.GetValue());
+  EXPECT_EQ(test::kDeviceId, diagnostic_entry.GetValue());
 }
 
 }  // namespace brave_ads

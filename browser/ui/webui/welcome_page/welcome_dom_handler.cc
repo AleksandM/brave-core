@@ -10,14 +10,16 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/utf_string_conversions.h"
 #include "brave/common/importer/importer_constants.h"
+#include "brave/components/constants/pref_names.h"
 #include "brave/components/p3a/pref_names.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/metrics/metrics_reporting_state.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/common/webui_url_constants.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -27,17 +29,20 @@ constexpr char16_t kChromeBetaMacBrowserName[] = u"Chrome Beta";
 constexpr char16_t kChromeDevMacBrowserName[] = u"Chrome Dev";
 constexpr char16_t kChromeBetaLinuxBrowserName[] = u"Google Chrome (beta)";
 constexpr char16_t kChromeDevLinuxBrowserName[] = u"Google Chrome (unstable)";
+constexpr char kP3AOnboardingHistogramName[] =
+    "Brave.Welcome.InteractionStatus.2";
+constexpr size_t kMaxP3AOnboardingPhases = 3;
 
-void RecordP3AHistogram(int screen_number, bool finished) {
-  int kCurrentScreen = 0;
-  int kMaxScreens = 6;
-  if (finished) {
-    kCurrentScreen = kMaxScreens + 1;
-  } else {
-    kCurrentScreen = std::min(screen_number, kMaxScreens);
-  }
-  UMA_HISTOGRAM_EXACT_LINEAR("Brave.Welcome.InteractionStatus", kCurrentScreen,
-                             kMaxScreens + 1);
+// What was the last screen that you viewed during the browser onboarding
+// process?
+// 0. Only viewed the welcome screen, performed no action
+// 1. Viewed the profile import screen
+// 2. Viewed the diagnostic/analytics consent screen
+// 3. Finished the onboarding process
+void RecordP3AHistogram(size_t last_onboarding_phase) {
+  int answer = std::min(last_onboarding_phase, kMaxP3AOnboardingPhases);
+  UMA_HISTOGRAM_EXACT_LINEAR(kP3AOnboardingHistogramName, answer,
+                             kMaxP3AOnboardingPhases + 1);
 }
 
 bool IsChromeBeta(const std::u16string& browser_name) {
@@ -65,11 +70,11 @@ WelcomeDOMHandler::WelcomeDOMHandler(Profile* profile) : profile_(profile) {
 }
 
 WelcomeDOMHandler::~WelcomeDOMHandler() {
-  RecordP3AHistogram(screen_number_, finished_);
+  RecordP3AHistogram(last_onboarding_phase_);
 }
 
 Browser* WelcomeDOMHandler::GetBrowser() {
-  return chrome::FindBrowserWithWebContents(web_ui()->GetWebContents());
+  return chrome::FindBrowserWithTab(web_ui()->GetWebContents());
 }
 
 void WelcomeDOMHandler::RegisterMessages() {
@@ -94,6 +99,10 @@ void WelcomeDOMHandler::RegisterMessages() {
   web_ui()->RegisterMessageCallback(
       "getDefaultBrowser",
       base::BindRepeating(&WelcomeDOMHandler::HandleGetDefaultBrowser,
+                          base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "enableWebDiscovery",
+      base::BindRepeating(&WelcomeDOMHandler::HandleEnableWebDiscovery,
                           base::Unretained(this)));
 }
 
@@ -127,14 +136,12 @@ void WelcomeDOMHandler::OnGetDefaultBrowser(
 }
 
 void WelcomeDOMHandler::HandleRecordP3A(const base::Value::List& args) {
-  if (!args[0].is_int() || !args[1].is_bool() || !args[2].is_bool()) {
-    return;
-  }
-  screen_number_ = args[0].GetInt();
-  finished_ = args[1].GetBool();
-  skipped_ = args[2].GetBool();
+  CHECK_EQ(1U, args.size());
+  CHECK(args[0].is_int());
 
-  RecordP3AHistogram(screen_number_, finished_);
+  last_onboarding_phase_ = args[0].GetInt();
+
+  RecordP3AHistogram(last_onboarding_phase_);
 }
 
 void WelcomeDOMHandler::HandleOpenSettingsPage(const base::Value::List& args) {
@@ -145,7 +152,7 @@ void WelcomeDOMHandler::HandleOpenSettingsPage(const base::Value::List& args) {
         GURL("brave://settings/privacy"), content::Referrer(),
         WindowOpenDisposition::NEW_BACKGROUND_TAB,
         ui::PAGE_TRANSITION_AUTO_TOPLEVEL, false);
-    browser->OpenURL(open_params);
+    browser->OpenURL(open_params, /*navigation_handle_callback=*/{});
   }
 }
 
@@ -158,6 +165,12 @@ void WelcomeDOMHandler::HandleSetMetricsReportingEnabled(
   bool enabled = args[0].GetBool();
   ChangeMetricsReportingState(
       enabled, ChangeMetricsReportingStateCalledFrom::kUiSettings);
+}
+
+void WelcomeDOMHandler::HandleEnableWebDiscovery(
+    const base::Value::List& args) {
+  DCHECK(profile_);
+  profile_->GetPrefs()->SetBoolean(kWebDiscoveryEnabled, true);
 }
 
 void WelcomeDOMHandler::SetLocalStateBooleanEnabled(

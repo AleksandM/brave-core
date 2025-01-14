@@ -23,62 +23,18 @@ aggregate_vector_icons("brave_vector_icons") {
     "brave_tooltips_stopwatch.icon",
     "brave_translate.icon",
     "download_unlock.icon",
-    "open_in_ipfs.icon",
-    "open_in_tor.icon",
     "sidebar_toolbar_button.icon",
     "sidebar_toolbar_button_right.icon",
+    "user_menu_guest.icon",
     "web_discovery_infobar_close_button.icon",
   ]
 
-  # The Skia icon names are transformed to make them easier to use in Brave Core
-  # `arrow-right.svg` becomes `leo_arrow_right.icon`
-  leo_icons = [
-    "leo_arrow_right.icon",
-    "leo_check_circle_filled.icon",
-    "leo_folder_exchange.icon",
-    "leo_heart_filled.icon",
-    "leo_heart_outline.icon",
-    "leo_product_brave_wallet.icon",
-    "leo_product_readermode.icon",
-    "leo_product_speedreader.icon",
-    "leo_rss.icon",
-    "leo_trash.icon",
-    "leo_check_circle_outline.icon",
-    "leo_verification_filled.icon",
-  ]
-
-  if (toolkit_views) {
-    leo_icons += [
-      "leo_plus_add.icon",
-      "leo_search.icon",
-    ]
-  }
-
-  if (enable_playlist_webui) {
-    leo_icons += [
-      "leo_product_playlist.icon",
-      "leo_product_playlist_add.icon",
-      "leo_product_playlist_added.icon",
-    ]
-  }
-
-  sources +=
-      rebase_path(leo_icons, ".", "//brave/node_modules/@brave/leo/icons-skia")
-
   if (toolkit_views) {
     sources += [
-      "sidebar_add_item.icon",
-      "sidebar_bookmarks.icon",
-      "sidebar_brave_talk.icon",
-      "sidebar_chat.icon",
-      "sidebar_crypto_wallet.icon",
       "sidebar_edit.icon",
-      "sidebar_history.icon",
       "sidebar_item_added_check.icon",
       "sidebar_items_down_arrow.icon",
       "sidebar_items_up_arrow.icon",
-      "sidebar_reading_list.icon",
-      "sidebar_settings.icon",
       "sidebar_trash.icon",
       "vertical_tab_strip_toggle_button.icon",
     ]

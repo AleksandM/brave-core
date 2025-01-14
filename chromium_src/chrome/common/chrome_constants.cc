@@ -16,7 +16,7 @@
 
 namespace chrome {
 
-const char kChromeVersion[] = CHROME_VERSION_STRING;
+constexpr char kChromeVersion[] = CHROME_VERSION_STRING;
 
 // The following should not be used for UI strings; they are meant
 // for system strings only. UI changes should be made in the GRD.
@@ -80,7 +80,7 @@ const base::FilePath::CharType kFrameworkName[] =
     FPL(PRODUCT_STRING " Framework.framework");
 const base::FilePath::CharType kFrameworkExecutableName[] =
     FPL(PRODUCT_STRING " Framework");
-const char kMacHelperSuffixAlerts[] = " (Alerts)";
+constexpr char kMacHelperSuffixAlerts[] = " (Alerts)";
 #endif  // OS_MAC
 
 #if BUILDFLAG(IS_WIN)
@@ -90,18 +90,22 @@ const base::FilePath::CharType kStatusTrayWindowClass[] =
     FPL("Chrome_StatusTrayWindow");
 #endif  // BUILDFLAG(IS_WIN)
 
-const char kInitialProfile[] = "Default";
-const char kMultiProfileDirPrefix[] = "Profile ";
+constexpr char kInitialProfile[] = "Default";
+constexpr char kMultiProfileDirPrefix[] = "Profile ";
 const base::FilePath::CharType kGuestProfileDir[] = FPL("Guest Profile");
 const base::FilePath::CharType kSystemProfileDir[] = FPL("System Profile");
 
 // filenames
+const base::FilePath::CharType kAccountPreferencesFilename[] =
+    FPL("AccountPreferences");
 const base::FilePath::CharType kCacheDirname[] = FPL("Cache");
 const base::FilePath::CharType kCookieFilename[] = FPL("Cookies");
 const base::FilePath::CharType kCRLSetFilename[] =
     FPL("Certificate Revocation Lists");
 const base::FilePath::CharType kCustomDictionaryFileName[] =
     FPL("Custom Dictionary.txt");
+const base::FilePath::CharType kDeviceBoundSessionsFilename[] =
+    FPL("Device Bound Sessions");
 const base::FilePath::CharType kDownloadServiceStorageDirname[] =
     FPL("Download Service");
 const base::FilePath::CharType kExtensionActivityLogFilename[] =
@@ -162,6 +166,8 @@ const base::FilePath::CharType kJumpListIconDirname[] = FPL("JumpListIcons");
 // directory names
 #if BUILDFLAG(IS_WIN)
 const wchar_t kUserDataDirname[] = L"User Data";
+#elif BUILDFLAG(IS_ANDROID)
+const base::FilePath::CharType kOTRTempStateDirname[] = FPL("OTRTempState");
 #endif
 
 const float kMaxShareOfExtensionProcesses = 0.30f;
@@ -169,9 +175,12 @@ const float kMaxShareOfExtensionProcesses = 0.30f;
 // This GUID is associated with any 'don't ask me again' settings that the
 // user can select for different file types.
 // {2676A9A2-D919-4FEE-9187-152100393AB2}
-const char kApplicationClientIDStringForAVScanning[] =
+constexpr char kApplicationClientIDStringForAVScanning[] =
     "2676A9A2-D919-4FEE-9187-152100393AB2";
 
 }  // namespace chrome
 
+#if BUILDFLAG(IS_MAC)
+#undef PRODUCT_STRING
+#endif  // BUILDFLAG(IS_MAC)
 #undef FPL

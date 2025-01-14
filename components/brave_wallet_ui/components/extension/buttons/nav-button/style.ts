@@ -4,9 +4,8 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import styled, { css } from 'styled-components'
-
-// types
-import { PanelButtonTypes } from './index'
+import * as leo from '@brave/leo/tokens/css/variables'
+import Icon from '@brave/leo/react/icon'
 
 // images
 import CloseIcon from '../../../../assets/svg-icons/close.svg'
@@ -16,6 +15,15 @@ import CheckIcon from '../../assets/filled-checkmark.svg'
 // styles
 import { walletButtonFocusMixin } from '../../../shared/style'
 import { Link } from 'react-router-dom'
+
+export type PanelButtonTypes =
+  | 'primary'
+  | 'secondary'
+  | 'danger'
+  | 'confirm'
+  | 'sign'
+  | 'reject'
+  | 'cancel'
 
 interface StyledButtonProps {
   buttonType: PanelButtonTypes
@@ -38,40 +46,29 @@ const StyledButtonCssMixin = (p: StyledButtonProps) => {
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: ${(p) => p.disabled ? 'default' : 'pointer'};
+    cursor: ${(p) => (p.disabled ? 'default' : 'pointer')};
     border-radius: 40px;
     padding: 10px 22px;
     outline: none;
-    margin-top: ${(p) => p?.addTopMargin ? '8px' : '0px'};
+    margin-top: ${(p) => (p?.addTopMargin ? '8px' : '0px')};
 
     background-color: ${(p) =>
       p.disabled
-        ? p.theme.color.disabled
+        ? leo.color.icon.disabled
         : p.buttonType === 'primary' ||
           p.buttonType === 'confirm' ||
           p.buttonType === 'sign'
-            ? p.theme.palette.blurple500
-            : p.buttonType === 'danger'
-              ? p.theme.color.errorBorder
-              : 'transparent'
-    };
+        ? leo.color.primitive.primary[40]
+        : p.buttonType === 'danger'
+        ? p.theme.color.errorBorder
+        : 'transparent'};
 
     border: ${(p) =>
-      p.buttonType === 'secondary' ||
-      p.buttonType === 'reject'
+      p.buttonType === 'secondary' || p.buttonType === 'reject'
         ? `1px solid ${p.theme.color.interactive08}`
-        : 'none'
-    };
+        : 'none'};
 
-    margin-right: ${(p) =>
-      p.buttonType === 'primary' ||
-      p.buttonType === 'confirm' ||
-      p.buttonType === 'sign'
-        ? '0px'
-        : '8px'
-    };
-
-    pointer-events: ${(p) => p.disabled ? 'none' : 'auto'};
+    pointer-events: ${(p) => (p.disabled ? 'none' : 'auto')};
 
     text-decoration: none;
   `
@@ -92,17 +89,18 @@ export const StyledLink = styled(Link).withConfig<StyledButtonProps>({
 
 export const ButtonText = styled.span<{
   buttonType: PanelButtonTypes
+  isV2?: boolean
 }>`
-  font-size: 13px;
+  font-family: Poppins;
+  font-size: ${(p) => (p.isV2 ? '16px' : '13px')};
   font-weight: 600;
-  line-height: 20px;
+  line-height: ${(p) => (p.isV2 ? '24px' : '20px')};
   color: ${(p) =>
     p.buttonType === 'secondary' ||
     p.buttonType === 'reject' ||
     p.buttonType === 'cancel'
-      ? p.theme.color.interactive07
-      : p.theme.palette.white
-  };
+      ? leo.color.text.secondary
+      : p.theme.palette.white};
 `
 
 export const RejectIcon = styled.div`
@@ -133,4 +131,11 @@ export const ConfirmIcon = styled.div`
   mask-image: url(${CheckIcon});
   mask-size: 100%;
   margin-right: 10px;
+`
+
+export const LaunchIcon = styled(Icon).attrs({ name: 'launch' })`
+  --leo-icon-size: 20px;
+  --leo-icon-color: ${leo.color.white};
+  margin-left: 8px;
+  margin-bottom: 1px;
 `

@@ -6,6 +6,7 @@
 #include "brave/components/brave_ads/core/internal/ml/transformation/hashed_ngrams_transformation.h"
 
 #include <map>
+#include <utility>
 
 #include "base/check.h"
 #include "brave/components/brave_ads/core/internal/ml/data/text_data.h"
@@ -20,10 +21,11 @@ HashedNGramsTransformation::HashedNGramsTransformation()
 }
 
 HashedNGramsTransformation::HashedNGramsTransformation(
-    const int bucket_count,
-    const std::vector<int>& subgrams)
+    int bucket_count,
+    std::vector<uint32_t> subgrams)
     : Transformation(TransformationType::kHashedNGrams) {
-  hash_vectorizer_ = std::make_unique<HashVectorizer>(bucket_count, subgrams);
+  hash_vectorizer_ =
+      std::make_unique<HashVectorizer>(bucket_count, std::move(subgrams));
 }
 
 HashedNGramsTransformation::HashedNGramsTransformation(
@@ -33,9 +35,15 @@ HashedNGramsTransformation::~HashedNGramsTransformation() = default;
 
 std::unique_ptr<Data> HashedNGramsTransformation::Apply(
     const std::unique_ptr<Data>& input_data) const {
-  CHECK(input_data->GetType() == DataType::kText);
+  CHECK(input_data);
 
-  auto* text_data = static_cast<TextData*>(input_data.get());
+  // TODO(https://github.com/brave/brave-browser/issues/31180): Refactor
+  // TextProcessing to make it more reliable.
+  if (input_data->GetType() != DataType::kText) {
+    return {};
+  }
+
+  const auto* const text_data = static_cast<TextData*>(input_data.get());
 
   const std::map<unsigned, double> frequences =
       hash_vectorizer_->GetFrequencies(text_data->GetText());

@@ -12,39 +12,17 @@
     "128": "assets/img/icon-128.png",
     "256": "assets/img/icon-256.png"
   },
-  "web_accessible_resources": [
-    "elementPicker.html",
-    "elementPicker.js"
-  ],
-  "background": {
+  "MAYBE_background":{
     "scripts": [
       "out/brave_extension_background.bundle.js"
     ],
     "persistent": true
   },
-  "externally_connectable": {
-    "ids": [
-      "*"
-    ],
-    "matches": [
-      "chrome://newtab/*"
-    ]
-  },
   "content_scripts": [
     {
       "matches": [
-        "http://*/*",
-        "https://*/*"
-      ],
-      "js": [
-        "out/content_element_picker.bundle.js"
-      ],
-      "run_at": "document_start",
-      "all_frames": true
-    },
-    {
-      "matches": [
-        "https://chrome.google.com/webstore/*"
+        "https://chrome.google.com/webstore/*",
+        "https://chromewebstore.google.com/*"
       ],
       "js": [
         "out/webstore.bundle.js"

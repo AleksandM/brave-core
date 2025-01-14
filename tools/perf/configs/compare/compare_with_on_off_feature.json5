@@ -7,12 +7,14 @@
       "label": "solana_on",
       "profile": "clean",
       "browser-type": "brave",
+      "field-trials": "no-trials",
       "extra-browser-args": ["--enable-features=BraveWalletSolana"],
       "extra-benchmark-args": [],
     },
     {
       "target" : "v1.39.73",
       "label": "solana_off",
+      "field-trials": "no-trials",
       "profile": "clean",
       "browser-type": "brave",
       "extra-browser-args": ["--disable-features=BraveWalletSolana"],
@@ -22,11 +24,9 @@
   "benchmarks": [
     {
       "name": "loading.desktop.brave",
-      "pageset-repeat": 1,
+      "pageset-repeat": 5,
       "stories": [
         "example.com_cold",
-        "wikipedia.com_cold",
-        "IGN_warm",
       ]
     }
   ]

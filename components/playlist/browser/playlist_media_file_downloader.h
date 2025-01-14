@@ -58,7 +58,8 @@ class PlaylistMediaFileDownloader
 
     // Called when target media file generation succeed.
     virtual void OnMediaFileReady(const std::string& id,
-                                  const std::string& media_file_path) = 0;
+                                  const std::string& media_file_path,
+                                  int64_t received_bytes) = 0;
     // Called when target media file generation failed.
     virtual void OnMediaFileGenerationFailed(const std::string& id) = 0;
 
@@ -83,7 +84,7 @@ class PlaylistMediaFileDownloader
   void RequestCancelCurrentPlaylistGeneration();
 
   bool in_progress() const { return in_progress_; }
-  const std::string& current_playlist_id() const { return current_item_->id; }
+  const std::string& current_item_id() const { return current_item_->id; }
 
   // download::SimpleDownloadManager::Observer:
   void OnDownloadCreated(download::DownloadItem* item) override;
@@ -95,11 +96,21 @@ class PlaylistMediaFileDownloader
  private:
   void ResetDownloadStatus();
   void DownloadMediaFile(const GURL& url);
-  void OnMediaFileDownloaded(const std::string& mime_type, base::FilePath path);
-  void OnRenameFile(const base::FilePath& new_path, bool result);
+  void OnMediaFileDownloaded(const std::string& download_item_guid,
+                             const std::string& mime_type,
+                             base::FilePath path,
+                             int64_t received_bytes);
+  void OnRenameFile(const base::FilePath& new_path,
+                    int64_t received_bytes,
+                    bool result);
 
   void NotifyFail(const std::string& id);
-  void NotifySucceed(const std::string& id, const std::string& media_file_path);
+  void NotifySucceed(const std::string& id,
+                     const std::string& media_file_path,
+                     int64_t received_bytes);
+
+  void ScheduleToCancelDownloadItem(const std::string& guid);
+  void CancelDownloadItem(const std::string& guid);
 
   void ScheduleToDetachCachedFile(download::DownloadItem* item);
   void DetachCachedFile(download::DownloadItem* item);
@@ -121,8 +132,13 @@ class PlaylistMediaFileDownloader
       download_item_observation_{this};
 
   // All below variables are only for playlist creation.
+  // TODO(sko) These are really fragile and unreliable. DownloadManager invokes
+  // many async callbacks, at the timing of the callback, these variables might
+  // be out of sync. We should wrap these into a class that matches the actual
+  // download item 1:1.
   base::FilePath destination_path_;
   mojom::PlaylistItemPtr current_item_;
+  std::string current_download_item_guid_;
 
   // true when this class is working for playlist now.
   bool in_progress_ = false;

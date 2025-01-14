@@ -8,7 +8,6 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_util.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
 #include "url/gurl.h"
@@ -41,7 +40,7 @@ class RewardsBrowserTestContextHelper {
  private:
   void OpenPopup();
 
-  raw_ptr<Browser> browser_ = nullptr;  // NOT OWNED
+  raw_ptr<Browser, DanglingUntriaged> browser_ = nullptr;  // NOT OWNED
   base::WeakPtr<content::WebContents> popup_contents_;
 };
 

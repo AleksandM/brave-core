@@ -6,13 +6,13 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_STATEMENT_STATEMENT_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_STATEMENT_STATEMENT_H_
 
-#include "base/functional/callback_forward.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom-forward.h"
+#include "base/functional/callback.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom-forward.h"
 
 namespace brave_ads {
 
 using BuildStatementCallback =
-    base::OnceCallback<void(mojom::StatementInfoPtr statement)>;
+    base::OnceCallback<void(mojom::StatementInfoPtr mojom_statement)>;
 
 void BuildStatement(BuildStatementCallback callback);
 

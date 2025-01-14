@@ -3,18 +3,19 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "brave/components/brave_ads/core/public/flags/flags_util.h"
+
 #include <string>
 #include <vector>
 
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
-#include "brave/components/brave_ads/core/flags_util.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/command_line_switch_info.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_command_line_switch_util.h"
-#include "brave/components/brave_ads/core/internal/flags/environment/environment_types_unittest_util.h"
+#include "brave/components/brave_ads/core/internal/common/test/command_line_switch_test_info.h"
+#include "brave/components/brave_ads/core/internal/common/test/command_line_switch_test_util.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
+#include "brave/components/brave_ads/core/internal/flags/environment/environment_types_test_util.h"
 #include "brave/components/brave_ads/core/internal/flags/flag_constants.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 #include "components/variations/variations_switches.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds*
@@ -23,19 +24,17 @@ namespace brave_ads {
 
 namespace {
 
-constexpr char kRewardsSwitch[] = "rewards";
-
 struct ParamInfo final {
-  CommandLineSwitchList command_line_switches;
+  test::CommandLineSwitchList command_line_switches;
   bool expected_should_debug;
   bool expected_did_override_command_line_switches;
   mojom::EnvironmentType expected_environment_type;
 } const kTests[] = {
     // Should debug
-    {{{kRewardsSwitch, "debug=true"}}, true, false, kDefaultEnvironmentType},
+    {{{"rewards", "debug=true"}}, true, false, kDefaultEnvironmentType},
 
     // Should not debug
-    {{{kRewardsSwitch, "debug=false"}}, false, false, kDefaultEnvironmentType},
+    {{{"rewards", "debug=false"}}, false, false, kDefaultEnvironmentType},
 
     // Override variations command-line switches
     {{{variations::switches::kFakeVariationsChannel, "foobar"}},
@@ -50,13 +49,13 @@ struct ParamInfo final {
      kDefaultEnvironmentType},
 
     // Force staging environment from command-line switch
-    {{{kRewardsSwitch, "staging=true"}},
+    {{{"rewards", "staging=true"}},
      false,
      false,
      mojom::EnvironmentType::kStaging},
 
     // Force production environment from command-line switch
-    {{{kRewardsSwitch, "staging=false"}},
+    {{{"rewards", "staging=false"}},
      false,
      false,
      mojom::EnvironmentType::kProduction},
@@ -66,11 +65,11 @@ struct ParamInfo final {
 
 }  // namespace
 
-class BraveAdsFlagsUtilTest : public UnitTestBase,
+class BraveAdsFlagsUtilTest : public test::TestBase,
                               public ::testing::WithParamInterface<ParamInfo> {
  protected:
   void SetUpMocks() override {
-    AppendCommandLineSwitches(GetParam().command_line_switches);
+    test::AppendCommandLineSwitches(GetParam().command_line_switches);
   }
 };
 
@@ -79,20 +78,20 @@ TEST_P(BraveAdsFlagsUtilTest, BuildFlags) {
   const ParamInfo param = GetParam();
 
   // Act
-  const mojom::FlagsPtr flags = BuildFlags();
+  const mojom::FlagsPtr mojom_flags = BuildFlags();
 
   // Assert
-  EXPECT_EQ(param.expected_should_debug, flags->should_debug);
+  EXPECT_EQ(param.expected_should_debug, mojom_flags->should_debug);
   EXPECT_EQ(param.expected_did_override_command_line_switches,
-            flags->did_override_from_command_line);
-  EXPECT_EQ(param.expected_environment_type, flags->environment_type);
+            mojom_flags->did_override_from_command_line);
+  EXPECT_EQ(param.expected_environment_type, mojom_flags->environment_type);
 }
 
 std::string TestParamToString(
     const ::testing::TestParamInfo<ParamInfo>& test_param) {
   // Environment
   const std::string environment_type =
-      EnvironmentTypeEnumToString(test_param.param.expected_environment_type);
+      test::ToString(test_param.param.expected_environment_type);
 
   // When
   std::vector<std::string> flags;
@@ -123,7 +122,7 @@ std::string TestParamToString(
       }
 
       sanitized_command_line_switches.push_back(
-          SanitizeCommandLineSwitch(command_line_switch));
+          test::ToString(command_line_switch));
     }
 
     with = base::StrCat(
@@ -139,7 +138,7 @@ std::string TestParamToString(
 
 INSTANTIATE_TEST_SUITE_P(,
                          BraveAdsFlagsUtilTest,
-                         testing::ValuesIn(kTests),
+                         ::testing::ValuesIn(kTests),
                          TestParamToString);
 
 }  // namespace brave_ads

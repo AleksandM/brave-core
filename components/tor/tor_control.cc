@@ -3,6 +3,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(https://github.com/brave/brave-browser/issues/41661): Remove this and
+// convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "brave/components/tor/tor_control.h"
 
 #include <utility>
@@ -91,7 +97,7 @@ TorControl::TorControl(base::WeakPtr<TorControl::Delegate> delegate,
       io_task_runner_(task_runner),
       writing_(false),
       reading_(false),
-      read_start_(-1),
+      read_start_(0u),
       read_cr_(false),
       delegate_(delegate) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(owner_sequence_checker_);
@@ -394,9 +400,7 @@ void TorControl::GetVersionLine(std::string* version,
                                 const std::string& status,
                                 const std::string& reply) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
-  if (status != "250" ||
-      !base::StartsWith(reply, kGetVersionReply,
-                        base::CompareCase::SENSITIVE) ||
+  if (status != "250" || !reply.starts_with(kGetVersionReply) ||
       !version->empty()) {
     VLOG(0) << "tor: unexpected " << kGetVersionCmd << " reply";
     return;
@@ -441,8 +445,7 @@ void TorControl::GetSOCKSListenersLine(std::vector<std::string>* listeners,
                                        const std::string& status,
                                        const std::string& reply) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
-  if (status != "250" || !base::StartsWith(reply, kGetSOCKSListenersReply,
-                                           base::CompareCase::SENSITIVE)) {
+  if (status != "250" || !reply.starts_with(kGetSOCKSListenersReply)) {
     VLOG(0) << "tor: unexpected " << kGetSOCKSListenersCmd << " reply";
     return;
   }
@@ -485,9 +488,7 @@ void TorControl::GetCircuitEstablishedLine(std::string* established,
                                            const std::string& status,
                                            const std::string& reply) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
-  if (status != "250" ||
-      !base::StartsWith(reply, kGetCircuitEstablishedReply,
-                        base::CompareCase::SENSITIVE) ||
+  if (status != "250" || !reply.starts_with(kGetCircuitEstablishedReply) ||
       !established->empty()) {
     VLOG(0) << "tor: unexpected " << kGetCircuitEstablishedCmd << " reply";
     return;
@@ -729,7 +730,7 @@ void TorControl::StartRead() {
   DCHECK(!cmdq_.empty() || !async_events_.empty());
   readiobuf_ = base::MakeRefCounted<net::GrowableIOBuffer>();
   readiobuf_->SetCapacity(kTorBufferSize);
-  read_start_ = 0;
+  read_start_ = 0u;
   DCHECK(readiobuf_->RemainingCapacity());
 }
 
@@ -817,8 +818,9 @@ void TorControl::ReadDone(int rv) {
         // CRLF seen, so we must have i >= 2.  Emit a line and advance
         // to the next one, unless anything went wrong with the line.
         assert(i >= 1);
-        std::string line(readiobuf_->StartOfBuffer() + read_start_,
-                         readiobuf_->offset() + i - 1 - read_start_);
+        std::string_view line =
+            base::as_string_view(readiobuf_->everything().subspan(
+                read_start_, readiobuf_->offset() + i - 1 - read_start_));
         read_start_ = readiobuf_->offset() + i + 1;
         read_cr_ = false;
         if (!ReadLine(line)) {
@@ -845,10 +847,9 @@ void TorControl::ReadDone(int rv) {
       Error();
       return;
     }
-    memmove(readiobuf_->StartOfBuffer(),
-            readiobuf_->StartOfBuffer() + read_start_,
-            readiobuf_->offset() - read_start_ + rv);
-    readiobuf_->set_offset(readiobuf_->offset() - read_start_ + rv);
+    readiobuf_->everything().copy_prefix_from(readiobuf_->everything().subspan(
+        read_start_, readiobuf_->offset() + rv - read_start_));
+    readiobuf_->set_offset(readiobuf_->offset() + rv - read_start_);
     read_start_ = 0;
   } else {
     // Otherwise, just advance the offset by the size of this input.
@@ -859,8 +860,8 @@ void TorControl::ReadDone(int rv) {
   // If we've processed every byte in the input so far, and there's no
   // more command callbacks queued or asynchronous events registered,
   // stop.
-  if (read_start_ == readiobuf_->offset() && cmdq_.empty() &&
-      async_events_.empty()) {
+  if (read_start_ == base::checked_cast<size_t>(readiobuf_->offset()) &&
+      cmdq_.empty() && async_events_.empty()) {
     reading_ = false;
     readiobuf_.reset();
     read_start_ = 0;
@@ -874,7 +875,7 @@ void TorControl::ReadDone(int rv) {
 //      We have read a line of input; process it.  Return true on
 //      success, false on error.
 //
-bool TorControl::ReadLine(const std::string& line) {
+bool TorControl::ReadLine(std::string_view line) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(io_sequence_checker_);
 
   if (line.size() < 4) {
@@ -889,9 +890,9 @@ bool TorControl::ReadLine(const std::string& line) {
   // intermediate reply and ` ' for a final reply.
   //
   // TODO(riastradh): parse or check syntax of status
-  std::string status(line, 0, 3);
+  std::string status(line.substr(0, 3));
   char pos = line[3];
-  std::string reply(line, 4);
+  std::string reply(line.substr(4));
 
   // Determine whether it is an asynchronous reply, status 6yz.
   if (status[0] == '6') {
@@ -1067,7 +1068,7 @@ void TorControl::Error() {
   }
   reading_ = false;
   readiobuf_.reset();
-  read_start_ = -1;
+  read_start_ = 0u;
   read_cr_ = false;
 
   // Clear write state.

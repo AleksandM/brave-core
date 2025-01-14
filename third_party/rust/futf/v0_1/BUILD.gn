@@ -1,0 +1,42 @@
+# Copyright 2023 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# @generated from third_party/rust/chromium_crates_io/BUILD.gn.hbs by
+# tools/crates/gnrt.
+# Do not edit!
+
+import("//build/rust/cargo_crate.gni")
+
+cargo_crate("lib") {
+  crate_name = "futf"
+  epoch = "0.1"
+  crate_type = "rlib"
+  crate_root =
+      "//brave/third_party/rust/chromium_crates_io/vendor/futf-0.1.5/src/lib.rs"
+  sources = [
+    "//brave/third_party/rust/chromium_crates_io/vendor/futf-0.1.5/src/lib.rs",
+    "//brave/third_party/rust/chromium_crates_io/vendor/futf-0.1.5/src/test.rs",
+  ]
+  inputs = []
+
+  build_native_rust_unit_tests = false
+  edition = "2015"
+  cargo_pkg_version = "0.1.5"
+  cargo_pkg_authors = "Keegan McAllister <kmcallister@mozilla.com>"
+  cargo_pkg_name = "futf"
+  cargo_pkg_description = "Handling fragments of UTF-8"
+  library_configs -= [ "//build/config/compiler:chromium_code" ]
+  library_configs += [ "//build/config/compiler:no_chromium_code" ]
+  executable_configs -= [ "//build/config/compiler:chromium_code" ]
+  executable_configs += [ "//build/config/compiler:no_chromium_code" ]
+  proc_macro_configs -= [ "//build/config/compiler:chromium_code" ]
+  proc_macro_configs += [ "//build/config/compiler:no_chromium_code" ]
+  deps = [
+    "//brave/third_party/rust/mac/v0_1:lib",
+    "//brave/third_party/rust/new_debug_unreachable/v1:lib",
+  ]
+  aliased_deps = {
+    debug_unreachable = "//brave/third_party/rust/new_debug_unreachable/v1:lib"
+  }
+}

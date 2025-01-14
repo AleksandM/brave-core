@@ -1,27 +1,27 @@
 diff --git a/chrome/common/BUILD.gn b/chrome/common/BUILD.gn
-index 21ba8f95b198d9a92119a947172af071db533893..3c49a9bc2dcf4ec74c5814d7c01908f9db64d492 100644
+index d8aae1b4cb41444828721172b9df75cf878b1ccf..2e5a8c333de6242ae2e22b287acd2026e75fa72e 100644
 --- a/chrome/common/BUILD.gn
 +++ b/chrome/common/BUILD.gn
-@@ -89,6 +89,7 @@ source_set("channel_info") {
-   } else if (is_fuchsia) {
-     sources += [ "channel_info_fuchsia.cc" ]
+@@ -100,6 +100,7 @@ source_set("channel_info") {
+   } else if (is_posix) {
+     sources += [ "channel_info_posix.cc" ]
    }
 +  public_deps += [ "//brave/common:channel_info" ]
  }
  
  source_set("ini_parser") {
-@@ -276,6 +277,7 @@ static_library("common_lib") {
+@@ -285,6 +286,7 @@ static_library("common_lib") {
    if (enable_ppapi) {
      public_deps += [ "//ppapi/shared_impl" ]
    }
-+  import("//brave/common/sources.gni") sources += brave_common_sources
++  import("//brave/common/sources.gni") sources += brave_chrome_common_sources deps += brave_chrome_common_deps public_deps += brave_chrome_common_public_deps
  
-   if (enable_extensions) {
-     sources += [
-@@ -548,6 +550,7 @@ static_library("non_code_constants") {
-     "//printing/buildflags",
-     "//ui/base:buildflags",
-   ]
+   if (enable_extensions_core) {
+     public_deps += [
+@@ -498,6 +500,7 @@ static_library("non_code_constants") {
+   if (is_win) {
+     sources += [ "chrome_icon_resources_win.h" ]
+   }
 +  configs += [ "//brave/common:constants_configs" ]
  }
  

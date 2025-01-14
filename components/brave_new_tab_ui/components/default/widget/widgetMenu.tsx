@@ -5,15 +5,22 @@
 
 import * as React from 'react'
 
+import Icon from '@brave/leo/react/icon'
+
 import { StyledWidgetMenuContainer, StyledWidgetMenu, StyledWidgetButton, StyledWidgetIcon, StyledSpan, StyledWidgetLink, StyledEllipsis } from './styles'
 import { IconButton } from '../../default'
-import EllipsisIcon from '../../popupMenu/ellipsisIcon'
 import HideIcon from './assets/hide'
 import AddSiteIcon from './assets/add-site'
 import FrecencyIcon from './assets/frecency'
 import LearnMoreIcon from './assets/learn-more'
 import FavoritesIcon from './assets/favorites'
 import { getLocale } from '../../../../common/locale'
+
+export interface WidgetMenuCustomItem {
+  label: string
+  renderIcon: () => React.ReactNode
+  onClick: () => void
+}
 
 interface Props {
   menuPosition: 'right' | 'left'
@@ -28,6 +35,7 @@ interface Props {
   onAddSite?: () => void
   customLinksEnabled?: boolean
   onToggleCustomLinksEnabled?: () => void
+  customMenuItems?: WidgetMenuCustomItem[]
   paddingType: 'none' | 'right' | 'default'
 }
 
@@ -88,6 +96,32 @@ export default class WidgetMenu extends React.PureComponent<Props, State> {
     this.closeMenu()
   }
 
+  renderCustomMenuItems () {
+    const { customMenuItems } = this.props
+
+    if (!customMenuItems) {
+      return null
+    }
+
+    return (
+      <>
+        {
+          customMenuItems.map((item, index) => {
+            return (
+              <StyledWidgetLink
+                key={index}
+                onClick={this.closeMenuWidget.bind(this, item.onClick)}
+              >
+                <StyledWidgetIcon>{item.renderIcon()}</StyledWidgetIcon>
+                <StyledSpan>{getLocale(item.label)}</StyledSpan>
+              </StyledWidgetLink>
+            )
+          })
+        }
+      </>
+    )
+  }
+
   render () {
     const {
       menuPosition,
@@ -99,7 +133,8 @@ export default class WidgetMenu extends React.PureComponent<Props, State> {
       onLearnMore,
       onAddSite,
       onToggleCustomLinksEnabled,
-      customLinksEnabled
+      customLinksEnabled,
+      customMenuItems
     } = this.props
     const { showMenu } = this.state
     const hideString = widgetTitle ? `${getLocale('hide')} ${widgetTitle}` : getLocale('hide')
@@ -108,7 +143,7 @@ export default class WidgetMenu extends React.PureComponent<Props, State> {
       <StyledWidgetMenuContainer ref={this.settingsMenuRef} paddingType={paddingType}>
         <StyledEllipsis widgetMenuPersist={widgetMenuPersist} isForeground={isForeground}>
           <IconButton isClickMenu={true} onClick={this.toggleMenu}>
-            <EllipsisIcon />
+            <Icon name='more-vertical' />
           </IconButton>
         </StyledEllipsis>
         {showMenu && <StyledWidgetMenu
@@ -116,6 +151,7 @@ export default class WidgetMenu extends React.PureComponent<Props, State> {
           menuPosition={menuPosition}
           widgetMenuPersist={widgetMenuPersist}
         >
+          { customMenuItems ? this.renderCustomMenuItems() : null }
           {
             onLearnMore
             ? <StyledWidgetLink

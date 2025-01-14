@@ -10,12 +10,12 @@
 TEST(ThreadProfilerConfigurationTest, DisabledForAllThreads) {
   const auto* config = ThreadProfilerConfiguration::Get();
   for (int t =
-           static_cast<int>(metrics::CallStackProfileParams::Thread::kUnknown);
-       t <= static_cast<int>(metrics::CallStackProfileParams::Thread::kMax);
+           static_cast<int>(sampling_profiler::ProfilerThreadType::kUnknown);
+       t <= static_cast<int>(sampling_profiler::ProfilerThreadType::kMax);
        ++t) {
     // This should be disabled for all threads.
     EXPECT_FALSE(config->IsProfilerEnabledForCurrentProcessAndThread(
-        static_cast<metrics::CallStackProfileParams::Thread>(t)))
+        static_cast<sampling_profiler::ProfilerThreadType>(t)))
         << t;
   }
 }

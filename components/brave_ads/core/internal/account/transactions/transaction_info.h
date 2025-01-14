@@ -6,12 +6,12 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_TRANSACTIONS_TRANSACTION_INFO_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_TRANSACTIONS_TRANSACTION_INFO_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/time/time.h"
-#include "brave/components/brave_ads/core/ad_type.h"
-#include "brave/components/brave_ads/core/confirmation_type.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads {
 
@@ -32,13 +32,14 @@ struct TransactionInfo final {
   [[nodiscard]] bool IsValid() const;
 
   std::string id;
-  base::Time created_at;
+  std::optional<base::Time> created_at;
   std::string creative_instance_id;
   std::string segment;
   double value = 0.0;
-  AdType ad_type = AdType::kUndefined;
-  ConfirmationType confirmation_type = ConfirmationType::kUndefined;
-  base::Time reconciled_at;
+  mojom::AdType ad_type = mojom::AdType::kUndefined;
+  mojom::ConfirmationType confirmation_type =
+      mojom::ConfirmationType::kUndefined;
+  std::optional<base::Time> reconciled_at;
 };
 
 using TransactionList = std::vector<TransactionInfo>;

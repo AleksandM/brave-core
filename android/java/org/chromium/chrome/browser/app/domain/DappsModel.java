@@ -8,26 +8,24 @@ package org.chromium.chrome.browser.app.domain;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
+import org.chromium.base.Callbacks;
 import org.chromium.brave_wallet.mojom.AccountInfo;
 import org.chromium.brave_wallet.mojom.BraveWalletService;
 import org.chromium.brave_wallet.mojom.CoinType;
 import org.chromium.brave_wallet.mojom.JsonRpcService;
-import org.chromium.brave_wallet.mojom.KeyringId;
 import org.chromium.brave_wallet.mojom.KeyringService;
 import org.chromium.brave_wallet.mojom.KeyringServiceObserver;
-import org.chromium.brave_wallet.mojom.SignAllTransactionsRequest;
-import org.chromium.brave_wallet.mojom.SignTransactionRequest;
+import org.chromium.brave_wallet.mojom.SignMessageRequest;
+import org.chromium.brave_wallet.mojom.SignSolTransactionsRequest;
+import org.chromium.brave_wallet.mojom.SolanaSignature;
 import org.chromium.brave_wallet.mojom.TransactionInfo;
 import org.chromium.brave_wallet.mojom.TransactionStatus;
 import org.chromium.chrome.browser.crypto_wallet.activities.BraveWalletDAppsActivity;
 import org.chromium.chrome.browser.crypto_wallet.model.WalletAccountCreationRequest;
-import org.chromium.chrome.browser.crypto_wallet.util.AssetUtils;
 import org.chromium.chrome.browser.crypto_wallet.util.PendingTxHelper;
 import org.chromium.chrome.browser.crypto_wallet.util.Utils;
-import org.chromium.mojo.bindings.Callbacks;
 import org.chromium.mojo.system.MojoException;
 import org.chromium.mojo.system.Pair;
-import org.chromium.url.internal.mojom.Origin;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,10 +42,8 @@ public class DappsModel implements KeyringServiceObserver {
     private final Object mLock = new Object();
     private final MutableLiveData<BraveWalletDAppsActivity.ActivityType> _mProcessNextDAppsRequest =
             new MutableLiveData<>();
-    private final MutableLiveData<List<SignTransactionRequest>> _mSignTxRequests;
-    private final MutableLiveData<List<SignAllTransactionsRequest>> _mSignAllTxRequests;
-    private final LiveData<List<SignTransactionRequest>> mSignTxRequests;
-    private final LiveData<List<SignAllTransactionsRequest>> mSignAllTxRequests;
+    private final MutableLiveData<List<SignSolTransactionsRequest>> _mSignSolTransactionsRequests;
+    private final LiveData<List<SignSolTransactionsRequest>> mSignSolTransactionsRequests;
     private List<WalletAccountCreationRequest> mPendingWalletAccountCreationRequests;
     private MutableLiveData<WalletAccountCreationRequest> _mPendingWalletAccountCreationRequest;
     public LiveData<WalletAccountCreationRequest> mPendingWalletAccountCreationRequest;
@@ -61,10 +57,8 @@ public class DappsModel implements KeyringServiceObserver {
         mJsonRpcService = jsonRpcService;
         mKeyringService = keyringService;
         mPendingTxHelper = pendingTxHelper;
-        _mSignTxRequests = new MutableLiveData<>(Collections.emptyList());
-        mSignTxRequests = _mSignTxRequests;
-        _mSignAllTxRequests = new MutableLiveData<>(Collections.emptyList());
-        mSignAllTxRequests = _mSignAllTxRequests;
+        _mSignSolTransactionsRequests = new MutableLiveData<>(Collections.emptyList());
+        mSignSolTransactionsRequests = _mSignSolTransactionsRequests;
         _mPendingWalletAccountCreationRequest = new MutableLiveData<>();
         mPendingWalletAccountCreationRequest = _mPendingWalletAccountCreationRequest;
         mPendingWalletAccountCreationRequests = new ArrayList<>();
@@ -73,75 +67,48 @@ public class DappsModel implements KeyringServiceObserver {
 
     public void fetchAccountsForConnectionReq(@CoinType.EnumType int coinType,
             Callbacks.Callback1<Pair<AccountInfo, List<AccountInfo>>> callback) {
-        if (coinType == CoinType.ETH || coinType == CoinType.SOL) {
-            mKeyringService.getKeyringInfo(
-                    AssetUtils.getKeyringForEthOrSolOnly(coinType), keyringInfo -> {
-                        mKeyringService.getSelectedAccount(coinType, accountAddress -> {
-                            if (coinType == CoinType.SOL) {
-                                // only the selected account is used for solana dapps
-                                for (AccountInfo accountInfo : keyringInfo.accountInfos) {
-                                    if (accountAddress.equals(accountInfo.address)) {
-                                        List<AccountInfo> accountInfos = new ArrayList<>();
-                                        accountInfos.add(accountInfo);
-                                        callback.call(new Pair<>(
-                                                Utils.findAccount(
-                                                        keyringInfo.accountInfos, accountAddress),
-                                                accountInfos));
-                                        return;
-                                    }
-                                }
-                            } else {
-                                callback.call(new Pair<>(
-                                        Utils.findAccount(keyringInfo.accountInfos, accountAddress),
-                                        Arrays.asList(keyringInfo.accountInfos)));
-                            }
-                        });
-                    });
-        } else {
+        if (coinType != CoinType.ETH && coinType != CoinType.SOL) {
             callback.call(new Pair<>(null, Collections.emptyList()));
+            return;
         }
+
+        mKeyringService.getAllAccounts(
+                allAccounts -> {
+                    List<AccountInfo> accounts =
+                            Utils.filterAccountsByCoin(allAccounts.accounts, coinType);
+                    callback.call(new Pair<>(allAccounts.ethDappSelectedAccount, accounts));
+                });
     }
 
-    public LiveData<List<SignTransactionRequest>> fetchSignTxRequest() {
-        mBraveWalletService.getPendingSignTransactionRequests(requests -> {
-            _mSignTxRequests.postValue(new ArrayList<>(Arrays.asList(requests)));
-        });
-        return mSignTxRequests;
+    public LiveData<List<SignSolTransactionsRequest>> fetchSignSolTransactionsRequests() {
+        mBraveWalletService.getPendingSignSolTransactionsRequests(
+                requests -> {
+                    _mSignSolTransactionsRequests.postValue(
+                            new ArrayList<>(Arrays.asList(requests)));
+                });
+        return mSignSolTransactionsRequests;
     }
 
-    public void signTxRequest(boolean isApproved, SignTransactionRequest signTransactionRequest) {
-        mBraveWalletService.notifySignTransactionRequestProcessed(
-                isApproved, signTransactionRequest.id, null, null);
-        mBraveWalletService.getPendingSignTransactionRequests(requests -> {
-            if (requests.length == 0) {
-                _mProcessNextDAppsRequest.postValue(BraveWalletDAppsActivity.ActivityType.FINISH);
-            } else {
-                _mSignTxRequests.postValue(new ArrayList<>(Arrays.asList(requests)));
-            }
-        });
+    public void notifySignSolTransactionsRequestProcessed(
+            boolean isApproved, SignSolTransactionsRequest request) {
+        mBraveWalletService.notifySignSolTransactionsRequestProcessed(
+                isApproved, request.id, new SolanaSignature[0], null);
+        mBraveWalletService.getPendingSignSolTransactionsRequests(
+                requests -> {
+                    if (requests.length == 0) {
+                        _mProcessNextDAppsRequest.postValue(
+                                BraveWalletDAppsActivity.ActivityType.FINISH);
+                    } else {
+                        _mSignSolTransactionsRequests.postValue(
+                                new ArrayList<>(Arrays.asList(requests)));
+                    }
+                });
     }
 
-    public LiveData<List<SignAllTransactionsRequest>> fetchSignAllTxRequest() {
-        mBraveWalletService.getPendingSignAllTransactionsRequests(requests -> {
-            _mSignAllTxRequests.postValue(new ArrayList<>(Arrays.asList(requests)));
-        });
-        return mSignAllTxRequests;
-    }
-
-    public void signAllTxRequest(boolean isApproved, SignAllTransactionsRequest request) {
-        mBraveWalletService.notifySignAllTransactionsRequestProcessed(
-                isApproved, request.id, null, null);
-        mBraveWalletService.getPendingSignAllTransactionsRequests(requests -> {
-            if (requests.length == 0) {
-                _mProcessNextDAppsRequest.postValue(BraveWalletDAppsActivity.ActivityType.FINISH);
-            } else {
-                _mSignAllTxRequests.postValue(new ArrayList<>(Arrays.asList(requests)));
-            }
-        });
-    }
-
-    public void resetServices(JsonRpcService jsonRpcService,
-            BraveWalletService braveWalletService, PendingTxHelper pendingTxHelper) {
+    public void resetServices(
+            JsonRpcService jsonRpcService,
+            BraveWalletService braveWalletService,
+            PendingTxHelper pendingTxHelper) {
         synchronized (mLock) {
             mBraveWalletService = braveWalletService;
             mJsonRpcService = jsonRpcService;
@@ -159,12 +126,12 @@ public class DappsModel implements KeyringServiceObserver {
         _mProcessNextDAppsRequest.postValue(null);
     }
 
-    public void processPublicEncryptionKey(boolean isApproved, Origin origin) {
+    public void processPublicEncryptionKey(String requestId, boolean isApproved) {
         synchronized (mLock) {
             if (mBraveWalletService == null) {
                 return;
             }
-            mBraveWalletService.notifyGetPublicKeyRequestProcessed(isApproved, origin);
+            mBraveWalletService.notifyGetPublicKeyRequestProcessed(requestId, isApproved);
             mBraveWalletService.getPendingGetEncryptionPublicKeyRequests(requests -> {
                 if (requests != null && requests.length > 0) {
                     _mProcessNextDAppsRequest.postValue(BraveWalletDAppsActivity.ActivityType
@@ -177,12 +144,12 @@ public class DappsModel implements KeyringServiceObserver {
         }
     }
 
-    public void processDecryptRequest(boolean isApproved, Origin origin) {
+    public void processDecryptRequest(String requestId, boolean isApproved) {
         synchronized (mLock) {
             if (mBraveWalletService == null) {
                 return;
             }
-            mBraveWalletService.notifyDecryptRequestProcessed(isApproved, origin);
+            mBraveWalletService.notifyDecryptRequestProcessed(requestId, isApproved);
             mBraveWalletService.getPendingDecryptRequests(requests -> {
                 if (requests != null && requests.length > 0) {
                     _mProcessNextDAppsRequest.postValue(
@@ -228,6 +195,18 @@ public class DappsModel implements KeyringServiceObserver {
         }
     }
 
+    public void notifySignMessageRequestProcessed(boolean isApproved, int id) {
+        notifySignMessageRequestProcessed(isApproved, id, null);
+    }
+
+    public void notifySignMessageRequestProcessed(boolean isApproved, int id, String error) {
+        mBraveWalletService.notifySignMessageRequestProcessed(isApproved, id, null, error);
+    }
+
+    public void getPendingSignMessageRequests(Callbacks.Callback1<SignMessageRequest[]> callback) {
+        mBraveWalletService.getPendingSignMessageRequests(callback::call);
+    }
+
     private void updateWalletBadgeVisibilityInternal() {
         if (mBraveWalletService == null || mJsonRpcService == null || mPendingTxHelper == null) {
             return;
@@ -235,46 +214,48 @@ public class DappsModel implements KeyringServiceObserver {
 
         _mWalletIconNotificationVisible.setValue(false);
 
-        mBraveWalletService.getPendingSignMessageRequests(requests -> {
-            if (requests != null && requests.length > 0) {
-                setWalletBadgeVisible();
-            }
-        });
-        mBraveWalletService.getPendingAddSuggestTokenRequests(requests -> {
-            if (requests != null && requests.length > 0) {
-                setWalletBadgeVisible();
-            }
-        });
-        mBraveWalletService.getPendingGetEncryptionPublicKeyRequests(requests -> {
-            if (requests != null && requests.length > 0) {
-                setWalletBadgeVisible();
-            }
-        });
-        mJsonRpcService.getPendingAddChainRequests(networks -> {
-            if (networks != null && networks.length > 0) {
-                setWalletBadgeVisible();
-            }
-        });
-        mJsonRpcService.getPendingSwitchChainRequests(requests -> {
-            if (requests != null && requests.length > 0) {
-                setWalletBadgeVisible();
-            }
-        });
-        mBraveWalletService.getPendingDecryptRequests(requests -> {
-            if (requests != null && requests.length > 0) {
-                setWalletBadgeVisible();
-            }
-        });
-        mBraveWalletService.getPendingSignTransactionRequests(requests -> {
-            if (requests != null && requests.length > 0) {
-                setWalletBadgeVisible();
-            }
-        });
-        mBraveWalletService.getPendingSignAllTransactionsRequests(requests -> {
-            if (requests != null && requests.length > 0) {
-                setWalletBadgeVisible();
-            }
-        });
+        mBraveWalletService.getPendingSignMessageRequests(
+                requests -> {
+                    if (requests != null && requests.length > 0) {
+                        setWalletBadgeVisible();
+                    }
+                });
+        mBraveWalletService.getPendingAddSuggestTokenRequests(
+                requests -> {
+                    if (requests != null && requests.length > 0) {
+                        setWalletBadgeVisible();
+                    }
+                });
+        mBraveWalletService.getPendingGetEncryptionPublicKeyRequests(
+                requests -> {
+                    if (requests != null && requests.length > 0) {
+                        setWalletBadgeVisible();
+                    }
+                });
+        mJsonRpcService.getPendingAddChainRequests(
+                networks -> {
+                    if (networks != null && networks.length > 0) {
+                        setWalletBadgeVisible();
+                    }
+                });
+        mJsonRpcService.getPendingSwitchChainRequests(
+                requests -> {
+                    if (requests != null && requests.length > 0) {
+                        setWalletBadgeVisible();
+                    }
+                });
+        mBraveWalletService.getPendingDecryptRequests(
+                requests -> {
+                    if (requests != null && requests.length > 0) {
+                        setWalletBadgeVisible();
+                    }
+                });
+        mBraveWalletService.getPendingSignSolTransactionsRequests(
+                requests -> {
+                    if (requests != null && requests.length > 0) {
+                        setWalletBadgeVisible();
+                    }
+                });
         for (TransactionInfo info : mPendingTxHelper.mTransactionInfoLd.getValue()) {
             if (info.txStatus == TransactionStatus.UNAPPROVED) {
                 setWalletBadgeVisible();
@@ -293,13 +274,13 @@ public class DappsModel implements KeyringServiceObserver {
     }
 
     @Override
-    public void keyringCreated(@KeyringId.EnumType int keyringId) {}
+    public void walletCreated() {}
 
     @Override
-    public void keyringRestored(@KeyringId.EnumType int keyringId) {}
+    public void walletRestored() {}
 
     @Override
-    public void keyringReset() {}
+    public void walletReset() {}
 
     @Override
     public void locked() {}
@@ -322,7 +303,11 @@ public class DappsModel implements KeyringServiceObserver {
     public void autoLockMinutesChanged() {}
 
     @Override
-    public void selectedAccountChanged(int coin) {}
+    public void selectedWalletAccountChanged(AccountInfo accountInfo) {}
+
+    @Override
+    public void selectedDappAccountChanged(
+            @CoinType.EnumType int coinType, AccountInfo accountInfo) {}
 
     @Override
     public void onConnectionError(MojoException e) {}

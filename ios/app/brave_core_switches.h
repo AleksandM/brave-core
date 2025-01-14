@@ -24,6 +24,15 @@ OBJC_EXPORT const BraveCoreSwitchKey BraveCoreSwitchKeyVModule;
 ///
 /// Expected value: A URL string
 OBJC_EXPORT const BraveCoreSwitchKey BraveCoreSwitchKeySyncURL;
+/// Sets the variations URL to a test seed generated in brave/brave-variations
+/// pull request.
+///
+/// Expected value: A brave/brave-variations pull request number
+OBJC_EXPORT const BraveCoreSwitchKey BraveCoreSwitchKeyVariationsPR;
+/// Overrides the variations seed URL. Defaults to production
+///
+/// Expected value: A URL string
+OBJC_EXPORT const BraveCoreSwitchKey BraveCoreSwitchKeyVariationsURL;
 /// Sets a number of overrides for the ads & ledger services such as which
 /// environment its using, debug mode, etc.
 ///
@@ -57,13 +66,27 @@ OBJC_EXPORT const BraveCoreSwitchKey
 /// Expected value: A number (in seconds)
 OBJC_EXPORT const BraveCoreSwitchKey
     BraveCoreSwitchKeyP3ASlowRotationIntervalSeconds NS_SWIFT_NAME(p3aSlowRotationIntervalSeconds);  // NOLINT
-/// For specifying a fake STAR epoch, for the purpose of
+/// For specifying a fake STAR epoch for the typical cadence, for the purpose of
 /// triggering the transmission of encrypted measurements before they are
 /// due to be sent, for testing purposes.
 ///
 /// Expected value: An 8-bit unsigned integer
 OBJC_EXPORT const BraveCoreSwitchKey
-    BraveCoreSwitchKeyP3AFakeStarEpoch NS_SWIFT_NAME(p3aFakeStarEpoch);  // NOLINT
+    BraveCoreSwitchKeyP3AFakeTypicalStarEpoch NS_SWIFT_NAME(p3aFakeTypicalStarEpoch);  // NOLINT
+/// For specifying a fake STAR epoch for the slow cadence, for the purpose of
+/// triggering the transmission of encrypted measurements before they are
+/// due to be sent, for testing purposes.
+///
+/// Expected value: An 8-bit unsigned integer
+OBJC_EXPORT const BraveCoreSwitchKey
+    BraveCoreSwitchKeyP3AFakeSlowStarEpoch NS_SWIFT_NAME(p3aFakeSlowStarEpoch);  // NOLINT
+/// For specifying a fake STAR epoch for the express cadence, for the purpose of
+/// triggering the transmission of encrypted measurements before they are
+/// due to be sent, for testing purposes.
+///
+/// Expected value: An 8-bit unsigned integer
+OBJC_EXPORT const BraveCoreSwitchKey
+    BraveCoreSwitchKeyP3AFakeExpressStarEpoch NS_SWIFT_NAME(p3aFakeExpressStarEpoch);  // NOLINT
 /// Overrides the P3A JSON backend URL.
 ///
 /// Expected value: A URL string
@@ -83,7 +106,7 @@ OBJC_EXPORT const BraveCoreSwitchKey
 ///
 /// Expected value: A URL string
 OBJC_EXPORT const BraveCoreSwitchKey
-    BraveCoreSwitchKeyP3AConstellationUploadServerURL NS_SWIFT_NAME(p3aConstellationUploadServerURL);
+    BraveCoreSwitchKeyP3AConstellationUploadServerHost NS_SWIFT_NAME(p3aConstellationUploadServerHost);
 /// Overrides the P3A "disable star attestation" setting.
 OBJC_EXPORT const BraveCoreSwitchKey
     BraveCoreSwitchKeyP3ADisableStarAttestation NS_SWIFT_NAME(p3aDisableStarAttestation);
@@ -96,6 +119,12 @@ OBJC_EXPORT const BraveCoreSwitchKey
 /// continue the normal process.
 OBJC_EXPORT const BraveCoreSwitchKey
     BraveCoreSwitchKeyP3AIgnoreServerErrors NS_SWIFT_NAME(p3aIgnoreServerErrors);  // NOLINT
+/// Fetch CRX components from staging instead of production
+OBJC_EXPORT const BraveCoreSwitchKey
+    BraveCoreSwitchKeyUseDevGoUpdater NS_SWIFT_NAME(useDevGoUpdater);  // NOLINT
+/// Expected value: A string {dev, staging, prod}
+OBJC_EXPORT const BraveCoreSwitchKey
+    BraveCoreSwitchKeyServicesEnvironment NS_SWIFT_NAME(servicesEnvironment);
 
 /// Defines a switch that may be overriden on launch.
 ///

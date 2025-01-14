@@ -3,15 +3,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "brave/browser/ui/views/sidebar/sidebar_item_added_feedback_bubble.h"
+
+#include <memory>
 #include <utility>
 
 #include "base/functional/bind.h"
 #include "brave/app/vector_icons/vector_icons.h"
-#include "brave/browser/ui/views/sidebar/sidebar_item_added_feedback_bubble.h"
 #include "brave/components/l10n/common/localization_util.h"
 #include "brave/grit/brave_generated_resources.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/compositor/layer.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/background.h"
@@ -58,7 +61,7 @@ SidebarItemAddedFeedbackBubble::SidebarItemAddedFeedbackBubble(
   set_color(kBubbleBackground);
   set_margins(gfx::Insets());
   set_title_margins(gfx::Insets());
-  SetButtons(ui::DIALOG_BUTTON_NONE);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
 
   AddChildViews();
   observed_.Observe(items_contents_view);
@@ -136,5 +139,5 @@ void SidebarItemAddedFeedbackBubble::AddChildViews() {
   label->SetEnabledColor(SK_ColorWHITE);
 }
 
-BEGIN_METADATA(SidebarItemAddedFeedbackBubble, views::BubbleDialogDelegateView)
+BEGIN_METADATA(SidebarItemAddedFeedbackBubble)
 END_METADATA

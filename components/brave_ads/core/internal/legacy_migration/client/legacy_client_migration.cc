@@ -5,74 +5,124 @@
 
 #include "brave/components/brave_ads/core/internal/legacy_migration/client/legacy_client_migration.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 
+#include "base/debug/dump_without_crashing.h"
 #include "base/functional/bind.h"
-#include "brave/components/brave_ads/common/pref_names.h"
-#include "brave/components/brave_ads/core/internal/ads_client_helper.h"
+#include "brave/components/brave_ads/core/internal/ads_client/ads_client_util.h"
 #include "brave/components/brave_ads/core/internal/common/logging_util.h"
 #include "brave/components/brave_ads/core/internal/deprecated/client/client_info.h"
-#include "brave/components/brave_ads/core/internal/deprecated/client/client_state_manager_constants.h"
+#include "brave/components/brave_ads/core/internal/history/ad_history_database_table.h"
+#include "brave/components/brave_ads/core/internal/legacy_migration/client/legacy_client_migration_ad_history_json_reader.h"
 #include "brave/components/brave_ads/core/internal/legacy_migration/client/legacy_client_migration_util.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "brave/components/brave_ads/core/internal/prefs/pref_util.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client.h"
+#include "brave/components/brave_ads/core/public/ads_constants.h"
+#include "brave/components/brave_ads/core/public/history/ad_history_item_info.h"
+#include "brave/components/brave_ads/core/public/prefs/pref_names.h"
 
-namespace brave_ads::client {
+namespace brave_ads {
 
 namespace {
 
-void FailedToMigrate(InitializeCallback callback) {
-  std::move(callback).Run(/*success*/ false);
+void FailedToMigrate(const std::string& reason, InitializeCallback callback) {
+  SCOPED_CRASH_KEY_STRING64("Issue32066", "failure_reason", reason);
+  base::debug::DumpWithoutCrashing();
+  BLOG(0, reason);
+  std::move(callback).Run(/*success=*/false);
 }
 
 void SuccessfullyMigrated(InitializeCallback callback) {
-  AdsClientHelper::GetInstance()->SetBooleanPref(prefs::kHasMigratedClientState,
-                                                 true);
-  std::move(callback).Run(/*success*/ true);
+  SetProfileBooleanPref(prefs::kHasMigratedClientState, true);
+  std::move(callback).Run(/*success=*/true);
 }
 
-}  // namespace
-
-void Migrate(InitializeCallback callback) {
-  if (HasMigrated()) {
-    return std::move(callback).Run(/*success*/ true);
+void HandleAdHistoryMigration(const std::string& json,
+                              InitializeCallback callback) {
+  const std::optional<AdHistoryList> ad_history =
+      json::reader::ReadAdHistory(json);
+  if (!ad_history) {
+    BLOG(3, "Successfully migrated client state");
+    return SuccessfullyMigrated(std::move(callback));
   }
 
-  AdsClientHelper::GetInstance()->Load(
-      kClientStateFilename,
+  database::table::AdHistory database_table;
+  database_table.Save(*ad_history,
+                      base::BindOnce(
+                          [](InitializeCallback callback, bool success) {
+                            if (!success) {
+                              return FailedToMigrate(
+                                  "Failed to migrate ad history client state",
+                                  std::move(callback));
+                            }
+
+                            BLOG(3, "Successfully migrated client state");
+                            SuccessfullyMigrated(std::move(callback));
+                          },
+                          std::move(callback)));
+}
+
+void HandleMalformedClientState(InitializeCallback callback) {
+  BLOG(0, "Resetting malformed client state to default values");
+
+  GetAdsClient().Save(
+      kClientJsonFilename, /*default state=§*/ "{}",
       base::BindOnce(
-          [](InitializeCallback callback,
-             const absl::optional<std::string>& json) {
-            if (!json) {
-              // Client state does not exist
-              return SuccessfullyMigrated(std::move(callback));
+          [](InitializeCallback callback, bool success) {
+            if (!success) {
+              return FailedToMigrate(
+                  "Failed to reset malformed client state to default values",
+                  std::move(callback));
             }
 
-            ClientInfo client;
-            if (!client.FromJson(*json)) {
-              BLOG(0, "Failed to load client state");
-              return FailedToMigrate(std::move(callback));
-            }
-
-            BLOG(1, "Migrating client state");
-
-            const std::string migrated_json = client.ToJson();
-
-            AdsClientHelper::GetInstance()->Save(
-                kClientStateFilename, migrated_json,
-                base::BindOnce(
-                    [](InitializeCallback callback, const bool success) {
-                      if (!success) {
-                        BLOG(0, "Failed to save client state");
-                        return FailedToMigrate(std::move(callback));
-                      }
-
-                      BLOG(3, "Successfully migrated client state");
-                      SuccessfullyMigrated(std::move(callback));
-                    },
-                    std::move(callback)));
+            SuccessfullyMigrated(std::move(callback));
           },
           std::move(callback)));
 }
 
-}  // namespace brave_ads::client
+void HandleClientStateMigration(InitializeCallback callback,
+                                const std::optional<std::string>& json) {
+  if (!json) {
+    // No client state to migrate.
+    return SuccessfullyMigrated(std::move(callback));
+  }
+
+  BLOG(1, "Migrating client state");
+
+  ClientInfo client;
+  if (!client.FromJson(*json)) {
+    return HandleMalformedClientState(std::move(callback));
+  }
+
+  const std::string migrated_json = client.ToJson();
+  GetAdsClient().Save(
+      kClientJsonFilename, migrated_json,
+      base::BindOnce(
+          [](const std::string& json, InitializeCallback callback,
+             bool success) {
+            if (!success) {
+              return FailedToMigrate("Failed to save migrated client state",
+                                     std::move(callback));
+            }
+
+            HandleAdHistoryMigration(json, std::move(callback));
+          },
+          *json, std::move(callback)));
+}
+
+}  // namespace
+
+void MigrateClientState(InitializeCallback callback) {
+  if (HasMigratedClientState()) {
+    // Already migrated.
+    return std::move(callback).Run(/*success=*/true);
+  }
+
+  GetAdsClient().Load(
+      kClientJsonFilename,
+      base::BindOnce(&HandleClientStateMigration, std::move(callback)));
+}
+
+}  // namespace brave_ads

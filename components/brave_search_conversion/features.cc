@@ -5,11 +5,7 @@
 
 #include "brave/components/brave_search_conversion/features.h"
 
-#include "base/feature_list.h"
-
-namespace brave_search_conversion {
-
-namespace features {
+namespace brave_search_conversion::features {
 
 // Brave search promotion match located at last low in omnibox popup.
 // This type seems more like ads banner.
@@ -17,15 +13,18 @@ BASE_FEATURE(kOmniboxBanner,
              "BraveSearchOmniboxBanner",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
-// Brave search promotion match located at second low in omnibox popup.
-// This looks very similar with other normal matches.
-BASE_FEATURE(kOmniboxButton,
-             "BraveSearchOmniboxButton",
+const base::FeatureParam<std::string> kBannerType{&kOmniboxBanner,
+                                                  kBannerTypeParamName, ""};
+
+BASE_FEATURE(kOmniboxDDGBanner,
+             "BraveSearchOmniboxDDGBanner",
+             base::FEATURE_DISABLED_BY_DEFAULT);
+
+BASE_FEATURE(kOmniboxPromotionButton,
+             "BraveSearchPromotionOmniboxButton",
              base::FEATURE_DISABLED_BY_DEFAULT);
 
 // Brave search promotion at NTP.
 BASE_FEATURE(kNTP, "BraveSearchNTP", base::FEATURE_DISABLED_BY_DEFAULT);
 
-}  // namespace features
-
-}  // namespace brave_search_conversion
+}  // namespace brave_search_conversion::features

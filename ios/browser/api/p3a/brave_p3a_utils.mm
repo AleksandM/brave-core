@@ -6,6 +6,7 @@
 #include "brave/ios/browser/api/p3a/brave_p3a_utils.h"
 
 #include "base/callback_list.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
@@ -14,9 +15,7 @@
 #include "brave/components/p3a/metric_log_type.h"
 #include "brave/components/p3a/p3a_service.h"
 #include "brave/components/p3a/pref_names.h"
-#include "brave/ios/browser/api/p3a/brave_histograms_controller+private.h"
 #include "components/prefs/pref_service.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 
 P3AMetricLogType const P3AMetricLogTypeSlow =
     static_cast<P3AMetricLogType>(p3a::MetricLogType::kSlow);
@@ -44,17 +43,13 @@ NSString* const P3ACreativeMetricPrefix =
 @end
 
 @implementation BraveP3AUtils {
-  ChromeBrowserState* _browserState;
-  PrefService* _localState;
+  raw_ptr<PrefService> _localState;
   scoped_refptr<p3a::P3AService> _p3aService;
 }
 
-- (instancetype)initWithBrowserState:(ChromeBrowserState*)mainBrowserState
-                          localState:(PrefService*)localState
-                          p3aService:
-                              (scoped_refptr<p3a::P3AService>)p3aService {
+- (instancetype)initWithLocalState:(PrefService*)localState
+                        p3aService:(scoped_refptr<p3a::P3AService>)p3aService {
   if ((self = [super init])) {
-    _browserState = mainBrowserState;
     _localState = localState;
     _p3aService = p3aService;
   }
@@ -77,10 +72,6 @@ NSString* const P3ACreativeMetricPrefix =
 - (void)setIsNoticeAcknowledged:(bool)isNoticeAcknowledged {
   _localState->SetBoolean(p3a::kP3ANoticeAcknowledged, isNoticeAcknowledged);
   _localState->CommitPendingWrite();
-}
-
-- (BraveHistogramsController*)histogramsController {
-  return [[BraveHistogramsController alloc] initWithBrowserState:_browserState];
 }
 
 - (P3ACallbackRegistration*)registerRotationCallback:
@@ -138,6 +129,16 @@ NSString* const P3ACreativeMetricPrefix =
     return;
   }
   _p3aService->RemoveDynamicMetric(base::SysNSStringToUTF8(histogramName));
+}
+
+- (void)updateMetricValueForSingleFormat:(NSString*)histogramName
+                                  bucket:(size_t)bucket
+                         isConstellation:(BOOL)isConstellation {
+  if (!_p3aService) {
+    return;
+  }
+  _p3aService->UpdateMetricValueForSingleFormat(
+      base::SysNSStringToUTF8(histogramName), bucket, isConstellation);
 }
 
 void UmaHistogramExactLinear(NSString* name,

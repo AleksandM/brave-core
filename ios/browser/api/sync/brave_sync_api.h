@@ -23,8 +23,6 @@ OBJC_EXPORT BraveSyncAPISyncProtocolErrorResult const
 OBJC_EXPORT BraveSyncAPISyncProtocolErrorResult const
     BraveSyncAPISyncProtocolErrorResultThrottled;
 OBJC_EXPORT BraveSyncAPISyncProtocolErrorResult const
-    BraveSyncAPISyncProtocolErrorResultClearPending;
-OBJC_EXPORT BraveSyncAPISyncProtocolErrorResult const
     BraveSyncAPISyncProtocolErrorResultTransientError;
 OBJC_EXPORT BraveSyncAPISyncProtocolErrorResult const
     BraveSyncAPISyncProtocolErrorResultMigrationDone;
@@ -74,7 +72,7 @@ OBJC_EXPORT
 
 @property(nonatomic, readonly) bool canSyncFeatureStart;
 @property(nonatomic, readonly) bool isSyncFeatureActive;
-@property(nonatomic, readonly) bool isFirstSetupComplete;
+@property(nonatomic, readonly) bool isInitialSyncFeatureSetupComplete;
 @property(nonatomic) bool isSyncAccountDeletedNoticePending;
 @property(nonatomic, readonly) bool isFailedDecryptSeedNoticeDismissed;
 
@@ -118,13 +116,13 @@ OBJC_EXPORT
 
 - (NSString*)getTimeLimitedWordsFromWords:(NSString*)words;
 
+- (NSDate*)getExpirationFromTimeLimitedWords:(NSString*)timeLimitedWords;
+
 - (NSString*)getHexSeedFromQrCodeJson:(NSString*)json;
 
 - (nullable UIImage*)getQRCodeImage:(CGSize)size;
 
 - (nullable NSString*)getDeviceListJSON;
-
-- (BraveSyncInternalsController*)createSyncInternalsController;
 
 - (id)createSyncDeviceObserver:(void (^)())onDeviceInfoChanged;
 - (id)createSyncServiceObserver:(void (^)())onSyncServiceStateChanged

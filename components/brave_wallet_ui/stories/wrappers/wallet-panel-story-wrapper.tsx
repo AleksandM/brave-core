@@ -16,19 +16,15 @@ import { WalletActions } from '../../common/actions'
 // types
 import { PanelState, UIState, WalletState } from '../../constants/types'
 
-// components
-import { LibContext } from '../../common/context/lib.context'
+// theme
+import LightDarkThemeProvider from '../../../common/BraveCoreThemeProvider'
+import walletDarkTheme from '../../theme/wallet-dark'
+import walletLightTheme from '../../theme/wallet-light'
 
 // Mocks
-import * as Lib from '../../common/async/__mocks__/lib'
-import { ApiProxyContext } from '../../common/context/api-proxy.context'
-import {
-  getMockedAPIProxy,
-  WalletApiDataOverrides
-} from '../../common/async/__mocks__/bridge'
 import { createMockStore } from '../../utils/test-utils'
-
-const mockedProxy = getMockedAPIProxy()
+import { WalletApiDataOverrides } from '../../constants/testing_types'
+import '../locale'
 
 export interface WalletPanelStoryProps {
   walletStateOverride?: Partial<WalletState>
@@ -37,7 +33,9 @@ export interface WalletPanelStoryProps {
   walletApiDataOverrides?: WalletApiDataOverrides
 }
 
-export const WalletPanelStory: React.FC<React.PropsWithChildren<WalletPanelStoryProps>> = ({
+export const WalletPanelStory: React.FC<
+  React.PropsWithChildren<WalletPanelStoryProps>
+> = ({
   children,
   panelStateOverride,
   walletStateOverride,
@@ -62,21 +60,27 @@ export const WalletPanelStory: React.FC<React.PropsWithChildren<WalletPanelStory
   ])
 
   React.useEffect(() => {
-    store && store.dispatch(WalletActions.initialize({}))
+    store && store.dispatch(WalletActions.initialize())
   }, [store])
 
   // render
   return (
     <MemoryRouter initialEntries={['/']}>
-      <Provider store={store}>
-        <ApiProxyContext.Provider value={mockedProxy}>
-          <LibContext.Provider value={Lib as any}>
-            {children}
-          </LibContext.Provider>
-        </ApiProxyContext.Provider>
-      </Provider>
+      <Provider store={store}>{children}</Provider>
     </MemoryRouter>
   )
 }
+
+export const WalletPanelTestWrapper = (
+  props: React.PropsWithChildren<WalletPanelStoryProps>
+) => (
+  <LightDarkThemeProvider
+    initialThemeType={'Light'}
+    dark={walletDarkTheme}
+    light={walletLightTheme}
+  >
+    <WalletPanelStory {...props} />
+  </LightDarkThemeProvider>
+)
 
 export default WalletPanelStory

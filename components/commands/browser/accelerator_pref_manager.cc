@@ -32,16 +32,14 @@ constexpr char kDefaultAcceleratorsPrefs[] = "brave.default_accelerators";
 AcceleratorPrefManager::Accelerators GetAcceleratorsFromPref(
     const std::string& pref,
     PrefService* prefs,
-    const base::flat_set<int> command_ids) {
+    const base::flat_set<int>& command_ids) {
   AcceleratorPrefManager::Accelerators result;
 
   const auto& accelerators = prefs->GetDict(pref);
   for (const auto [command_id, shortcuts] : accelerators) {
     int id;
-    if (!base::StringToInt(command_id, &id)) {
-      DCHECK(false) << "Failed to parse " << command_id << " as int";
-      continue;
-    }
+    CHECK(base::StringToInt(command_id, &id))
+        << "Failed to parse " << command_id << " as int";
 
     if (!base::Contains(command_ids, id)) {
       DVLOG(1) << "Found non-existent command_id " << id

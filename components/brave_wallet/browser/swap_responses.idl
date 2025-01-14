@@ -4,79 +4,92 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 namespace swap_responses {
-  dictionary ZeroExSource {
-    DOMString name;
-    DOMString proportion;
-  };
-
-  dictionary SwapResponse0x {
-    DOMString price;
-    DOMString? guaranteedPrice;
-    DOMString? to;
-    DOMString? data;
-    DOMString value;
-    DOMString gas;
-    DOMString estimatedGas;
-    DOMString gasPrice;
-    DOMString protocolFee;
-    DOMString minimumProtocolFee;
-    DOMString buyTokenAddress;
-    DOMString buyTokenAddress;
-    DOMString sellTokenAddress;
-    DOMString buyAmount;
-    DOMString sellAmount;
-    DOMString allowanceTarget;
-    DOMString sellTokenToEthRate;
-    DOMString buyTokenToEthRate;
-    DOMString estimatedPriceImpact;
-    ZeroExSource[] sources;
-  };
-
-  dictionary SwapErrorResponseItem0x {
-    DOMString field;
-    long code;
-    DOMString reason;
-  };
-
-  dictionary SwapErrorResponse0x {
-    long code;
-    DOMString reason;
-    SwapErrorResponseItem0x[]? validationErrors;
-  };
-
-  dictionary JupiterMarketInfoFee {
+  dictionary ZeroExFee {
     DOMString amount;
-    DOMString mint;
-    DOMString pct;
+    DOMString token;
+    DOMString type;
   };
 
-  dictionary JupiterMarketInfo {
+  dictionary ZeroExFees {
+    // nullable field that maps to ZeroExFee
+    any zeroExFee;
+  };
+
+  dictionary ZeroExTransaction {
+    DOMString to;
+    DOMString data;
+    DOMString gas;
+    DOMString gasPrice;
+    DOMString value;
+  };
+
+  dictionary ZeroExRouteFill {
+    DOMString from;
+    DOMString to;
+    DOMString source;
+    DOMString proportionBps;
+  };
+
+  dictionary ZeroExRoute {
+    ZeroExRouteFill[] fills;
+  };
+
+  dictionary ZeroExQuoteResponse {
+    DOMString? blockNumber;
+    DOMString? buyAmount;
+    DOMString? buyToken;
+    ZeroExFees? fees;
+    DOMString? gas;
+    DOMString? gasPrice;
+    boolean liquidityAvailable;
+    DOMString? minBuyAmount;
+    ZeroExRoute? route;
+    DOMString? sellAmount;
+    DOMString? sellToken;
+    DOMString? totalNetworkFee;
+  };
+
+  dictionary ZeroExTransactionResponse {
+    ZeroExTransaction transaction;
+  };
+
+  dictionary ZeroExErrorResponse {
+    DOMString name;
+    DOMString message;
+  };
+
+  dictionary JupiterPlatformFee {
+    DOMString amount;
+    DOMString feeBps;
+  };
+
+  dictionary JupiterSwapInfo {
+    DOMString ammKey;
     DOMString _label;
-    DOMString id;
     DOMString inputMint;
     DOMString outputMint;
-    boolean notEnoughLiquidity;
     DOMString inAmount;
     DOMString outAmount;
-    any priceImpactPct; // nullable
-    JupiterMarketInfoFee lpFee;
-    JupiterMarketInfoFee platformFee;
+    DOMString feeAmount;
+    DOMString feeMint;
   };
 
-  dictionary JupiterQuoteData {
-    DOMString inAmount;
-    DOMString outAmount;
-    DOMString amount;
-    DOMString slippageBps;
-    DOMString otherAmountThreshold;
-    DOMString swapMode;
-    any priceImpactPct; // nullable
-    JupiterMarketInfo[] marketInfos;
+  dictionary JupiterRouteStep {
+    JupiterSwapInfo swapInfo;
+    DOMString percent;
   };
 
   dictionary JupiterQuoteResponse {
-    JupiterQuoteData[] data;
-    DOMString timeTaken;
+    DOMString inputMint;
+    DOMString inAmount;
+    DOMString outputMint;
+    DOMString outAmount;
+    DOMString otherAmountThreshold;
+    DOMString swapMode;
+    DOMString slippageBps;
+    any platformFee; // nullable
+    DOMString priceImpactPct;
+    JupiterRouteStep[] routePlan;
   };
 
   dictionary JupiterSwapTransactions {
@@ -87,5 +100,278 @@ namespace swap_responses {
     DOMString statusCode;
     DOMString error;
     DOMString message;
+  };
+
+  // LiFi response types
+
+  dictionary LiFiStepStatusToken {
+    DOMString address;
+  };
+
+  dictionary LiFiStepStatus {
+    DOMString chainId;
+
+    // The following fields are temporarily undefined in case of a pending
+    // receiving step.
+    DOMString? txHash;
+    DOMString? txLink;
+    DOMString? amount;
+    LiFiStepStatusToken? token;
+  };
+
+  enum LiFiStatus {
+    NOT_FOUND,
+    INVALID,
+    PENDING,
+    DONE,
+    FAILED
+  };
+
+  enum LiFiSubstatus {
+    // substatuses for PENDING
+    WAIT_SOURCE_CONFIRMATIONS,
+    WAIT_DESTINATION_TRANSACTION,
+    BRIDGE_NOT_AVAILABLE,
+    CHAIN_NOT_AVAILABLE,
+    REFUND_IN_PROGRESS,
+    UNKNOWN_ERROR,
+
+    // substatuses for DONE
+    COMPLETED,
+    PARTIAL,
+    REFUNDED,
+
+    // substatuses for FAILED
+    NOT_PROCESSABLE_REFUND_NEEDED,
+    OUT_OF_GAS,
+    SLIPPAGE_EXCEEDED,
+    INSUFFICIENT_ALLOWANCE,
+    INSUFFICIENT_BALANCE,
+    EXPIRED
+  };
+
+  dictionary LiFiTransactionRequest {
+    // In case of SOL -> EVM transfers, only the data field is required which
+    // is a base64 encoded Solana transaction.
+    DOMString data;
+
+    // The following fields are mandatory for EVM -> any transfers.
+    DOMString? from;
+    DOMString? to;
+    DOMString? chainId;
+    DOMString? value;
+    DOMString? gasPrice;
+    DOMString? gasLimit;
+  };
+
+  dictionary LiFiToken {
+    DOMString address;
+    DOMString decimals;
+    DOMString symbol;
+    DOMString chainId;
+    DOMString name;
+    DOMString? coinKey;
+    DOMString? logoURI;
+  };
+
+  dictionary LiFiFeeCost {
+    DOMString name;
+    DOMString description;
+    DOMString percentage;
+    LiFiToken token;
+    DOMString amount;
+    boolean included;
+  };
+
+  dictionary LiFiGasCost {
+    DOMString type;
+    DOMString estimate;
+    DOMString limit;
+    DOMString amount;
+    LiFiToken token;
+  };
+
+  dictionary LiFiAction {
+    DOMString fromChainId;
+    DOMString fromAmount;
+    LiFiToken fromToken;
+    DOMString toChainId;
+    LiFiToken toToken;
+    DOMString slippage;
+
+    DOMString? fromAddress;
+    DOMString? toAddress;
+    DOMString? destinationCallData;
+  };
+
+  dictionary LiFiEstimate {
+    DOMString tool;
+    DOMString fromAmount;
+    DOMString toAmount;
+    DOMString toAmountMin;
+    DOMString approvalAddress;
+    LiFiFeeCost[]? feeCosts;
+    LiFiGasCost[] gasCosts;
+    DOMString executionDuration;
+  };
+
+  dictionary LiFiToolDetails {
+    DOMString key;
+    DOMString name;
+    DOMString logoURI;
+  };
+
+  dictionary LiFiStep {
+    DOMString id;
+    DOMString type;
+    DOMString tool;
+    LiFiToolDetails toolDetails;
+    LiFiAction action;
+    LiFiEstimate estimate;
+
+    DOMString? integrator;
+    LiFiStep[]? includedSteps;
+  };
+
+  dictionary LiFiRoute {
+    DOMString id;
+    boolean containsSwitchChain;
+    DOMString fromChainId;
+    DOMString fromAmount;
+    LiFiToken fromToken;
+    DOMString fromAddress;
+    DOMString toChainId;
+    DOMString toAmount;
+    DOMString toAmountMin;
+    LiFiToken toToken;
+    DOMString toAddress;
+    LiFiStep[] steps;
+    DOMString[] tags;
+  };
+
+  // Docs: https://apidocs.li.fi/reference/post_advanced-routes
+  dictionary LiFiQuoteResponse {
+    LiFiRoute[] routes;
+  };
+
+  // Docs: https://apidocs.li.fi/reference/post_advanced-steptransaction
+  dictionary LiFiTransactionResponse {
+    LiFiTransactionRequest transactionRequest;
+  };
+
+  dictionary LiFiStatusResponse {
+    DOMString transactionId;
+    LiFiStepStatus sending;
+    LiFiStepStatus receiving;
+    DOMString lifiExplorerLink;
+    DOMString fromAddress;
+    DOMString toAddress;
+    DOMString tool;
+    LiFiStatus status;
+    LiFiSubstatus substatus;
+    DOMString substatusMessage;
+  };
+
+  dictionary LiFiErrorResponse {
+    DOMString message;
+    DOMString? code;
+  };
+
+  // Squid response types
+
+  enum SquidChainType {
+    kEvm
+  };
+
+  enum SquidActionType {
+    kWrap,
+    kUnwrap,
+    kSwap,
+    kBridge
+  };
+
+  dictionary SquidToken {
+    DOMString address;
+    DOMString symbol;
+    DOMString name;
+    DOMString decimals;
+    DOMString chainId;
+    DOMString? coingeckoId;
+    DOMString? logoURI;
+    DOMString type;
+  };
+
+  dictionary SquidAction {
+    DOMString type;
+    DOMString description;
+    DOMString fromAmount;
+    DOMString fromChain;
+    SquidToken fromToken;
+
+    DOMString provider;
+    // logoURI is found to be missing in some cases
+    DOMString? logoURI;
+
+    DOMString toAmount;
+    DOMString toAmountMin;
+    DOMString toChain;
+    SquidToken toToken;
+  };
+
+  dictionary SquidFeeCost {
+    DOMString amount;
+    DOMString description;
+    DOMString name;
+    SquidToken token;
+  };
+
+  dictionary SquidGasCost {
+    DOMString amount;
+    DOMString gasLimit;
+    SquidToken token;
+  };
+
+  dictionary SquidEstimate {
+    SquidAction[] actions;
+    DOMString aggregatePriceImpact;
+    DOMString aggregateSlippage;
+    DOMString estimatedRouteDuration;
+    DOMString exchangeRate;
+    SquidFeeCost[] feeCosts;
+    SquidGasCost[] gasCosts;
+    boolean isBoostSupported;
+
+    DOMString fromAmount;
+    SquidToken fromToken;
+
+    DOMString toAmount;
+    DOMString toAmountMin;
+    SquidToken toToken;
+  };
+
+  dictionary SquidTransactionRequest {
+    DOMString data;
+    DOMString target;
+    DOMString value;
+    DOMString gasLimit;
+    DOMString gasPrice;
+    DOMString lastBaseFeePerGas;
+    DOMString maxFeePerGas;
+    DOMString maxPriorityFeePerGas;
+  };
+
+  dictionary SquidRoute {
+    SquidEstimate estimate;
+    SquidTransactionRequest? transactionRequest;
+  };
+
+  dictionary SquidQuoteResponse {
+    SquidRoute route;
+  };
+
+  dictionary SquidErrorResponse {
+    DOMString message;
+    DOMString statusCode;
+    DOMString type;
   };
 };

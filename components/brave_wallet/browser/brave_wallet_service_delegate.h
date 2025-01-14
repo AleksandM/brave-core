@@ -7,13 +7,14 @@
 #define BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_BRAVE_WALLET_SERVICE_DELEGATE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "base/functional/callback.h"
 #include "base/observer_list_types.h"
+#include "base/types/expected.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/brave_wallet_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/origin.h"
 
 namespace content {
@@ -27,15 +28,7 @@ class BraveWalletServiceDelegate {
   using IsExternalWalletInstalledCallback = base::OnceCallback<void(bool)>;
   using IsExternalWalletInitializedCallback = base::OnceCallback<void(bool)>;
   using GetImportInfoCallback =
-      base::OnceCallback<void(bool, ImportInfo, ImportError)>;
-  using AddPermissionCallback =
-      mojom::BraveWalletService::AddPermissionCallback;
-  using HasPermissionCallback =
-      mojom::BraveWalletService::HasPermissionCallback;
-  using ResetPermissionCallback =
-      mojom::BraveWalletService::ResetPermissionCallback;
-  using IsPermissionDeniedCallback =
-      mojom::BraveWalletService::IsPermissionDeniedCallback;
+      base::OnceCallback<void(base::expected<ImportInfo, ImportError>)>;
   using GetWebSitesWithPermissionCallback =
       mojom::BraveWalletService::GetWebSitesWithPermissionCallback;
   using ResetWebSitePermissionCallback =
@@ -62,21 +55,18 @@ class BraveWalletServiceDelegate {
   virtual void GetImportInfoFromExternalWallet(mojom::ExternalWalletType type,
                                                const std::string& password,
                                                GetImportInfoCallback callback);
-  virtual void AddPermission(mojom::CoinType coin,
+  virtual bool AddPermission(mojom::CoinType coin,
                              const url::Origin& origin,
-                             const std::string& account,
-                             AddPermissionCallback callback);
-  virtual void HasPermission(mojom::CoinType coin,
+                             const std::string& account);
+  virtual bool HasPermission(mojom::CoinType coin,
                              const url::Origin& origin,
-                             const std::string& account,
-                             HasPermissionCallback callback);
-  virtual void ResetPermission(mojom::CoinType coin,
+                             const std::string& account);
+  virtual bool ResetPermission(mojom::CoinType coin,
                                const url::Origin& origin,
-                               const std::string& account,
-                               ResetPermissionCallback callback);
-  virtual void IsPermissionDenied(mojom::CoinType coin,
-                                  const url::Origin& origin,
-                                  IsPermissionDeniedCallback callback);
+                               const std::string& account);
+  virtual bool IsPermissionDenied(mojom::CoinType coin,
+                                  const url::Origin& origin);
+  virtual void ResetAllPermissions() {}
   virtual void GetWebSitesWithPermission(
       mojom::CoinType coin,
       GetWebSitesWithPermissionCallback callback);
@@ -84,9 +74,13 @@ class BraveWalletServiceDelegate {
                                       const std::string& formed_website,
                                       ResetWebSitePermissionCallback callback);
 
-  virtual mojom::OriginInfoPtr GetActiveOrigin();
+  virtual std::optional<url::Origin> GetActiveOrigin();
 
   virtual void ClearWalletUIStoragePartition();
+
+  virtual base::FilePath GetWalletBaseDirectory() = 0;
+
+  virtual bool IsPrivateWindow() = 0;
 
   static std::unique_ptr<BraveWalletServiceDelegate> Create(
       content::BrowserContext* browser_context);

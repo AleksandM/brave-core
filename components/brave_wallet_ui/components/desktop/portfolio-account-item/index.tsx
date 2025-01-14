@@ -3,67 +3,72 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 import * as React from 'react'
-import { create } from 'ethereum-blockies'
 import { useHistory } from 'react-router'
+import { skipToken } from '@reduxjs/toolkit/query/react'
 
 // Types
-import {
-  BraveWallet,
-  DefaultCurrencies,
-  WalletRoutes
-} from '../../../constants/types'
+import { AccountPageTabs, BraveWallet } from '../../../constants/types'
 
 // Hooks
-import { useExplorer } from '../../../common/hooks'
+import { useExplorer } from '../../../common/hooks/explorer'
+import { useOnClickOutside } from '../../../common/hooks/useOnClickOutside'
 
 // Utils
 import { reduceAddress } from '../../../utils/reduce-address'
 import Amount from '../../../utils/amount'
+import {
+  computeFiatAmount,
+  getPriceIdForToken
+} from '../../../utils/pricing-utils'
+import { makeAccountRoute } from '../../../utils/routes-utils'
+import { getIsRewardsAccount } from '../../../utils/rewards_utils'
+import {
+  externalWalletProviderFromString //
+} from '../../../../brave_rewards/resources/shared/lib/external_wallet'
 import { getLocale } from '../../../../common/locale'
-import { getPriceIdForToken } from '../../../utils/api-utils'
-import { computeFiatAmount } from '../../../utils/pricing-utils'
 
 // Components
-import { TransactionPopup, WithHideBalancePlaceholder } from '../'
-import { CopyTooltip } from '../../shared/copy-tooltip/copy-tooltip'
-import { TransactionPopupItem } from '../transaction-popup'
+import WithHideBalancePlaceholder from '../with-hide-balance-placeholder'
+import { PortfolioAccountMenu } from '../wallet-menus/portfolio-account-menu'
+import { RewardsMenu } from '../wallet-menus/rewards_menu'
+import { PopupModal } from '../popup-modals/index'
+import { DepositModal } from '../popup-modals/account-settings-modal/account-settings-modal'
+
+// Styled Components
+import {
+  CreateAccountIcon //
+} from '../../shared/create-account-icon/create-account-icon'
 
 // Queries
 import {
+  useGetDefaultFiatCurrencyQuery,
   useGetTokenSpotPricesQuery
 } from '../../../common/slices/api.slice'
-import {
-  querySubscriptionOptions60s
-} from '../../../common/slices/constants'
+import { querySubscriptionOptions60s } from '../../../common/slices/constants'
 
 // Styled Components
 import {
   StyledWrapper,
-  AssetBalanceText,
-  AccountNameButton,
-  AccountAddressButton,
-  AccountAndAddress,
-  BalanceColumn,
-  FiatBalanceText,
-  NameAndIcon,
-  AccountCircle,
-  MoreButton,
-  MoreIcon,
-  RightSide,
-  CopyIcon,
-  AddressAndButtonRow
+  AccountMenuWrapper,
+  AccountMenuButton,
+  AccountMenuIcon,
+  AccountButton
 } from './style'
-import { SellButtonRow, SellButton } from '../../shared/style'
+import {
+  BraveRewardsIndicator,
+  VerticalSpacer,
+  Text,
+  Row,
+  Column,
+  VerticalDivider
+} from '../../shared/style'
 
 interface Props {
-  address: string
-  defaultCurrencies: DefaultCurrencies
+  account: BraveWallet.AccountInfo
   asset: BraveWallet.BlockchainToken
   assetBalance: string
-  selectedNetwork?: BraveWallet.NetworkInfo
-  name: string
+  selectedNetwork?: BraveWallet.NetworkInfo | null
   hideBalances?: boolean
-  isNft?: boolean
   isSellSupported: boolean
   showSellModal: () => void
 }
@@ -72,12 +77,9 @@ export const PortfolioAccountItem = (props: Props) => {
   const {
     asset,
     assetBalance,
-    address,
+    account,
     selectedNetwork,
-    defaultCurrencies,
     hideBalances,
-    name,
-    isNft,
     isSellSupported,
     showSellModal
   } = props
@@ -89,12 +91,19 @@ export const PortfolioAccountItem = (props: Props) => {
   const onClickViewOnBlockExplorer = useExplorer(selectedNetwork)
 
   // State
-  const [showAccountPopup, setShowAccountPopup] = React.useState<boolean>(false)
+  const [showAccountMenu, setShowAccountMenu] = React.useState<boolean>(false)
+  const [showDepositModal, setShowDepositModal] = React.useState<boolean>(false)
 
-  // Memos
-  const orb = React.useMemo(() => {
-    return create({ seed: address.toLowerCase(), size: 8, scale: 16 }).toDataURL()
-  }, [address])
+  // Refs
+  const accountMenuRef = React.useRef<HTMLDivElement>(null)
+  const depositModalRef = React.useRef<HTMLDivElement>(null)
+
+  // Memos & Computed
+  const isRewardsAccount = getIsRewardsAccount(account.accountId)
+
+  const externalProvider = isRewardsAccount
+    ? externalWalletProviderFromString(account.accountId.uniqueKey)
+    : null
 
   const formattedAssetBalance: string = React.useMemo(() => {
     return new Amount(assetBalance)
@@ -107,8 +116,13 @@ export const PortfolioAccountItem = (props: Props) => {
     [asset]
   )
 
+  // Queries
+  const { data: defaultFiatCurrency = 'usd' } = useGetDefaultFiatCurrencyQuery()
+
   const { data: spotPriceRegistry } = useGetTokenSpotPricesQuery(
-    { ids: tokenPriceIds },
+    defaultFiatCurrency && tokenPriceIds.length
+      ? { ids: tokenPriceIds, toCurrency: defaultFiatCurrency }
+      : skipToken,
     querySubscriptionOptions60s
   )
 
@@ -124,66 +138,153 @@ export const PortfolioAccountItem = (props: Props) => {
     return new Amount(assetBalance).isZero()
   }, [assetBalance])
 
-  // Methods
-  const onHideAccountPopup = React.useCallback(() => {
-    if (showAccountPopup) {
-      setShowAccountPopup(false)
-    }
-  }, [showAccountPopup])
+  const blockExplorerSupported = !!account.address
 
+  // Methods
   const onSelectAccount = React.useCallback(() => {
-    history.push(`${WalletRoutes.Accounts}/${address}`)
-  }, [address])
+    history.push(makeAccountRoute(account, AccountPageTabs.AccountAssetsSub))
+  }, [history, account])
+
+  const onViewAccountOnBlockExplorer = React.useCallback(
+    () => onClickViewOnBlockExplorer('address', account.address)(),
+    [account.address, onClickViewOnBlockExplorer]
+  )
+
+  const onHideAccountMenu = React.useCallback(() => {
+    setShowAccountMenu(false)
+  }, [])
+
+  const onShowDepositModal = () => {
+    setShowDepositModal(true)
+    setShowAccountMenu(false)
+  }
+
+  // Hooks
+  useOnClickOutside(accountMenuRef, onHideAccountMenu, showAccountMenu)
+  useOnClickOutside(
+    depositModalRef,
+    () => setShowDepositModal(false),
+    showDepositModal
+  )
 
   return (
-    <StyledWrapper onClick={onHideAccountPopup}>
-      <NameAndIcon>
-        <AccountCircle orb={orb} />
-        <AccountAndAddress>
-          <AccountNameButton onClick={onSelectAccount}>{name}</AccountNameButton>
-          <AddressAndButtonRow>
-            <AccountAddressButton onClick={onSelectAccount}>{reduceAddress(address)}</AccountAddressButton>
-            <CopyTooltip text={address}>
-              <CopyIcon />
-            </CopyTooltip>
-          </AddressAndButtonRow>
-        </AccountAndAddress>
-
-      </NameAndIcon>
-      <RightSide>
-        <BalanceColumn>
-          <WithHideBalancePlaceholder
-            size='small'
-            hideBalances={hideBalances ?? false}
-          >
-            {!isNft &&
-              <FiatBalanceText>
-                {fiatBalance.formatAsFiat(defaultCurrencies.fiat)}
-              </FiatBalanceText>
-            }
-            <AssetBalanceText>
-              {`${formattedAssetBalance} ${asset.symbol}`}
-            </AssetBalanceText>
-          </WithHideBalancePlaceholder>
-        </BalanceColumn>
-        <SellButtonRow>
-          {isSellSupported && !isAssetsBalanceZero &&
-            <SellButton onClick={showSellModal}>{getLocale('braveWalletSell')}</SellButton>
-          }
-        </SellButtonRow>
-        <MoreButton onClick={() => setShowAccountPopup(true)}>
-          <MoreIcon />
-        </MoreButton>
-        {showAccountPopup &&
-          <TransactionPopup>
-            <TransactionPopupItem
-              onClick={onClickViewOnBlockExplorer('address', address)}
-              text={getLocale('braveWalletTransactionExplorer')}
+    <>
+      <StyledWrapper isRewardsAccount={isRewardsAccount}>
+        <AccountButton
+          onClick={onSelectAccount}
+          disabled={isRewardsAccount}
+        >
+          <Row width='unset'>
+            <CreateAccountIcon
+              size='huge'
+              marginRight={12}
+              account={account}
+              externalProvider={externalProvider}
             />
-          </TransactionPopup>
-        }
-      </RightSide>
-    </StyledWrapper>
+            <Column alignItems='flex-start'>
+              <Text
+                textSize='14px'
+                isBold={true}
+                textColor='primary'
+                textAlign='left'
+              >
+                {account.name}
+              </Text>
+              {isRewardsAccount && (
+                <>
+                  <VerticalSpacer space='6px' />
+                  <BraveRewardsIndicator>
+                    {getLocale('braveWalletBraveRewardsTitle')}
+                  </BraveRewardsIndicator>
+                </>
+              )}
+              {account.address && !isRewardsAccount && (
+                <Text
+                  textSize='12px'
+                  isBold={false}
+                  textColor='primary'
+                  textAlign='left'
+                >
+                  {reduceAddress(account.address)}
+                </Text>
+              )}
+            </Column>
+          </Row>
+          <Column
+            alignItems='flex-end'
+            margin='0px 12px 0px 0px'
+          >
+            <WithHideBalancePlaceholder
+              size='small'
+              hideBalances={hideBalances ?? false}
+            >
+              <Text
+                textSize='14px'
+                isBold={true}
+                textColor='primary'
+                textAlign='right'
+              >
+                {`${formattedAssetBalance} ${asset.symbol}`}
+              </Text>
+              <Text
+                textSize='12px'
+                isBold={false}
+                textColor='secondary'
+                textAlign='right'
+              >
+                {fiatBalance.formatAsFiat(defaultFiatCurrency)}
+              </Text>
+            </WithHideBalancePlaceholder>
+          </Column>
+        </AccountButton>
+        <AccountMenuWrapper ref={accountMenuRef}>
+          <AccountMenuButton
+            onClick={() => setShowAccountMenu((prev) => !prev)}
+          >
+            <AccountMenuIcon />
+          </AccountMenuButton>
+          {showAccountMenu && (
+            <>
+              {isRewardsAccount ? (
+                <RewardsMenu />
+              ) : (
+                <PortfolioAccountMenu
+                  onClickViewOnExplorer={
+                    blockExplorerSupported
+                      ? onViewAccountOnBlockExplorer
+                      : undefined
+                  }
+                  onClickSell={
+                    isSellSupported && !isAssetsBalanceZero
+                      ? showSellModal
+                      : undefined
+                  }
+                  onClickDeposit={onShowDepositModal}
+                />
+              )}
+            </>
+          )}
+        </AccountMenuWrapper>
+      </StyledWrapper>
+
+      {showDepositModal && (
+        <PopupModal
+          title={getLocale('braveWalletDepositCryptoButton')}
+          onClose={() => setShowDepositModal(false)}
+          ref={depositModalRef}
+        >
+          <VerticalDivider />
+          <Column
+            fullHeight={true}
+            fullWidth={true}
+            justifyContent='flex-start'
+            padding='20px 15px'
+          >
+            <DepositModal selectedAccount={account} />
+          </Column>
+        </PopupModal>
+      )}
+    </>
   )
 }
 

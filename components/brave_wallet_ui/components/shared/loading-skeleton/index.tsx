@@ -7,10 +7,10 @@ import { LineBreak, LoadingSkeletonStyleProps, Skeleton } from './styles'
 
 export interface LoadingSkeletonProps extends LoadingSkeletonStyleProps {
   count?: number
-  wrapper?: React.FunctionComponent
+  wrapper?: React.FunctionComponent<React.PropsWithChildren>
 }
 
-const LoadingSkeleton = (props: LoadingSkeletonProps) => {
+export const LoadingSkeleton = (props: LoadingSkeletonProps) => {
   const { count = 1, wrapper: Wrapper, ...styleProps } = props
   const elements: React.ReactElement[] = []
   const inline = styleProps.inline ?? false
@@ -19,7 +19,8 @@ const LoadingSkeleton = (props: LoadingSkeletonProps) => {
   for (let i = 0; i < count; i++) {
     const skeletonSpan = (
       <Skeleton
-        aria-busy={enableAnimation} {...styleProps}
+        aria-busy={enableAnimation}
+        {...styleProps}
         enableAnimation={enableAnimation}
         key={i}
       >
@@ -43,8 +44,7 @@ const LoadingSkeleton = (props: LoadingSkeletonProps) => {
     <>
       {Wrapper
         ? elements.map((el, i) => <Wrapper key={i}>{el}</Wrapper>)
-        : elements
-      }
+        : elements}
     </>
   )
 }

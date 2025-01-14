@@ -5,53 +5,63 @@
 
 #include "brave/components/brave_ads/core/internal/account/statement/statement.h"
 
-#include "base/functional/bind.h"
-#include "brave/components/brave_ads/core/internal/account/account_feature.h"
+#include "base/run_loop.h"
+#include "base/test/gmock_callback_support.h"
+#include "base/test/mock_callback.h"
+#include "brave/components/brave_ads/core/internal/account/statement/statement_feature.h"
 #include "brave/components/brave_ads/core/internal/account/transactions/transaction_info.h"
-#include "brave/components/brave_ads/core/internal/account/transactions/transactions_unittest_util.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_time_util.h"
+#include "brave/components/brave_ads/core/internal/account/transactions/transactions_database_table_util.h"
+#include "brave/components/brave_ads/core/internal/account/transactions/transactions_test_util.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
+#include "brave/components/brave_ads/core/internal/common/test/time_test_util.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads {
 
-class BraveAdsStatementTest : public UnitTestBase {};
+class BraveAdsStatementTest : public test::TestBase {};
 
 TEST_F(BraveAdsStatementTest, GetForTransactionsThisMonth) {
   // Arrange
-  AdvanceClockTo(TimeFromString("18 November 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("18 November 2020"));
 
   TransactionList transactions;
 
-  const TransactionInfo transaction_1 = BuildTransaction(
-      /*value*/ 0.01, ConfirmationType::kViewed, /*reconciled_at*/ Now());
+  const TransactionInfo transaction_1 = test::BuildTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_1);
 
-  const TransactionInfo transaction_2 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_2 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_2);
 
-  SaveTransactions(transactions);
+  database::SaveTransactions(transactions);
 
-  // Act
-  BuildStatement(base::BindOnce([](mojom::StatementInfoPtr statement) {
-    ASSERT_TRUE(statement);
+  // Act & Assert
+  const mojom::StatementInfoPtr expected_mojom_statement =
+      mojom::StatementInfo::New();
+  expected_mojom_statement->min_earnings_previous_month = 0.0;
+  expected_mojom_statement->max_earnings_previous_month = 0.0;
+  expected_mojom_statement->min_earnings_this_month =
+      0.02 * kMinEstimatedEarningsMultiplier.Get();
+  expected_mojom_statement->max_earnings_this_month = 0.02;
+  expected_mojom_statement->next_payment_date =
+      test::TimeFromUTCString("7 December 2020 23:59:59.999");
+  expected_mojom_statement->ads_received_this_month = 2;
+  expected_mojom_statement->ads_summary_this_month = {
+      {mojom::AdType::kNotificationAd, 2}};
 
-    mojom::StatementInfoPtr expected_statement = mojom::StatementInfo::New();
-    expected_statement->min_earnings_last_month = 0.0;
-    expected_statement->max_earnings_last_month = 0.0;
-    expected_statement->min_earnings_this_month =
-        0.02 * kMinEstimatedEarningsMultiplier.Get();
-    expected_statement->max_earnings_this_month = 0.02;
-    expected_statement->next_payment_date =
-        TimeFromString("7 December 2020 23:59:59.999", /*is_local*/ false);
-    expected_statement->ads_received_this_month = 2;
-
-    EXPECT_EQ(expected_statement, statement);
-  }));
-
-  // Assert
+  base::MockCallback<BuildStatementCallback> callback;
+  base::RunLoop run_loop;
+  EXPECT_CALL(callback, Run(::testing::Eq(std::ref(expected_mojom_statement))))
+      .WillOnce(base::test::RunOnceClosure(run_loop.QuitClosure()));
+  BuildStatement(callback.Get());
+  run_loop.Run();
 }
 
 TEST_F(BraveAdsStatementTest,
@@ -59,191 +69,234 @@ TEST_F(BraveAdsStatementTest,
   // Arrange
   TransactionList transactions;
 
-  AdvanceClockTo(TimeFromString("31 October 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("31 October 2020"));
 
-  const TransactionInfo transaction_1 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_1 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_1);
 
-  const TransactionInfo transaction_2 = BuildTransaction(
-      /*value*/ 0.01, ConfirmationType::kViewed, /*reconciled_at*/ Now());
+  const TransactionInfo transaction_2 = test::BuildTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_2);
 
-  AdvanceClockTo(TimeFromString("18 November 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("18 November 2020"));
 
-  const TransactionInfo transaction_3 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_3 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_3);
 
-  const TransactionInfo transaction_4 = BuildTransaction(
-      /*value*/ 0.01, ConfirmationType::kViewed, /*reconciled_at*/ Now());
+  const TransactionInfo transaction_4 = test::BuildTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_4);
 
-  AdvanceClockTo(TimeFromString("25 December 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("25 December 2020"));
 
-  const TransactionInfo transaction_5 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_5 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_5);
 
-  const TransactionInfo transaction_6 = BuildTransaction(
-      /*value*/ 0.01, ConfirmationType::kViewed, /*reconciled_at*/ Now());
+  const TransactionInfo transaction_6 = test::BuildTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_6);
 
-  const TransactionInfo transaction_7 =
-      BuildUnreconciledTransaction(/*value*/ 0.0, ConfirmationType::kClicked);
+  const TransactionInfo transaction_7 = test::BuildUnreconciledTransaction(
+      /*value=*/0.0, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kClicked,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_7);
 
-  const TransactionInfo transaction_8 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_8 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_8);
 
-  SaveTransactions(transactions);
+  database::SaveTransactions(transactions);
 
-  // Act
-  BuildStatement(base::BindOnce([](mojom::StatementInfoPtr statement) {
-    ASSERT_TRUE(statement);
+  // Act & Assert
+  const mojom::StatementInfoPtr expected_statement =
+      mojom::StatementInfo::New();
+  expected_statement->min_earnings_previous_month =
+      0.01 * kMinEstimatedEarningsMultiplier.Get();
+  expected_statement->max_earnings_previous_month = 0.01;
+  expected_statement->min_earnings_this_month =
+      0.05 * kMinEstimatedEarningsMultiplier.Get();
+  expected_statement->max_earnings_this_month = 0.05;
+  expected_statement->next_payment_date =
+      test::TimeFromUTCString("7 January 2021 23:59:59.999");
+  expected_statement->ads_received_this_month = 3;
+  expected_statement->ads_summary_this_month = {
+      {mojom::AdType::kNotificationAd, 3}};
 
-    mojom::StatementInfoPtr expected_statement = mojom::StatementInfo::New();
-    expected_statement->min_earnings_last_month =
-        0.01 * kMinEstimatedEarningsMultiplier.Get();
-    expected_statement->max_earnings_last_month = 0.01;
-    expected_statement->min_earnings_this_month =
-        0.05 * kMinEstimatedEarningsMultiplier.Get();
-    expected_statement->max_earnings_this_month = 0.05;
-    expected_statement->next_payment_date =
-        TimeFromString("7 January 2021 23:59:59.999", /*is_local*/ false);
-    expected_statement->ads_received_this_month = 3;
-
-    EXPECT_EQ(expected_statement, statement);
-  }));
-
-  // Assert
+  base::MockCallback<BuildStatementCallback> callback;
+  base::RunLoop run_loop;
+  EXPECT_CALL(callback, Run(::testing::Eq(std::ref(expected_statement))))
+      .WillOnce(base::test::RunOnceClosure(run_loop.QuitClosure()));
+  BuildStatement(callback.Get());
+  run_loop.Run();
 }
 
 TEST_F(BraveAdsStatementTest, GetForTransactionsSplitOverTwoYears) {
   // Arrange
   TransactionList transactions;
 
-  AdvanceClockTo(TimeFromString("31 December 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("31 December 2020"));
 
-  const TransactionInfo transaction_1 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_1 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_1);
 
-  const TransactionInfo transaction_2 = BuildTransaction(
-      /*value*/ 0.01, ConfirmationType::kViewed, /*reconciled_at*/ Now());
+  const TransactionInfo transaction_2 = test::BuildTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_2);
 
-  AdvanceClockTo(TimeFromString("1 January 2021", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("1 January 2021"));
 
-  const TransactionInfo transaction_3 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_3 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_3);
 
-  const TransactionInfo transaction_4 = BuildTransaction(
-      /*value*/ 0.01, ConfirmationType::kViewed, /*reconciled_at*/ Now());
+  const TransactionInfo transaction_4 = test::BuildTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_4);
 
-  const TransactionInfo transaction_5 =
-      BuildUnreconciledTransaction(/*value*/ 0.0, ConfirmationType::kClicked);
+  const TransactionInfo transaction_5 = test::BuildUnreconciledTransaction(
+      /*value=*/0.0, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kClicked,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_5);
 
-  const TransactionInfo transaction_6 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_6 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_6);
 
-  SaveTransactions(transactions);
+  database::SaveTransactions(transactions);
 
-  // Act
-  BuildStatement(base::BindOnce([](mojom::StatementInfoPtr statement) {
-    ASSERT_TRUE(statement);
+  // Act & Assert
+  const mojom::StatementInfoPtr expected_statement =
+      mojom::StatementInfo::New();
+  expected_statement->min_earnings_previous_month =
+      0.01 * kMinEstimatedEarningsMultiplier.Get();
+  expected_statement->max_earnings_previous_month = 0.01;
+  expected_statement->min_earnings_this_month =
+      0.04 * kMinEstimatedEarningsMultiplier.Get();
+  expected_statement->max_earnings_this_month = 0.04;
+  expected_statement->next_payment_date =
+      test::TimeFromUTCString("7 January 2021 23:59:59.999");
+  expected_statement->ads_received_this_month = 3;
+  expected_statement->ads_summary_this_month = {
+      {mojom::AdType::kNotificationAd, 3}};
 
-    mojom::StatementInfoPtr expected_statement = mojom::StatementInfo::New();
-    expected_statement->min_earnings_last_month =
-        0.01 * kMinEstimatedEarningsMultiplier.Get();
-    expected_statement->max_earnings_last_month = 0.01;
-    expected_statement->min_earnings_this_month =
-        0.04 * kMinEstimatedEarningsMultiplier.Get();
-    expected_statement->max_earnings_this_month = 0.04;
-    expected_statement->next_payment_date =
-        TimeFromString("7 January 2021 23:59:59.999", /*is_local*/ false);
-    expected_statement->ads_received_this_month = 3;
-
-    EXPECT_EQ(expected_statement, statement);
-  }));
-
-  // Assert
+  base::MockCallback<BuildStatementCallback> callback;
+  base::RunLoop run_loop;
+  EXPECT_CALL(callback, Run(::testing::Eq(std::ref(expected_statement))))
+      .WillOnce(base::test::RunOnceClosure(run_loop.QuitClosure()));
+  BuildStatement(callback.Get());
+  run_loop.Run();
 }
 
 TEST_F(BraveAdsStatementTest, GetForNoTransactions) {
   // Arrange
-  AdvanceClockTo(TimeFromString("18 November 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("18 November 2020"));
 
-  // Act
-  BuildStatement(base::BindOnce([](mojom::StatementInfoPtr statement) {
-    ASSERT_TRUE(statement);
+  // Act & Assert
+  const mojom::StatementInfoPtr expected_statement =
+      mojom::StatementInfo::New();
+  expected_statement->min_earnings_previous_month = 0.0;
+  expected_statement->max_earnings_previous_month = 0.0;
+  expected_statement->min_earnings_this_month = 0.0;
+  expected_statement->max_earnings_this_month = 0.0;
+  expected_statement->next_payment_date =
+      test::TimeFromUTCString("7 January 2021 23:59:59.999");
+  expected_statement->ads_received_this_month = 0;
+  expected_statement->ads_summary_this_month.clear();
 
-    mojom::StatementInfoPtr expected_statement = mojom::StatementInfo::New();
-    expected_statement->min_earnings_last_month = 0.0;
-    expected_statement->max_earnings_last_month = 0.0;
-    expected_statement->min_earnings_this_month = 0.0;
-    expected_statement->max_earnings_this_month = 0.0;
-    expected_statement->next_payment_date =
-        TimeFromString("7 January 2021 23:59:59.999", /*is_local*/ false);
-    expected_statement->ads_received_this_month = 0;
-
-    EXPECT_EQ(expected_statement, statement);
-  }));
-
-  // Assert
+  base::MockCallback<BuildStatementCallback> callback;
+  base::RunLoop run_loop;
+  EXPECT_CALL(callback, Run(::testing::Eq(std::ref(expected_statement))))
+      .WillOnce(base::test::RunOnceClosure(run_loop.QuitClosure()));
+  BuildStatement(callback.Get());
+  run_loop.Run();
 }
 
 TEST_F(BraveAdsStatementTest, GetWithFilteredTransactions) {
   // Arrange
-  AdvanceClockTo(TimeFromString("12 October 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("12 October 2020"));
   TransactionList transactions;
 
-  const TransactionInfo transaction_1 = BuildTransaction(
-      /*value*/ 0.01, ConfirmationType::kViewed, /*reconciled_at*/ Now());
+  const TransactionInfo transaction_1 = test::BuildTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_1);
 
-  TransactionInfo transaction_2 = BuildTransaction(
-      /*value*/ 0.02, ConfirmationType::kViewed, /*reconciled_at*/ Now());
-  transaction_2.ad_type = AdType::kNewTabPageAd;
+  TransactionInfo transaction_2 = test::BuildTransaction(
+      /*value=*/0.02, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
+  transaction_2.ad_type = mojom::AdType::kNewTabPageAd;
   transactions.push_back(transaction_2);
 
-  AdvanceClockTo(TimeFromString("18 November 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("18 November 2020"));
 
-  const TransactionInfo transaction_3 = BuildTransaction(
-      /*value*/ 0.01, ConfirmationType::kViewed, /*reconciled_at*/ Now());
+  const TransactionInfo transaction_3 = test::BuildTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression, /*reconciled_at=*/test::Now(),
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_3);
 
-  TransactionInfo transaction_4 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
-  transaction_4.ad_type = AdType::kNewTabPageAd;
+  TransactionInfo transaction_4 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
+  transaction_4.ad_type = mojom::AdType::kNewTabPageAd;
   transactions.push_back(transaction_4);
 
-  SaveTransactions(transactions);
+  database::SaveTransactions(transactions);
 
-  // Act
-  BuildStatement(base::BindOnce([](mojom::StatementInfoPtr statement) {
-    ASSERT_TRUE(statement);
+  // Act & Assert
+  const mojom::StatementInfoPtr expected_statement =
+      mojom::StatementInfo::New();
+  expected_statement->min_earnings_previous_month =
+      0.01 * kMinEstimatedEarningsMultiplier.Get();
+  expected_statement->max_earnings_previous_month = 0.03;
+  expected_statement->min_earnings_this_month =
+      0.01 * kMinEstimatedEarningsMultiplier.Get();
+  expected_statement->max_earnings_this_month = 0.02;
+  expected_statement->next_payment_date =
+      test::TimeFromUTCString("7 December 2020 23:59:59.999");
+  expected_statement->ads_received_this_month = 2;
+  expected_statement->ads_summary_this_month = {
+      {mojom::AdType::kNotificationAd, 1}, {mojom::AdType::kNewTabPageAd, 1}};
 
-    mojom::StatementInfoPtr expected_statement = mojom::StatementInfo::New();
-    expected_statement->min_earnings_last_month =
-        0.01 * kMinEstimatedEarningsMultiplier.Get();
-    expected_statement->max_earnings_last_month = 0.03;
-    expected_statement->min_earnings_this_month =
-        0.01 * kMinEstimatedEarningsMultiplier.Get();
-    expected_statement->max_earnings_this_month = 0.02;
-    expected_statement->next_payment_date =
-        TimeFromString("7 December 2020 23:59:59.999", /*is_local*/ false);
-    expected_statement->ads_received_this_month = 2;
-
-    EXPECT_EQ(expected_statement, statement);
-  }));
-
-  // Assert
+  base::MockCallback<BuildStatementCallback> callback;
+  base::RunLoop run_loop;
+  EXPECT_CALL(callback, Run(::testing::Eq(std::ref(expected_statement))))
+      .WillOnce(base::test::RunOnceClosure(run_loop.QuitClosure()));
+  BuildStatement(callback.Get());
+  run_loop.Run();
 }
 
 }  // namespace brave_ads

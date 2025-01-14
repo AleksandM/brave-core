@@ -1,7 +1,13 @@
-// Copyright (c) 2020 The Brave Authors
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this file,
-// you can obtain one at http://mozilla.org/MPL/2.0/.
+/* Copyright (c) 2020 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(https://github.com/brave/brave-browser/issues/41661): Remove this and
+// convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include "build/branding_buildflags.h"
 
@@ -27,16 +33,18 @@
 #if defined(OFFICIAL_BUILD)
 #undef BUILDFLAG_INTERNAL_GOOGLE_CHROME_BRANDING
 #define BUILDFLAG_INTERNAL_GOOGLE_CHROME_BRANDING() (1)
-#endif
+#endif  // defined(OFFICIAL_BUILD)
 
 #include "src/chrome/installer/mini_installer/mini_installer.cc"
-
+#if defined(OFFICIAL_BUILD)
+#undef BUILDFLAG_INTERNAL_GOOGLE_CHROME_BRANDING
+#endif  // defined(OFFICIAL_BUILD)
 #undef BRAVE_RUN_SETUP
 
 namespace mini_installer {
 
 namespace {
-const size_t kStandardReferralCodeLen = 6;
+constexpr size_t kStandardReferralCodeLen = 6;
 }  // namespace
 
 // Coverts a string in place to uppercase

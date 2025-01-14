@@ -1,9 +1,9 @@
 diff --git a/telemetry/telemetry/internal/backends/chrome/desktop_browser_finder.py b/telemetry/telemetry/internal/backends/chrome/desktop_browser_finder.py
-index b2df096bfe8ccefaa89f10dece9281e14cc81bd9..e88a871b502f4160e41342fcc7c40d6fe8d00b78 100644
+index 6e2cf84b2da3297fda0f0fedd1096c083ab705d7..e2f1fdf6f6de77bb70629dfcc39fb6a55d3cea16 100644
 --- a/telemetry/telemetry/internal/backends/chrome/desktop_browser_finder.py
 +++ b/telemetry/telemetry/internal/backends/chrome/desktop_browser_finder.py
-@@ -477,3 +477,4 @@ def FindAllAvailableBrowsers(finder_options, device):
+@@ -480,3 +480,4 @@ def FindAllAvailableBrowsers(finder_options, device):
      return []
  
    return browsers
-+from import_inline import inline_file_from_src; inline_file_from_src("brave/chromium_src/third_party/catapult/telemetry/telemetry/internal/backends/chrome/desktop_browser_finder.py", globals(), locals())
++from brave_chromium_utils import inline_chromium_src_override; inline_chromium_src_override(globals(), locals())

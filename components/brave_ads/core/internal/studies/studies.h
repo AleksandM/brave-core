@@ -6,7 +6,7 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_STUDIES_STUDIES_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_STUDIES_STUDIES_H_
 
-#include "brave/components/brave_ads/core/ads_client_notifier_observer.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client_notifier_observer.h"
 
 namespace brave_ads {
 
@@ -16,9 +16,6 @@ class Studies final : public AdsClientNotifierObserver {
 
   Studies(const Studies&) = delete;
   Studies& operator=(const Studies&) = delete;
-
-  Studies(Studies&&) noexcept = delete;
-  Studies& operator=(Studies&&) noexcept = delete;
 
   ~Studies() override;
 

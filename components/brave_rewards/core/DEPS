@@ -1,10 +1,6 @@
 include_rules = [
+  "+crypto",
   "+third_party/brotli",
   "+third_party/re2",
+  "+sql",
 ]
-
-specific_include_rules = {
-  "json_helper.h": [
-    "+rapidjson",
-  ],
-}

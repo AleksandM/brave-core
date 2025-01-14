@@ -3,9 +3,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <memory>
-
 #include "brave/components/permissions/permission_lifetime_manager.h"
+
+#include <memory>
+#include <optional>
 
 #include "base/command_line.h"
 #include "base/json/json_file_value_serializer.h"
@@ -56,18 +57,18 @@ namespace {
 struct TestCase {
   const char* address;
   ContentSettingsType type;
-  absl::optional<blink::PermissionType> permission;
+  std::optional<blink::PermissionType> permission;
 };
 
 constexpr TestCase kTestCases[] = {
-    {nullptr, ContentSettingsType::GEOLOCATION, absl::nullopt},
+    {nullptr, ContentSettingsType::GEOLOCATION, std::nullopt},
     {"0xaf5Ad1E10926C0Ee4af4eDAC61DD60E853753f8A",
      ContentSettingsType::BRAVE_ETHEREUM,
      blink::PermissionType::BRAVE_ETHEREUM},
     {"BrG44HdsEhzapvs8bEqzvkq4egwevS3fRE6ze2ENo6S8",
      ContentSettingsType::BRAVE_SOLANA, blink::PermissionType::BRAVE_SOLANA}};
 
-const char kPreTestDataFileName[] = "pre_test_data";
+constexpr char kPreTestDataFileName[] = "pre_test_data";
 
 std::string GetContentSettingTypeString(ContentSettingsType type) {
   std::string type_string;
@@ -83,7 +84,7 @@ std::string GetContentSettingTypeString(ContentSettingsType type) {
 
 #undef TYPE_CASE
     default:
-      DCHECK(false);
+      NOTREACHED();
   }
 
   return type_string;
@@ -197,18 +198,18 @@ class PermissionLifetimeManagerBrowserTest : public InProcessBrowserTest {
     if (entry.address && entry.permission) {
       auto last_committed_origin =
           url::Origin::Create(active_web_contents()->GetLastCommittedURL());
-      url::Origin origin;
-      EXPECT_TRUE(brave_wallet::GetConcatOriginFromWalletAddresses(
-          last_committed_origin, {std::string(entry.address)}, &origin));
+      auto origin = brave_wallet::GetConcatOriginFromWalletAddresses(
+          last_committed_origin, {std::string(entry.address)});
+      EXPECT_TRUE(origin);
       permission_manager()->RequestPermissionsForOrigin(
           {*entry.permission}, active_web_contents()->GetPrimaryMainFrame(),
-          origin.GetURL(), true, base::DoNothing());
+          origin->GetURL(), true, base::DoNothing());
 
-      url::Origin sub_request_origin;
-      EXPECT_TRUE(brave_wallet::GetSubRequestOrigin(
+      auto sub_request_origin = brave_wallet::GetSubRequestOrigin(
           ContentSettingsTypeToRequestType(entry.type), last_committed_origin,
-          entry.address, &sub_request_origin));
-      return sub_request_origin.GetURL();
+          entry.address);
+      EXPECT_TRUE(sub_request_origin);
+      return sub_request_origin->GetURL();
     } else {
       content::ExecuteScriptAsync(
           GetActiveMainFrame(),

@@ -23,9 +23,10 @@ Brave* Brave::brave(NavigatorBase& navigator) {
   return supplement;
 }
 
-ScriptPromise Brave::isBrave(ScriptState* script_state) {
-  auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  ScriptPromise promise = resolver->Promise();
+ScriptPromise<IDLBoolean> Brave::isBrave(ScriptState* script_state) {
+  auto* resolver =
+      MakeGarbageCollected<ScriptPromiseResolver<IDLBoolean>>(script_state);
+  ScriptPromise<IDLBoolean> promise = resolver->Promise();
   resolver->Resolve(true);
   return promise;
 }

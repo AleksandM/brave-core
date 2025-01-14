@@ -6,6 +6,7 @@
 #include "brave/chromium_src/chrome/browser/profiles/profile.h"
 
 #include "brave/components/tor/tor_constants.h"
+#include "components/search_engines/search_engine_choice/search_engine_choice_utils.h"
 
 #define BRAVE_ALLOWS_BROWSER_WINDOWS *this == TorID() ||
 
@@ -14,6 +15,7 @@
 #include "src/chrome/browser/profiles/profile.cc"
 #undef IsIncognitoProfile
 #undef IsPrimaryOTRProfile
+#undef BRAVE_ALLOWS_BROWSER_WINDOWS
 
 // static
 const Profile::OTRProfileID Profile::OTRProfileID::TorID() {

@@ -7,21 +7,24 @@
 #define BRAVE_BROWSER_UI_WEBUI_BRAVE_WALLET_WALLET_PANEL_UI_H_
 
 #include <memory>
+#include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "brave/browser/ui/webui/brave_wallet/common_handler/wallet_handler.h"
 #include "brave/browser/ui/webui/brave_wallet/panel_handler/wallet_panel_handler.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
-#include "content/public/browser/web_ui_controller.h"
+#include "chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.h"
+#include "chrome/browser/ui/webui/top_chrome/top_chrome_webui_config.h"
 #include "content/public/browser/web_ui_message_handler.h"
-
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
 
-#include "ui/webui/mojo_bubble_web_ui_controller.h"
+namespace content {
+class BrowserContext;
+}
 
-class WalletPanelUI : public ui::MojoBubbleWebUIController,
+class WalletPanelUI : public TopChromeWebUIController,
                       public brave_wallet::mojom::PanelHandlerFactory {
  public:
   explicit WalletPanelUI(content::WebUI* web_ui);
@@ -39,19 +42,19 @@ class WalletPanelUI : public ui::MojoBubbleWebUIController,
   void SetDeactivationCallback(
       base::RepeatingCallback<void(bool)> deactivation_callback);
 
-  // Allows disabling CSP on wallet panel so EvalJS could be run in main world.
-  static bool& ShouldDisableCSPForTesting();
+  static constexpr std::string GetWebUIName() { return "WalletPanel"; }
 
  private:
   // brave_wallet::mojom::PanelHandlerFactory:
   void CreatePanelHandler(
-      mojo::PendingRemote<brave_wallet::mojom::Page> page,
       mojo::PendingReceiver<brave_wallet::mojom::PanelHandler> panel_receiver,
       mojo::PendingReceiver<brave_wallet::mojom::WalletHandler> wallet_receiver,
       mojo::PendingReceiver<brave_wallet::mojom::JsonRpcService>
           json_rpc_service,
       mojo::PendingReceiver<brave_wallet::mojom::BitcoinWalletService>
           bitcoin_rpc_service,
+      mojo::PendingReceiver<brave_wallet::mojom::ZCashWalletService>
+          zcash_service,
       mojo::PendingReceiver<brave_wallet::mojom::SwapService> swap_service,
       mojo::PendingReceiver<brave_wallet::mojom::SimulationService>
           simulation_service,
@@ -68,12 +71,16 @@ class WalletPanelUI : public ui::MojoBubbleWebUIController,
           solana_tx_manager_proxy,
       mojo::PendingReceiver<brave_wallet::mojom::FilTxManagerProxy>
           fil_tx_manager_proxy,
+      mojo::PendingReceiver<brave_wallet::mojom::BtcTxManagerProxy>
+          bitcoin_tx_manager_proxy_receiver,
       mojo::PendingReceiver<brave_wallet::mojom::BraveWalletService>
           brave_wallet_service,
       mojo::PendingReceiver<brave_wallet::mojom::BraveWalletP3A>
           brave_wallet_p3a,
       mojo::PendingReceiver<brave_wallet::mojom::IpfsService>
-          brave_wallet_ipfs_service_receiver) override;
+          brave_wallet_ipfs_service_receiver,
+      mojo::PendingReceiver<brave_wallet::mojom::MeldIntegrationService>
+          meld_integration_service) override;
 
   std::unique_ptr<WalletPanelHandler> panel_handler_;
   std::unique_ptr<brave_wallet::WalletHandler> wallet_handler_;
@@ -84,6 +91,17 @@ class WalletPanelUI : public ui::MojoBubbleWebUIController,
       panel_factory_receiver_{this};
 
   WEB_UI_CONTROLLER_TYPE_DECL();
+};
+
+class WalletPanelUIConfig : public DefaultTopChromeWebUIConfig<WalletPanelUI> {
+ public:
+  WalletPanelUIConfig();
+
+  // WebUIConfig::
+  bool IsWebUIEnabled(content::BrowserContext* browser_context) override;
+
+  // TopChromeWebUIConfig::
+  bool ShouldAutoResizeHost() override;
 };
 
 #endif  // BRAVE_BROWSER_UI_WEBUI_BRAVE_WALLET_WALLET_PANEL_UI_H_

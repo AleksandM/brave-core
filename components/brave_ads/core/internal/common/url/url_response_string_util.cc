@@ -11,7 +11,7 @@
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads {
 
@@ -21,14 +21,13 @@ std::string HeadersToString(
     const base::flat_map<std::string, std::string>& headers,
     const int indent = 4) {
   std::vector<std::string> formatted_headers;
+  formatted_headers.reserve(headers.size());
 
-  const std::string spaces = std::string(indent, ' ');
+  const std::string spaces(indent, ' ');
 
   for (const auto& [header, value] : headers) {
-    const std::string formatted_header = base::ReplaceStringPlaceholders(
-        "$1$2: $3", {spaces, header, value}, nullptr);
-
-    formatted_headers.push_back(formatted_header);
+    formatted_headers.push_back(base::ReplaceStringPlaceholders(
+        "$1$2: $3", {spaces, header, value}, nullptr));
   }
 
   return base::JoinString(formatted_headers, "\n");
@@ -36,17 +35,19 @@ std::string HeadersToString(
 
 }  // namespace
 
-std::string UrlResponseToString(const mojom::UrlResponseInfo& url_response) {
+std::string UrlResponseToString(
+    const mojom::UrlResponseInfo& mojom_url_response) {
   return base::StringPrintf(
       "URL Response:\n  URL: %s\n  Response "
       "Status Code: %d\n  Response: %s",
-      url_response.url.spec().c_str(), url_response.status_code,
-      url_response.body.c_str());
+      mojom_url_response.url.spec().c_str(), mojom_url_response.status_code,
+      mojom_url_response.body.c_str());
 }
 
 std::string UrlResponseHeadersToString(
-    const mojom::UrlResponseInfo& url_response) {
-  return base::StrCat({"  Headers:\n", HeadersToString(url_response.headers)});
+    const mojom::UrlResponseInfo& mojom_url_response) {
+  return base::StrCat(
+      {"  Headers:\n", HeadersToString(mojom_url_response.headers)});
 }
 
 }  // namespace brave_ads

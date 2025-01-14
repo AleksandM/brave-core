@@ -5,7 +5,7 @@
 
 import styled from 'styled-components'
 import { WalletButton } from '../style'
-import * as leo from '@brave/leo/tokens/css'
+import * as leo from '@brave/leo/tokens/css/variables'
 
 export const StyledWrapper = styled.div`
   display: flex;
@@ -25,25 +25,27 @@ export const TabWrapper = styled(WalletButton)`
   cursor: pointer;
 `
 
-export const Tab = styled.div<{ isActive: boolean}>`
+export const Tab = styled.div<{ isActive: boolean }>`
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   font-family: 'Poppins';
   font-style: normal;
   font-weight: 600;
   font-size: 14px;
   line-height: 20px;
   letter-spacing: 0.02em;
-  color: ${p => p.isActive ? leo.color.text.interactive : leo.color.text.tertiary};
+  color: ${(p) =>
+    p.isActive ? leo.color.text.interactive : leo.color.text.tertiary};
   margin-bottom: 12px;
 `
 
 export const Indicator = styled.div<{ isActive: boolean }>`
   width: 100%;
   height: 4px;
-  background-color: ${p => p.isActive ? leo.color.interaction.buttonPrimaryBackground : 'transparent' };
+  background-color: ${(p) =>
+    p.isActive ? leo.color.button.background : 'transparent'};
   border-radius: 2px 2px 0px 0px;
 `
 
@@ -53,10 +55,9 @@ export const LabelSummary = styled.span<{ isActive: boolean }>`
   align-items: center;
   justify-content: center;
   padding: 4px;
-  min-width: 23px;
-  height: 24px;
-  background: ${leo.color.gray['10']};
-  border-radius: 4px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 6px;
   padding: 4px;
   font-family: 'Poppins';
   font-style: normal;
@@ -67,7 +68,9 @@ export const LabelSummary = styled.span<{ isActive: boolean }>`
   align-items: center;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: ${p => p.isActive ? leo.color.text.interactive : leo.color.gray['50']};
-  background-color: ${p => p.isActive ? leo.color.primary['10'] : leo.color.gray['10'] };
+  color: ${(p) =>
+    p.isActive ? leo.color.text.interactive : leo.color.neutral['50']};
   text-align: center;
+  border: 1px solid
+    ${(p) => (p.isActive ? leo.color.primary['40'] : leo.color.neutral['50'])};
 `

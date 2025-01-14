@@ -11,8 +11,8 @@ import * as Rewards from '../lib/types'
 export function defaultState (): Rewards.State {
   return {
     userType: 'unconnected',
-    enabledAds: false,
-    enabledAdsMigrated: false,
+    isUserTermsOfServiceUpdateRequired: false,
+    isAcSupported: false,
     enabledContribute: false,
     contributionMinTime: 8,
     contributionMinVisits: 1,
@@ -20,50 +20,42 @@ export function defaultState (): Rewards.State {
     reconcileStamp: 0,
     ui: {
       modalConnect: false,
+      modalConnectState: '',
       modalRedirect: 'hide',
+      modalRedirectProvider: '',
       modalReset: false,
       modalAdsHistory: false,
       adsSettings: false,
       autoContributeSettings: false,
-      contributionsSettings: false,
       promosDismissed: {}
     },
     autoContributeList: [],
     recurringList: [],
     tipsList: [],
     adsData: {
-      adsEnabled: false,
       adsPerHour: 0,
       adsSubdivisionTargeting: '',
       automaticallyDetectedAdsSubdivisionTargeting: '',
       shouldAllowAdsSubdivisionTargeting: true,
       subdivisions: [],
-      adsUIEnabled: false,
       adsIsSupported: false,
       needsBrowserUpgradeToServeAds: false,
+      notificationAdsEnabled: false,
+      newTabAdsEnabled: false,
+      newsAdsEnabled: false,
+      searchAdsEnabled: false,
       adsNextPaymentDate: 0,
       adsReceivedThisMonth: 0,
+      adTypesReceivedThisMonth: {},
       adsMinEarningsThisMonth: 0,
       adsMaxEarningsThisMonth: 0,
       adsMinEarningsLastMonth: 0,
       adsMaxEarningsLastMonth: 0
     },
     adsHistory: [],
-    promotions: [],
-    inlineTipsEnabled: true,
-    inlineTip: {
-      twitter: true,
-      reddit: true,
-      github: true
-    },
     excludedList: [],
     externalWalletProviderList: [],
     balance: optional<number>(),
-    monthlyReport: {
-      month: -1,
-      year: -1
-    },
-    monthlyReportIds: [],
     currentCountryCode: '',
     parameters: {
       autoContributeChoice: 0,

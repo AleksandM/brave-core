@@ -4,24 +4,25 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <memory>
+#include <string_view>
 
 #include "base/feature_list.h"
 #include "base/path_service.h"
-#include "brave/browser/brave_content_browser_client.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
-#include "brave/components/brave_shields/common/brave_shield_constants.h"
-#include "brave/components/brave_shields/common/features.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/core/common/brave_shield_constants.h"
+#include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/constants/brave_paths.h"
+#include "brave/components/webcompat/core/common/features.h"
 #include "build/build_config.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/chrome_content_client.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
+#include "components/google/core/common/google_switches.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/test/browser_test.h"
@@ -32,16 +33,19 @@
 #include "net/http/http_request_headers.h"
 #include "net/test/embedded_test_server/default_handlers.h"
 #include "net/test/embedded_test_server/http_request.h"
+#include "net/test/embedded_test_server/request_handler_util.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "url/origin.h"
 
 using brave_shields::ControlType;
+using net::test_server::HttpRequest;
+using net::test_server::HttpResponse;
 
 namespace {
 
-const char kIframeID[] = "test";
+constexpr char kIframeID[] = "test";
 
-const char kPointInPathScript[] = R"(
+constexpr char kPointInPathScript[] = R"(
   var canvas = document.createElement('canvas');
   var ctx = canvas.getContext('2d');
   ctx.rect(10, 10, 100, 100);
@@ -49,7 +53,7 @@ const char kPointInPathScript[] = R"(
   ctx.isPointInPath(10, 10);
 )";
 
-const char kGetImageDataScript[] =
+constexpr char kGetImageDataScript[] =
     "var adder = (a, x) => a + x;"
     "var canvas = document.createElement('canvas');"
     "canvas.width = 16;"
@@ -59,7 +63,7 @@ const char kGetImageDataScript[] =
     "ctx.putImageData(data, 0, 0);"
     "ctx.getImageData(0, 0, canvas.width, canvas.height).data.reduce(adder);";
 
-const char kImageScript[] = R"(
+constexpr char kImageScript[] = R"(
   let frame = document.createElement('img');
   frame.src = $1;
   new Promise(resolve => {
@@ -71,31 +75,43 @@ const char kImageScript[] = R"(
   });
 )";
 
-const int kExpectedImageDataHashFarblingBalanced = 172;
-const int kExpectedImageDataHashFarblingOff = 0;
-const int kExpectedImageDataHashFarblingMaximum =
-    kExpectedImageDataHashFarblingBalanced;
+constexpr int kExpectedImageDataHashFarblingBalanced = 208;
+constexpr int kExpectedImageDataHashFarblingOff = 0;
+constexpr int kExpectedImageDataHashFarblingBalancedGoogleCom = 212;
 
-const char kEmptyCookie[] = "";
+constexpr char kEmptyCookie[] = "";
 
 #define COOKIE_STR "test=hi"
 
-const char kTestCookie[] = COOKIE_STR;
+constexpr char kTestCookie[] = COOKIE_STR;
 
-const char kCookieScript[] = "document.cookie = '" COOKIE_STR
-                             "'"
-                             "; document.cookie;";
+constexpr char kCookieScript[] = "document.cookie = '" COOKIE_STR
+                                 "'"
+                                 "; document.cookie;";
 
-const char kCookie3PScript[] = "document.cookie = '" COOKIE_STR
-                               ";SameSite=None;Secure'"
-                               "; document.cookie;";
+constexpr char kCookie3PScript[] = "document.cookie = '" COOKIE_STR
+                                   ";SameSite=None;Secure'"
+                                   "; document.cookie;";
 
-const char kReferrerScript[] = "document.referrer;";
+constexpr char kReferrerScript[] = "document.referrer;";
 
-const char kTitleScript[] = "document.title;";
+constexpr char kTitleScript[] = "document.title;";
 
 GURL GetOriginURL(const GURL& url) {
   return url::Origin::Create(url).GetURL();
+}
+
+// Remaps requests from /maps/simple.html to /simple.html
+std::unique_ptr<HttpResponse> HandleGoogleMapsFileRequest(
+    const base::FilePath& server_root,
+    const HttpRequest& request) {
+  HttpRequest new_request(request);
+  if (!new_request.relative_url.starts_with("/maps")) {
+    // This handler is only relevant for a Google Maps url.
+    return nullptr;
+  }
+  new_request.relative_url = new_request.relative_url.substr(5);
+  return HandleFileRequest(server_root, new_request);
 }
 
 }  // namespace
@@ -104,25 +120,26 @@ class BraveContentSettingsAgentImplBrowserTest : public InProcessBrowserTest {
  public:
   BraveContentSettingsAgentImplBrowserTest()
       : https_server_(net::EmbeddedTestServer::TYPE_HTTPS) {
-    feature_list_.InitAndEnableFeature(net::features::kBraveEphemeralStorage);
+    feature_list_.InitWithFeatures(
+        {
+            brave_shields::features::kBraveShowStrictFingerprintingMode,
+            webcompat::features::kBraveWebcompatExceptionsService,
+        },
+        {});
   }
 
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
 
-    content_client_ = std::make_unique<ChromeContentClient>();
-    content::SetContentClient(content_client_.get());
-    browser_content_client_ = std::make_unique<BraveContentBrowserClient>();
-    content::SetBrowserClientForTesting(browser_content_client_.get());
-
     host_resolver()->AddRule("*", "127.0.0.1");
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     https_server_.SetSSLConfig(net::EmbeddedTestServer::CERT_TEST_NAMES);
     https_server_.ServeFilesFromDirectory(test_data_dir);
     https_server_.AddDefaultHandlers(GetChromeTestDataDir());
+    https_server_.RegisterDefaultHandler(
+        base::BindRepeating(&HandleGoogleMapsFileRequest, test_data_dir));
     content::SetupCrossSiteRedirector(&https_server_);
     https_server_.RegisterRequestMonitor(base::BindRepeating(
         &BraveContentSettingsAgentImplBrowserTest::SaveReferrer,
@@ -147,6 +164,16 @@ class BraveContentSettingsAgentImplBrowserTest : public InProcessBrowserTest {
     iframe_pattern_ = ContentSettingsPattern::FromString("https://b.test/*");
     first_party_pattern_ =
         ContentSettingsPattern::FromString("https://firstParty/*");
+  }
+
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    // Since the HTTPS server only serves a valid cert for localhost,
+    // this is needed to load pages from "www.google.*" without an interstitial.
+    command_line->AppendSwitch(switches::kIgnoreCertificateErrors);
+
+    // The production code only allows known ports (80 for http and 443 for
+    // https), but the test server runs on a random port.
+    command_line->AppendSwitch(switches::kIgnoreGooglePortNumbers);
   }
 
   void SaveReferrer(const net::test_server::HttpRequest& request) {
@@ -178,11 +205,6 @@ class BraveContentSettingsAgentImplBrowserTest : public InProcessBrowserTest {
       return "(missing)";  // Fail test if we haven't seen this URL before.
     }
     return pos->second;
-  }
-
-  void TearDown() override {
-    browser_content_client_.reset();
-    content_client_.reset();
   }
 
   const net::EmbeddedTestServer& https_server() { return https_server_; }
@@ -221,9 +243,9 @@ class BraveContentSettingsAgentImplBrowserTest : public InProcessBrowserTest {
     content_settings()->SetContentSettingCustomScope(
         top_level_page_pattern(), ContentSettingsPattern::Wildcard(),
         ContentSettingsType::BRAVE_REFERRERS, CONTENT_SETTING_BLOCK);
-    ContentSettingsForOneType settings;
-    content_settings()->GetSettingsForOneType(
-        ContentSettingsType::BRAVE_REFERRERS, &settings);
+    ContentSettingsForOneType settings =
+        content_settings()->GetSettingsForOneType(
+            ContentSettingsType::BRAVE_REFERRERS);
     // default plus new setting
     EXPECT_EQ(settings.size(), 2u);
   }
@@ -232,9 +254,9 @@ class BraveContentSettingsAgentImplBrowserTest : public InProcessBrowserTest {
     content_settings()->SetContentSettingCustomScope(
         top_level_page_pattern(), ContentSettingsPattern::Wildcard(),
         ContentSettingsType::BRAVE_REFERRERS, CONTENT_SETTING_ALLOW);
-    ContentSettingsForOneType settings;
-    content_settings()->GetSettingsForOneType(
-        ContentSettingsType::BRAVE_REFERRERS, &settings);
+    ContentSettingsForOneType settings =
+        content_settings()->GetSettingsForOneType(
+            ContentSettingsType::BRAVE_REFERRERS);
     // default plus new setting
     EXPECT_EQ(settings.size(), 2u);
   }
@@ -354,12 +376,12 @@ class BraveContentSettingsAgentImplBrowserTest : public InProcessBrowserTest {
   }
 
   template <typename T>
-  void CheckCookie(T* frame, base::StringPiece cookie) {
+  void CheckCookie(T* frame, std::string_view cookie) {
     EXPECT_EQ(cookie, EvalJs(frame, kCookieScript));
   }
 
   template <typename T>
-  void Check3PCookie(T* frame, base::StringPiece cookie) {
+  void Check3PCookie(T* frame, std::string_view cookie) {
     EXPECT_EQ(cookie, EvalJs(frame, kCookie3PScript));
   }
 
@@ -406,22 +428,11 @@ class BraveContentSettingsAgentImplBrowserTest : public InProcessBrowserTest {
   ContentSettingsPattern top_level_page_pattern_;
   ContentSettingsPattern first_party_pattern_;
   ContentSettingsPattern iframe_pattern_;
-  std::unique_ptr<ChromeContentClient> content_client_;
-  std::unique_ptr<BraveContentBrowserClient> browser_content_client_;
   mutable base::Lock last_referrers_lock_;
   std::map<GURL, std::string> last_referrers_;
 
   base::ScopedTempDir temp_user_data_dir_;
   net::test_server::EmbeddedTestServer https_server_;
-};
-
-class BraveContentSettingsAgentImplNoEphemeralStorageBrowserTest
-    : public BraveContentSettingsAgentImplBrowserTest {
- public:
-  BraveContentSettingsAgentImplNoEphemeralStorageBrowserTest() {
-    feature_list_.Reset();
-    feature_list_.InitAndDisableFeature(net::features::kBraveEphemeralStorage);
-  }
 };
 
 IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
@@ -452,14 +463,33 @@ IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
             content::EvalJs(contents(), kGetImageDataScript));
 }
 
-class BraveContentSettingsAgentImplV2BrowserTest
-    : public BraveContentSettingsAgentImplBrowserTest {
- public:
-  void SetUp() override { BraveContentSettingsAgentImplBrowserTest::SetUp(); }
+IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
+                       FarbleGetImageDataGoogleMapsException) {
+  // Farbling should be disabled on Google Maps
+  SetFingerprintingDefault();
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), https_server().GetURL("google.com", "/maps/simple.html")));
+  EXPECT_EQ(kExpectedImageDataHashFarblingOff,
+            content::EvalJs(contents(), kGetImageDataScript));
 
- private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-};
+  // Farbling should not be disabled on other Google things
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), https_server().GetURL("google.com", "/simple.html")));
+  EXPECT_EQ(kExpectedImageDataHashFarblingBalancedGoogleCom,
+            content::EvalJs(contents(), kGetImageDataScript));
+
+  // Farbling should be disabled on google.co.uk maps
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), https_server().GetURL("google.co.uk", "/maps/simple.html")));
+  EXPECT_EQ(kExpectedImageDataHashFarblingOff,
+            content::EvalJs(contents(), kGetImageDataScript));
+
+  // Farbling should be disabled on google.de maps
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), https_server().GetURL("google.de", "/maps/simple.html")));
+  EXPECT_EQ(kExpectedImageDataHashFarblingOff,
+            content::EvalJs(contents(), kGetImageDataScript));
+}
 
 // This test currently fails on Linux platforms due to an upstream bug when
 // SwANGLE is used, see upstream bug at http://crbug.com/1192632.
@@ -468,7 +498,7 @@ class BraveContentSettingsAgentImplV2BrowserTest
 #else
 #define MAYBE_WebGLReadPixels WebGLReadPixels
 #endif
-IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplV2BrowserTest,
+IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
                        MAYBE_WebGLReadPixels) {
   std::string origin = "a.test";
   std::string path = "/webgl/readpixels.html";
@@ -492,37 +522,7 @@ IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplV2BrowserTest,
   EXPECT_EQ(content::EvalJs(contents(), kTitleScript), "0");
 }
 
-IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplV2BrowserTest,
-                       FarbleGetImageData) {
-  // Farbling should be default when kBraveFingerprintingV2 is enabled
-  // because it uses a different content setting
-  NavigateToPageWithIframe();
-  EXPECT_EQ(kExpectedImageDataHashFarblingBalanced,
-            content::EvalJs(contents(), kGetImageDataScript));
-
-  // Farbling should be maximum if fingerprinting is blocked via content
-  // settings and kBraveFingerprintingV2 is enabled
-  BlockFingerprinting();
-  NavigateToPageWithIframe();
-  EXPECT_EQ(kExpectedImageDataHashFarblingMaximum,
-            content::EvalJs(contents(), kGetImageDataScript));
-
-  // Farbling should be balanced if fingerprinting is default via
-  // content settings and kBraveFingerprintingV2 is enabled
-  SetFingerprintingDefault();
-  NavigateToPageWithIframe();
-  EXPECT_EQ(kExpectedImageDataHashFarblingBalanced,
-            content::EvalJs(contents(), kGetImageDataScript));
-
-  // Farbling should be off if fingerprinting is allowed via
-  // content settings and kBraveFingerprintingV2 is enabled
-  AllowFingerprinting();
-  NavigateToPageWithIframe();
-  EXPECT_EQ(kExpectedImageDataHashFarblingOff,
-            content::EvalJs(contents(), kGetImageDataScript));
-}
-
-IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplV2BrowserTest,
+IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
                        CanvasIsPointInPath) {
   // Farbling level: maximum
   // Canvas isPointInPath(): blocked
@@ -562,9 +562,9 @@ IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplV2BrowserTest,
 // TODO(iefremov): We should reduce the copy-paste amount in these tests.
 IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
                        BlockReferrerByDefault) {
-  ContentSettingsForOneType settings;
-  content_settings()->GetSettingsForOneType(
-      ContentSettingsType::BRAVE_REFERRERS, &settings);
+  ContentSettingsForOneType settings =
+      content_settings()->GetSettingsForOneType(
+          ContentSettingsType::BRAVE_REFERRERS);
   // default setting
   EXPECT_EQ(settings.size(), 1u)
       << "There should not be any visible referrer rules.";
@@ -622,9 +622,9 @@ IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
 
 IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
                        BlockReferrerByDefaultRedirects) {
-  ContentSettingsForOneType settings;
-  content_settings()->GetSettingsForOneType(
-      ContentSettingsType::BRAVE_REFERRERS, &settings);
+  ContentSettingsForOneType settings =
+      content_settings()->GetSettingsForOneType(
+          ContentSettingsType::BRAVE_REFERRERS);
   // default setting
   EXPECT_EQ(settings.size(), 1u)
       << "There should not be any visible referrer rules.";
@@ -884,16 +884,6 @@ IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
   EXPECT_EQ(GetLastReferrer(cross_site_url()), GetOriginURL(url()).spec());
 }
 
-IN_PROC_BROWSER_TEST_F(
-    BraveContentSettingsAgentImplNoEphemeralStorageBrowserTest,
-    BlockThirdPartyCookieByDefault) {
-  NavigateToPageWithIframe();
-  CheckCookie(child_frame(), kTestCookie);
-
-  NavigateIframe(cross_site_url());
-  Check3PCookie(child_frame(), kEmptyCookie);
-}
-
 // With ephemeral storage enabled, the 3p cookie should still appear to be set
 // correctly.
 IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
@@ -903,18 +893,6 @@ IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
 
   NavigateIframe(cross_site_url());
   Check3PCookie(child_frame(), kTestCookie);
-}
-
-IN_PROC_BROWSER_TEST_F(
-    BraveContentSettingsAgentImplNoEphemeralStorageBrowserTest,
-    ExplicitBlock3PCookies) {
-  Block3PCookies();
-
-  NavigateToPageWithIframe();
-  CheckCookie(child_frame(), kTestCookie);
-
-  NavigateIframe(cross_site_url());
-  Check3PCookie(child_frame(), kEmptyCookie);
 }
 
 // With ephemeral storage enabled, the 3p cookie should still appear to be
@@ -969,23 +947,6 @@ IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
   Check3PCookie(child_frame(), kTestCookie);
 }
 
-IN_PROC_BROWSER_TEST_F(
-    BraveContentSettingsAgentImplNoEphemeralStorageBrowserTest,
-    ChromiumCookieBlockOverridesBraveAllowCookiesIframe) {
-  AllowCookies();
-  HostContentSettingsMap* content_settings =
-      HostContentSettingsMapFactory::GetForProfile(browser()->profile());
-  content_settings->SetContentSettingCustomScope(
-      iframe_pattern(), ContentSettingsPattern::Wildcard(),
-      ContentSettingsType::COOKIES, CONTENT_SETTING_BLOCK);
-
-  NavigateToPageWithIframe();
-  CheckCookie(contents(), kTestCookie);
-
-  NavigateIframe(cross_site_url());
-  Check3PCookie(child_frame(), kEmptyCookie);
-}
-
 // Ephemeral storage still works with the Chromium cookie blocking content
 // setting.
 IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
@@ -1037,20 +998,6 @@ IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,
 
   NavigateIframe(cross_site_url());
   Check3PCookie(child_frame(), kEmptyCookie);
-}
-
-IN_PROC_BROWSER_TEST_F(
-    BraveContentSettingsAgentImplNoEphemeralStorageBrowserTest,
-    LocalStorageTest) {
-  NavigateToPageWithIframe();
-
-  // Local storage is null, accessing it shouldn't throw.
-  NavigateIframe(cross_site_url());
-  CheckLocalStorageAccessDenied(child_frame());
-
-  // Local storage is null, accessing it doesn't throw.
-  NavigateIframe(cross_site_url());
-  CheckLocalStorageAccessDenied(child_frame());
 }
 
 IN_PROC_BROWSER_TEST_F(BraveContentSettingsAgentImplBrowserTest,

@@ -9,13 +9,18 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/raw_ptr.h"
 #include "brave/browser/ui/toolbar/bookmark_bar_sub_menu_model.h"
 #include "chrome/browser/ui/bookmarks/bookmark_context_menu_controller.h"
-#include "ui/base/models/simple_menu_model.h"
 #include "ui/gfx/native_widget_types.h"
 
 class Browser;
 class Profile;
+class PrefService;
+
+namespace bookmarks {
+class BookmarkModel;
+}
 
 class BraveBookmarkContextMenuController
     : public BookmarkContextMenuController {
@@ -27,7 +32,8 @@ class BraveBookmarkContextMenuController
       Profile* profile,
       BookmarkLaunchLocation opened_from,
       const bookmarks::BookmarkNode* parent,
-      const std::vector<const bookmarks::BookmarkNode*>& selection);
+      const std::vector<raw_ptr<const bookmarks::BookmarkNode,
+                                VectorExperimental>>& selection);
 
   BraveBookmarkContextMenuController(
       const BraveBookmarkContextMenuController&) = delete;
@@ -47,8 +53,16 @@ class BraveBookmarkContextMenuController
   std::u16string GetLabelForCommandId(int command_id) const override;
 
  private:
-  void AddBraveBookmarksSubmenu(Profile* profile);
+  friend class BraveBookmarkContextMenuTest;
 
+  void AddBraveBookmarksSubmenu(Profile* profile);
+  void AddShowAllBookmarksButtonMenu();
+
+  void SetPrefsForTesting(PrefService* prefs);
+
+  raw_ptr<Browser> browser_ = nullptr;
+  raw_ptr<PrefService> prefs_ = nullptr;
+  raw_ptr<bookmarks::BookmarkModel> bookmark_model_ = nullptr;
   std::unique_ptr<BookmarkBarSubMenuModel> brave_bookmarks_submenu_model_;
 };
 

@@ -7,6 +7,7 @@
 #define BRAVE_BROWSER_UI_VIEWS_TABS_BRAVE_COMPOUND_TAB_CONTAINER_H_
 
 #include <memory>
+#include <optional>
 
 #include "chrome/browser/ui/views/tabs/compound_tab_container.h"
 
@@ -15,8 +16,8 @@ class ScrollView;
 }  // namespace views
 
 class BraveCompoundTabContainer : public CompoundTabContainer {
+  METADATA_HEADER(BraveCompoundTabContainer, CompoundTabContainer)
  public:
-  METADATA_HEADER(BraveCompoundTabContainer);
 
   BraveCompoundTabContainer(TabContainerController& controller,
                             TabHoverCardController* hover_card_controller,
@@ -36,8 +37,9 @@ class BraveCompoundTabContainer : public CompoundTabContainer {
       base::RepeatingCallback<int()> available_width_callback) override;
   void TransferTabBetweenContainers(int from_model_index,
                                     int to_model_index) override;
-  void Layout() override;
-  gfx::Size CalculatePreferredSize() const override;
+  void Layout(PassKey) override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
   gfx::Size GetMinimumSize() const override;
   views::SizeBounds GetAvailableSize(const views::View* child) const override;
   Tab* AddTab(std::unique_ptr<Tab> tab,
@@ -48,23 +50,32 @@ class BraveCompoundTabContainer : public CompoundTabContainer {
       gfx::Point point_in_local_coords) const override;
   gfx::Rect ConvertUnpinnedContainerIdealBoundsToLocal(
       gfx::Rect ideal_bounds) const override;
-  BrowserRootView::DropTarget* GetDropTarget(
-      gfx::Point loc_in_local_coords) override;
   void OnThemeChanged() override;
   void PaintChildren(const views::PaintInfo& info) override;
   void ChildPreferredSizeChanged(views::View* child) override;
-  void SetActiveTab(absl::optional<size_t> prev_active_index,
-                    absl::optional<size_t> new_active_index) override;
+  void SetActiveTab(std::optional<size_t> prev_active_index,
+                    std::optional<size_t> new_active_index) override;
+  views::View* TargetForRect(views::View* root, const gfx::Rect& rect) override;
+
+  // BrowserRootView::DropTarget
+  BrowserRootView::DropTarget* GetDropTarget(
+      gfx::Point loc_in_local_coords) override;
+  std::optional<BrowserRootView::DropIndex> GetDropIndex(
+      const ui::DropTargetEvent& event) override;
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(VerticalTabStripBrowserTest, ScrollBarVisibility);
+
   bool ShouldShowVerticalTabs() const;
 
   void UpdateUnpinnedContainerSize();
   void ScrollTabToBeVisible(int model_index);
 
-  base::raw_ref<TabSlotController> tab_slot_controller_;
+  int GetAvailableWidthConsideringScrollBar();
 
-  base::raw_ptr<views::ScrollView> scroll_view_ = nullptr;
+  raw_ref<TabSlotController> tab_slot_controller_;
+
+  raw_ptr<views::ScrollView, DanglingUntriaged> scroll_view_ = nullptr;
 };
 
 #endif  // BRAVE_BROWSER_UI_VIEWS_TABS_BRAVE_COMPOUND_TAB_CONTAINER_H_

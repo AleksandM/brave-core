@@ -9,22 +9,28 @@
 #include <vector>
 
 #include "base/containers/contains.h"
-#include "brave/browser/widevine/constants.h"
 #include "brave/browser/widevine/widevine_utils.h"
 #include "brave/components/constants/pref_names.h"
+#include "brave/components/widevine/constants.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process_impl.h"
 #include "chrome/browser/profiles/profile.h"
+#include "components/prefs/pref_service.h"
+#include "components/update_client/crx_update_item.h"
+#include "content/public/browser/navigation_controller.h"
+#include "content/public/browser/navigation_handle.h"
+
+#if !BUILDFLAG(IS_ANDROID)
+#include "base/check_is_test.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "components/prefs/pref_service.h"
-#include "content/public/browser/navigation_controller.h"
-#include "content/public/browser/navigation_handle.h"
+#endif
 
 using component_updater::ComponentUpdateService;
 
 namespace {
+#if !BUILDFLAG(IS_ANDROID)
 bool IsAlreadyRegistered(ComponentUpdateService* cus) {
   return base::Contains(cus->GetComponentIDs(), kWidevineComponentId);
 }
@@ -39,18 +45,26 @@ void ReloadIfActive(content::WebContents* web_contents) {
   if (GetActiveWebContents() == web_contents)
     web_contents->GetController().Reload(content::ReloadType::NORMAL, false);
 }
-#endif
-
+#endif  // !BUILDFLAG(IS_LINUX)
+#endif  // !BUILDFLAG(IS_ANDROID)
 }  // namespace
 
 BraveDrmTabHelper::BraveDrmTabHelper(content::WebContents* contents)
     : WebContentsObserver(contents),
       content::WebContentsUserData<BraveDrmTabHelper>(*contents),
       brave_drm_receivers_(contents, this) {
+#if !BUILDFLAG(IS_ANDROID)
   auto* updater = g_browser_process->component_updater();
   // We don't need to observe if widevine is already registered.
-  if (!IsAlreadyRegistered(updater))
-    observer_.Observe(updater);
+  // component_updater() can return nullptr in unit tests.
+  if (updater) {
+    if (!IsAlreadyRegistered(updater)) {
+      observer_.Observe(updater);
+    }
+  } else {
+    CHECK_IS_TEST();
+  }
+#endif
 }
 
 BraveDrmTabHelper::~BraveDrmTabHelper() = default;
@@ -70,14 +84,22 @@ void BraveDrmTabHelper::BindBraveDRM(
 }
 
 bool BraveDrmTabHelper::ShouldShowWidevineOptIn() const {
+#if BUILDFLAG(IS_LINUX) && !defined(ARCH_CPU_X86_64)
+  // On non-x64 Linux, Widevine is not publicly available. This point is a
+  // convenient single place for turning this class into a no-op:
+  return false;
+  // Users on non-x64 Linux may still install Widevine manually and enable it in
+  // brave://settings.
+#else
   // If the user already opted in, don't offer it.
   PrefService* prefs =
       static_cast<Profile*>(web_contents()->GetBrowserContext())->GetPrefs();
-  if (IsWidevineOptedIn() || !prefs->GetBoolean(kAskWidevineInstall)) {
+  if (IsWidevineEnabled() || !prefs->GetBoolean(kAskEnableWidvine)) {
     return false;
   }
 
   return is_widevine_requested_;
+#endif  // BUILDFLAG(IS_LINUX) && !defined(ARCH_CPU_X86_64)
 }
 
 void BraveDrmTabHelper::DidStartNavigation(
@@ -92,16 +114,22 @@ void BraveDrmTabHelper::DidStartNavigation(
 
 void BraveDrmTabHelper::OnWidevineKeySystemAccessRequest() {
   is_widevine_requested_ = true;
+#if BUILDFLAG(IS_ANDROID)
+  bool for_restart = true;
+#else
+  bool for_restart = false;
+#endif
 
   if (ShouldShowWidevineOptIn() && !is_permission_requested_) {
     is_permission_requested_ = true;
-    RequestWidevinePermission(web_contents(), false /* for_restart */);
+    RequestWidevinePermission(web_contents(), for_restart);
   }
 }
 
-void BraveDrmTabHelper::OnEvent(Events event, const std::string& id) {
-  if (event == ComponentUpdateService::Observer::Events::COMPONENT_UPDATED &&
-      id == kWidevineComponentId) {
+void BraveDrmTabHelper::OnEvent(const update_client::CrxUpdateItem& item) {
+#if !BUILDFLAG(IS_ANDROID)
+  if (item.state == update_client::ComponentState::kUpdated &&
+      item.id == kWidevineComponentId) {
 #if BUILDFLAG(IS_LINUX)
     // Ask restart instead of reloading. Widevine is only usable after
     // restarting on linux. This restart permission request is only shown if
@@ -113,10 +141,11 @@ void BraveDrmTabHelper::OnEvent(Events event, const std::string& id) {
     // reloaded automatically.
     if (is_widevine_requested_)
       ReloadIfActive(web_contents());
-#endif
+#endif  // BUILDFLAG(IS_LINUX)
     // Stop observing component update event.
     observer_.Reset();
   }
+#endif  // !BUILDFLAG(IS_ANDROID)
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(BraveDrmTabHelper);

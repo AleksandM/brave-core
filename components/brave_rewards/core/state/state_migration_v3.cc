@@ -5,19 +5,19 @@
 
 #include "brave/components/brave_rewards/core/state/state_migration_v3.h"
 
-namespace brave_rewards::internal {
-namespace state {
+#include <utility>
+
+namespace brave_rewards::internal::state {
 
 StateMigrationV3::StateMigrationV3() = default;
 
 StateMigrationV3::~StateMigrationV3() = default;
 
-void StateMigrationV3::Migrate(LegacyResultCallback callback) {
+void StateMigrationV3::Migrate(ResultCallback callback) {
   // In this migration we migrated anon address to uphold wallet in preferences
   // because anon address was removed we can also remove this step
   // Ref: https://github.com/brave/brave-browser/issues/11150
-  callback(mojom::Result::LEDGER_OK);
+  std::move(callback).Run(mojom::Result::OK);
 }
 
-}  // namespace state
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::state

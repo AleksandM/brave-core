@@ -6,9 +6,9 @@
 #include "brave/components/omnibox/browser/brave_bookmark_provider.h"
 
 #include <memory>
+#include <string_view>
 
 #include "base/memory/scoped_refptr.h"
-#include "base/strings/string_piece_forward.h"
 #include "base/strings/utf_string_conversions.h"
 #include "brave/components/omnibox/browser/brave_fake_autocomplete_provider_client.h"
 #include "brave/components/omnibox/browser/brave_omnibox_prefs.h"
@@ -17,32 +17,32 @@
 #include "components/omnibox/browser/autocomplete_input.h"
 #include "components/omnibox/browser/test_scheme_classifier.h"
 #include "components/prefs/pref_service.h"
+#include "components/search_engines/search_engines_test_environment.h"
 #include "components/search_engines/template_url_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/googletest/src/googletest/include/gtest/gtest.h"
 
 class BraveBookmarkProviderTest : public testing::Test {
  public:
   BraveBookmarkProviderTest()
       : model_(bookmarks::TestBookmarkClient::CreateModel()) {}
 
-  AutocompleteInput CreateAutocompleteInput(base::StringPiece text) {
+  AutocompleteInput CreateAutocompleteInput(std::string_view text) {
     AutocompleteInput input(base::UTF8ToUTF16(text),
                             metrics::OmniboxEventProto::OTHER, classifier_);
     return input;
   }
 
   void SetUp() override {
-    EXPECT_CALL(client_, GetLocalOrSyncableBookmarkModel())
+    EXPECT_CALL(client_, GetBookmarkModel())
         .WillRepeatedly(testing::Return(model_.get()));
     EXPECT_CALL(client_, GetSchemeClassifier())
         .WillRepeatedly(testing::ReturnRef(classifier_));
-    auto* node = client_.GetLocalOrSyncableBookmarkModel()->other_node();
-    client_.GetLocalOrSyncableBookmarkModel()->AddURL(
-        node, 0, u"Hello", GURL("https://example.com"));
+    auto* node = client_.GetBookmarkModel()->other_node();
+    client_.GetBookmarkModel()->AddURL(node, 0, u"Hello",
+                                       GURL("https://example.com"));
     client_.set_template_url_service(
-        std::make_unique<TemplateURLService>(nullptr, 0));
+        search_engines_test_environment_.template_url_service());
     provider_ = base::MakeRefCounted<BraveBookmarkProvider>(&client_);
   }
 
@@ -50,6 +50,7 @@ class BraveBookmarkProviderTest : public testing::Test {
 
  protected:
   TestSchemeClassifier classifier_;
+  search_engines::SearchEnginesTestEnvironment search_engines_test_environment_;
   BraveFakeAutocompleteProviderClient client_;
   std::unique_ptr<bookmarks::BookmarkModel> model_;
   scoped_refptr<BraveBookmarkProvider> provider_;

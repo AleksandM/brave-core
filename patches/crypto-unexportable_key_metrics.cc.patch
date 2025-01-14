@@ -1,8 +1,8 @@
 diff --git a/crypto/unexportable_key_metrics.cc b/crypto/unexportable_key_metrics.cc
-index cd4ed606447ee4f5b0aa0580496f8d844310773a..4791e2ed910b760e86557dfa3ba4aadbe8a7f6e2 100644
+index 1c80cebe266bbd0856cade1f127c0446786304a8..7e855d4c6cf4ac478ea3794729d695000c9d695b 100644
 --- a/crypto/unexportable_key_metrics.cc
 +++ b/crypto/unexportable_key_metrics.cc
-@@ -28,6 +28,7 @@ enum class KeyType {
+@@ -23,6 +23,7 @@ enum class KeyType {
  };
  
  const SignatureVerifier::SignatureAlgorithm kAllAlgorithms[] = {
@@ -10,7 +10,7 @@ index cd4ed606447ee4f5b0aa0580496f8d844310773a..4791e2ed910b760e86557dfa3ba4aadb
      SignatureVerifier::SignatureAlgorithm::ECDSA_SHA256,
      SignatureVerifier::SignatureAlgorithm::RSA_PKCS1_SHA256,
  };
-@@ -137,6 +138,7 @@ internal::TPMSupport MeasureVirtualTpmOperations() {
+@@ -116,6 +117,7 @@ internal::TPMSupport MeasureVirtualTpmOperations() {
    if (algo) {
      switch (*algo) {
        case SignatureVerifier::SignatureAlgorithm::ECDSA_SHA256:
@@ -18,7 +18,7 @@ index cd4ed606447ee4f5b0aa0580496f8d844310773a..4791e2ed910b760e86557dfa3ba4aadb
          supported_virtual_algo = internal::TPMSupport::kECDSA;
          break;
        case SignatureVerifier::SignatureAlgorithm::RSA_PKCS1_SHA256:
-@@ -216,6 +218,7 @@ void MeasureTpmOperationsInternal() {
+@@ -196,6 +198,7 @@ void MeasureTpmOperationsInternal(UnexportableKeyProvider::Config config) {
    if (algo) {
      switch (*algo) {
        case SignatureVerifier::SignatureAlgorithm::ECDSA_SHA256:
@@ -26,3 +26,11 @@ index cd4ed606447ee4f5b0aa0580496f8d844310773a..4791e2ed910b760e86557dfa3ba4aadb
          supported_algo = internal::TPMSupport::kECDSA;
          break;
        case SignatureVerifier::SignatureAlgorithm::RSA_PKCS1_SHA256:
+@@ -297,6 +300,7 @@ std::string AlgorithmToString(SignatureVerifier::SignatureAlgorithm algorithm) {
+     case SignatureVerifier::SignatureAlgorithm::RSA_PSS_SHA256:
+       return "RSA";
+     case SignatureVerifier::SignatureAlgorithm::ECDSA_SHA256:
++    BRAVE_UNEXPORTED_KEY_METRICS_ALGORITHM_TO_STRING
+       return "ECDSA";
+   }
+ }

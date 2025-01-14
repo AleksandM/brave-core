@@ -3,10 +3,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 import * as React from 'react'
-import { create } from 'ethereum-blockies'
 
 // types
-import { BraveWallet, WalletAccountType } from '../../../constants/types'
+import { BraveWallet } from '../../../constants/types'
 
 // utils
 import { getLocale } from '../../../../common/locale'
@@ -32,11 +31,15 @@ import {
   AccountName,
   LeftSide,
   BigCheckMark,
-  SwitchAccountIconContainer
+  SwitchAccountIconContainer,
+  CaratDown
 } from './style'
 
+// hooks
+import { useAccountOrb } from '../../../common/hooks/use-orb'
+
 export interface Props {
-  account?: WalletAccountType
+  account?: BraveWallet.AccountInfo
   isSelected?: boolean
   selectedNetwork?: BraveWallet.NetworkInfo
   onSelectAccount?: () => void
@@ -44,9 +47,10 @@ export interface Props {
   fullAddress?: boolean
   hideAddress?: boolean
   showSwitchAccountsIcon?: boolean
+  isV2?: boolean
 }
 
-export function SelectAccountItem ({
+export function SelectAccountItem({
   account,
   isSelected,
   onSelectAccount,
@@ -54,77 +58,95 @@ export function SelectAccountItem ({
   fullAddress,
   selectedNetwork,
   hideAddress,
-  showSwitchAccountsIcon: showSwitchAccountsLink
+  showSwitchAccountsIcon: showSwitchAccountsLink,
+  isV2
 }: Props) {
   // methods
-  const onKeyPress = React.useCallback(({ key }: React.KeyboardEvent) => {
-    // Invoke for space or enter, just like a regular input or button
-    if (onSelectAccount && [' ', 'Enter'].includes(key)) {
-      onSelectAccount()
-    }
-  }, [onSelectAccount])
+  const onKeyPress = React.useCallback(
+    ({ key }: React.KeyboardEvent) => {
+      // Invoke for space or enter, just like a regular input or button
+      if (onSelectAccount && [' ', 'Enter'].includes(key)) {
+        onSelectAccount()
+      }
+    },
+    [onSelectAccount]
+  )
 
   // memos / computed
   const accountAddress = account?.address || ''
   const accountName = account?.name || ''
 
-  const orb = React.useMemo(() => {
-    return create({ seed: accountAddress.toLowerCase(), size: 8, scale: 16 }).toDataURL()
-  }, [accountAddress])
+  const orb = useAccountOrb(account)
 
   const PossibleToolTip = React.useMemo(() => {
-    return showTooltips ? Tooltip : ({ children }: React.PropsWithChildren<{
-      text: string
-      isAddress?: boolean
-    }>) => <>{children}</>
+    return showTooltips
+      ? Tooltip
+      : ({
+          children
+        }: React.PropsWithChildren<{
+          text: string
+          isAddress?: boolean
+        }>) => <>{children}</>
   }, [showTooltips])
 
   // render
   return (
-    <StyledWrapper onKeyPress={onKeyPress} onClick={onSelectAccount}>
+    <StyledWrapper
+      onKeyPress={onKeyPress}
+      onClick={onSelectAccount}
+      isV2={isV2}
+    >
       <LeftSide>
         {!selectedNetwork && <AccountCircle orb={orb} />}
-        {selectedNetwork &&
+        {selectedNetwork && (
           <IconsWrapper>
-            <AccountCircle orb={orb} style={{ width: '36px', height: '36px' }} />
+            <AccountCircle
+              orb={orb}
+              style={{ width: '36px', height: '36px' }}
+            />
             <NetworkIconWrapper>
-              <CreateNetworkIcon size='small' network={selectedNetwork} />
+              <CreateNetworkIcon
+                size='small'
+                network={selectedNetwork}
+              />
             </NetworkIconWrapper>
           </IconsWrapper>
-        }
+        )}
         <AccountAndAddress>
-
           <PossibleToolTip
-            text={showSwitchAccountsLink
-              ? getLocale('braveWalletClickToSwitch')
-              : accountName
+            text={
+              showSwitchAccountsLink
+                ? getLocale('braveWalletClickToSwitch')
+                : accountName
             }
             isAddress={!showSwitchAccountsLink}
           >
             <Row justifyContent={'flex-start'}>
-              <AccountName>{reduceAccountDisplayName(accountName, 22)}</AccountName>
-              {showSwitchAccountsLink &&
+              <AccountName>
+                {reduceAccountDisplayName(accountName, 22)}
+              </AccountName>
+              {showSwitchAccountsLink && !isV2 && (
                 <SwitchAccountIconContainer>
                   <SwitchAccountIcon />
                 </SwitchAccountIconContainer>
-              }
+              )}
             </Row>
           </PossibleToolTip>
 
-          {!hideAddress &&
-            <PossibleToolTip text={accountAddress} isAddress>
-              <AccountAddress>{fullAddress
-                ? accountAddress
-                : reduceAddress(accountAddress)
-              }</AccountAddress>
+          {!hideAddress && (
+            <PossibleToolTip
+              text={accountAddress}
+              isAddress
+            >
+              <AccountAddress>
+                {fullAddress ? accountAddress : reduceAddress(accountAddress)}
+              </AccountAddress>
             </PossibleToolTip>
-          }
-
+          )}
         </AccountAndAddress>
       </LeftSide>
-      {isSelected &&
-        <BigCheckMark />
-      }
+      {isSelected && <BigCheckMark />}
+      {isV2 && <CaratDown />}
     </StyledWrapper>
   )
 }

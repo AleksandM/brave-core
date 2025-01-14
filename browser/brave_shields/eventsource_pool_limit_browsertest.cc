@@ -4,16 +4,19 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include <string>
+#include <string_view>
 
 #include "base/path_service.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
 #include "brave/components/constants/brave_paths.h"
+#include "brave/components/webcompat/core/common/features.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
 #include "extensions/buildflags/buildflags.h"
 #include "net/dns/mock_host_resolver.h"
@@ -38,7 +41,7 @@ using net::test_server::HttpConnection;
 using net::test_server::HttpRequest;
 using net::test_server::HttpResponse;
 
-const int kEventSourcesPoolLimit = 250;
+constexpr int kEventSourcesPoolLimit = 250;
 
 constexpr char kEventSourcesOpenScript[] = R"(
   if (typeof sources === "undefined") {
@@ -87,27 +90,18 @@ constexpr char kEventSourceCloseInSwScript[] = R"(
   })();
 )";
 
-class EmbeddedTestServerKeepAlive : public EmbeddedTestServer {
- public:
-  using EmbeddedTestServer::EmbeddedTestServer;
-
-  void RemoveConnection(
-      HttpConnection* connection,
-      EmbeddedTestServerConnectionListener* listener = nullptr) {
-    // Don't remove connection, to keep it alive.
-  }
-};
-
 }  // namespace
 
 class EventSourcePoolLimitBrowserTest : public InProcessBrowserTest {
  public:
-  EventSourcePoolLimitBrowserTest() = default;
+  EventSourcePoolLimitBrowserTest() {
+    scoped_feature_list_.InitAndEnableFeature(
+        webcompat::features::kBraveWebcompatExceptionsService);
+  }
 
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
     host_resolver()->AddRule("*", "127.0.0.1");
-    brave::RegisterPathProvider();
     mock_cert_verifier_.mock_cert_verifier()->set_default_result(net::OK);
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
@@ -138,7 +132,7 @@ class EventSourcePoolLimitBrowserTest : public InProcessBrowserTest {
   }
 
   void OpenEventSources(content::RenderFrameHost* rfh,
-                        base::StringPiece script_template,
+                        std::string_view script_template,
                         int count) {
     const std::string& es_open_script =
         content::JsReplace(script_template, es_url_);
@@ -148,7 +142,7 @@ class EventSourcePoolLimitBrowserTest : public InProcessBrowserTest {
   }
 
   void ExpectEventSourcesAreLimited(content::RenderFrameHost* rfh,
-                                    base::StringPiece script_template) {
+                                    std::string_view script_template) {
     const std::string& es_open_script =
         content::JsReplace(script_template, es_url_);
     for (int i = 0; i < 5; ++i) {
@@ -157,7 +151,7 @@ class EventSourcePoolLimitBrowserTest : public InProcessBrowserTest {
   }
 
   void CloseEventSources(content::RenderFrameHost* rfh,
-                         base::StringPiece script_template,
+                         std::string_view script_template,
                          int count) {
     for (int i = 0; i < count; ++i) {
       EXPECT_TRUE(content::ExecJs(rfh, content::JsReplace(script_template, i)));
@@ -165,7 +159,7 @@ class EventSourcePoolLimitBrowserTest : public InProcessBrowserTest {
   }
 
   void OpenEventSourcesAndExpectLimited(content::RenderFrameHost* rfh,
-                                        base::StringPiece script_template,
+                                        std::string_view script_template,
                                         int count) {
     OpenEventSources(rfh, script_template, count);
     ExpectEventSourcesAreLimited(rfh, script_template);
@@ -193,7 +187,7 @@ class EventSourcePoolLimitBrowserTest : public InProcessBrowserTest {
   // Makes use of Cross Site Redirector
   content::RenderFrameHost* GetNthChildFrameWithHost(
       content::RenderFrameHost* main,
-      base::StringPiece host,
+      std::string_view host,
       size_t n = 0) {
     size_t child_idx = 0;
     while (true) {
@@ -212,8 +206,11 @@ class EventSourcePoolLimitBrowserTest : public InProcessBrowserTest {
 
  protected:
   content::ContentMockCertVerifier mock_cert_verifier_;
-  EmbeddedTestServerKeepAlive https_server_{EmbeddedTestServer::TYPE_HTTPS};
+  EmbeddedTestServer https_server_{EmbeddedTestServer::TYPE_HTTPS};
   GURL es_url_;
+
+ private:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(EventSourcePoolLimitBrowserTest,
@@ -294,8 +291,8 @@ IN_PROC_BROWSER_TEST_F(EventSourcePoolLimitBrowserTest,
 // Ensures that sub-frame opaque origins are treated properly when used from
 // different top-frame opaque origins.
 // TODO(https://github.com/brave/brave-browser/issues/28393): Test flaky on
-// master for the windows build.
-#if BUILDFLAG(IS_WIN)
+// master for the windows asan build.
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
 #define MAYBE_SandboxedFramesAreLimited DISABLED_SandboxedFramesAreLimited
 #else
 #define MAYBE_SandboxedFramesAreLimited SandboxedFramesAreLimited
@@ -355,6 +352,33 @@ IN_PROC_BROWSER_TEST_F(EventSourcePoolLimitBrowserTest,
       kRegisterSwScript, "service-worker-eventsource-limit.js");
   ASSERT_TRUE(content::ExecJs(a_com_rfh, register_sw_script));
   OpenEventSources(a_com_rfh, kEventSourcesOpenInSwScript,
+                   kEventSourcesPoolLimit + 5);
+}
+
+IN_PROC_BROWSER_TEST_F(EventSourcePoolLimitBrowserTest,
+                       PoolIsNotLimitedWithWebcompatException) {
+  const GURL url(https_server_.GetURL("a.com", "/ephemeral_storage.html"));
+
+  // Enable shields.
+  brave_shields::SetBraveShieldsEnabled(content_settings(), true, url);
+
+  // Enable webcompat exception.
+  brave_shields::SetWebcompatEnabled(
+      content_settings(),
+      ContentSettingsType::BRAVE_WEBCOMPAT_EVENT_SOURCE_POOL, true,
+      https_server_.GetURL("a.com", "/"), nullptr);
+
+  auto* a_com_rfh = ui_test_utils::NavigateToURLWithDisposition(
+      browser(), url, WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_LOAD_STOP);
+
+  // No limits should be active.
+  OpenEventSources(a_com_rfh, kEventSourcesOpenScript,
+                   kEventSourcesPoolLimit + 5);
+
+  // No limits should be active in a 3p frame.
+  auto* b_com_in_a_com_rfh = GetNthChildFrameWithHost(a_com_rfh, "b.com");
+  OpenEventSources(b_com_in_a_com_rfh, kEventSourcesOpenScript,
                    kEventSourcesPoolLimit + 5);
 }
 

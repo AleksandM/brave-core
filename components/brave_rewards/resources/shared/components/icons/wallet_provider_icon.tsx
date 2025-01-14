@@ -9,6 +9,8 @@ import { ExternalWalletProvider } from '../../lib/external_wallet'
 import { BitflyerIcon } from './bitflyer_icon'
 import { GeminiIcon } from './gemini_icon'
 import { UpholdIcon } from './uphold_icon'
+import { ZebPayIcon } from './zebpay_icon'
+import { SolanaIcon } from './solana_icon'
 
 interface Props {
   provider: ExternalWalletProvider
@@ -19,6 +21,7 @@ export function WalletProviderIcon (props: Props) {
     case 'gemini': return <GeminiIcon />
     case 'bitflyer': return <BitflyerIcon />
     case 'uphold': return <UpholdIcon />
+    case 'zebpay': return <ZebPayIcon />
+    case 'solana': return <SolanaIcon />
   }
-  return null
 }

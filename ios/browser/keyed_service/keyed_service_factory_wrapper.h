@@ -15,7 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// Create a subclass of this class for each factory you want to expose to Swift
 /// using the concrete return type and then implement the required
-/// `serviceForBrowserState:` method.
+/// `serviceForProfile:` method.
 ///
 /// This must be an Obj-C interface instead of a protocol due to limitations
 /// of Obj-C's lightweight generics
@@ -28,7 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// the same service regardless of private mode, or you may receive `nil` if
 /// the service you requested does not support private browsing.
 + (nullable ResultType)getForPrivateMode:(bool)isPrivateBrowsing
-    NS_SWIFT_NAME(get(privateMode:))NS_REQUIRES_SUPER;
+    NS_SWIFT_NAME(get(privateMode:)) NS_REQUIRES_SUPER NS_SWIFT_UI_ACTOR;
 
 - (instancetype)init NS_UNAVAILABLE;
 

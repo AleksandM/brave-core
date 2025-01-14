@@ -10,15 +10,23 @@
 #include "keyed_service_factory_wrapper.h"  // NOLINT
 
 @protocol BraveWalletAssetRatioService
-, BraveWalletBraveWalletService, BraveWalletJsonRpcService,
-    BraveWalletEthTxManagerProxy, BraveWalletSolanaTxManagerProxy,
-    BraveWalletTxService, BraveWalletKeyringService, BraveWalletSwapService,
-    BraveWalletIpfsService;
+, BraveWalletBraveWalletService, BraveWalletBitcoinWalletService,
+    BraveWalletJsonRpcService, BraveWalletEthTxManagerProxy,
+    BraveWalletSolanaTxManagerProxy, BraveWalletTxService,
+    BraveWalletKeyringService, BraveWalletMeldIntegrationService,
+    BraveWalletSwapService, BraveWalletIpfsService,
+    BraveWalletZCashWalletService;
 
 OBJC_EXPORT
 NS_SWIFT_NAME(BraveWallet.AssetRatioServiceFactory)
 @interface BraveWalletAssetRatioServiceFactory
     : KeyedServiceFactoryWrapper <id <BraveWalletAssetRatioService>>
+@end
+
+OBJC_EXPORT
+NS_SWIFT_NAME(BraveWallet.BitcoinWalletServiceFactory)
+@interface BraveWalletBitcoinWalletServiceFactory
+    : KeyedServiceFactoryWrapper <id <BraveWalletBitcoinWalletService>>
 @end
 
 OBJC_EXPORT
@@ -52,6 +60,12 @@ NS_SWIFT_NAME(BraveWallet.KeyringServiceFactory)
 @end
 
 OBJC_EXPORT
+NS_SWIFT_NAME(BraveWallet.MeldIntegrationServiceFactory)
+@interface BraveWalletMeldIntegrationServiceFactory
+    : KeyedServiceFactoryWrapper <id <BraveWalletMeldIntegrationService>>
+@end
+
+OBJC_EXPORT
 NS_SWIFT_NAME(BraveWallet.ServiceFactory)
 @interface BraveWalletServiceFactory
     : KeyedServiceFactoryWrapper <id <BraveWalletBraveWalletService>>
@@ -67,6 +81,12 @@ OBJC_EXPORT
 NS_SWIFT_NAME(BraveWallet.IpfsServiceFactory)
 @interface BraveWalletIpfsServiceFactory
     : KeyedServiceFactoryWrapper <id <BraveWalletIpfsService>>
+@end
+
+OBJC_EXPORT
+NS_SWIFT_NAME(BraveWallet.ZCashWalletServiceFactory)
+@interface BraveWalletZCashWalletServiceFactory
+    : KeyedServiceFactoryWrapper <id <BraveWalletZCashWalletService>>
 @end
 
 #endif  // BRAVE_IOS_BROWSER_BRAVE_WALLET_BRAVE_WALLET_FACTORY_WRAPPERS_H_

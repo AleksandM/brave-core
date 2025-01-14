@@ -5,6 +5,7 @@
 
 if (is_android) {
   import("//build/config/android/rules.gni")
+  import("//third_party/jni_zero/jni_zero.gni")
 }
 
 assert(!is_ios)
@@ -19,6 +20,7 @@ static_library("browser") {
 
   deps = [
     "//base",
+    "//brave/brave_domains",
     "//brave/components/brave_stats/browser",
     "//brave/components/constants",
     "//brave/vendor/brave_base",
@@ -28,6 +30,13 @@ static_library("browser") {
     "//net",
     "//services/network/public/cpp",
   ]
+
+  if (is_mac) {
+    sources += [
+      "file_extended_attribute.cc",
+      "file_extended_attribute.h",
+    ]
+  }
 
   if (is_android) {
     sources += [
@@ -45,5 +54,21 @@ static_library("browser") {
 if (is_android) {
   generate_jni("jni_headers") {
     sources = [ "//brave/android/java/org/chromium/chrome/browser/util/BraveReferrer.java" ]
+  }
+}
+
+source_set("unit_tests") {
+  testonly = true
+  sources = []
+  deps = []
+
+  if (is_mac) {
+    sources += [ "file_extended_attribute_unittest.cc" ]
+    deps += [
+      ":browser",
+      "//base",
+      "//base/test:test_support",
+      "//testing/gtest",
+    ]
   }
 }

@@ -5,14 +5,15 @@
 
 #include "brave/components/permissions/permission_lifetime_options.h"
 
+#include <optional>
 #include <utility>
 
 namespace permissions {
 
 PermissionLifetimeOption::PermissionLifetimeOption(
     std::u16string label,
-    absl::optional<base::TimeDelta> lifetime)
-    : label(std::move(label)), lifetime(std::move(lifetime)) {}
+    std::optional<base::TimeDelta> lifetime)
+    : label(std::move(label)), lifetime(lifetime) {}
 
 PermissionLifetimeOption::PermissionLifetimeOption(
     const PermissionLifetimeOption&) = default;

@@ -8,8 +8,7 @@
 #include "brave/components/p3a_utils/bucket.h"
 #include "components/sync/base/user_selectable_type.h"
 
-namespace brave_sync {
-namespace p3a {
+namespace brave_sync::p3a {
 
 void RecordEnabledTypes(bool sync_everything_enabled,
                         const syncer::UserSelectableTypeSet& selected_types) {
@@ -18,23 +17,23 @@ void RecordEnabledTypes(bool sync_everything_enabled,
 
   EnabledTypesAnswer sample;
   static const auto all_brave_supported_types = UserSelectableTypeSet(
-      UserSelectableType::kBookmarks, UserSelectableType::kHistory,
-      UserSelectableType::kExtensions, UserSelectableType::kApps,
-      UserSelectableType::kPasswords, UserSelectableType::kPreferences,
-      UserSelectableType::kThemes, UserSelectableType::kTabs,
-      UserSelectableType::kAutofill);
+      {UserSelectableType::kBookmarks, UserSelectableType::kHistory,
+       UserSelectableType::kExtensions, UserSelectableType::kApps,
+       UserSelectableType::kPasswords, UserSelectableType::kPreferences,
+       UserSelectableType::kThemes, UserSelectableType::kTabs,
+       UserSelectableType::kAutofill});
   if (sync_everything_enabled ||
       selected_types.HasAll(all_brave_supported_types)) {
     // Sync All
     sample = EnabledTypesAnswer::kAllTypes;
-  } else if (selected_types.Empty() ||
+  } else if (selected_types.empty() ||
              selected_types ==
-                 UserSelectableTypeSet(UserSelectableType::kBookmarks)) {
+                 UserSelectableTypeSet({UserSelectableType::kBookmarks})) {
     // Bookmarks or no types
     sample = EnabledTypesAnswer::kEmptyOrBookmarksOnly;
   } else if (selected_types ==
-             UserSelectableTypeSet(UserSelectableType::kBookmarks,
-                                   UserSelectableType::kHistory)) {
+             UserSelectableTypeSet({UserSelectableType::kBookmarks,
+                                    UserSelectableType::kHistory})) {
     // Bookmarks & History
     sample = EnabledTypesAnswer::kBookmarksAndHistory;
   } else {
@@ -46,14 +45,27 @@ void RecordEnabledTypes(bool sync_everything_enabled,
 }
 
 void RecordSyncedObjectsCount(int total_entities) {
-  // "Brave.Sync.SyncedObjectsCount"
+  // "Brave.Sync.SyncedObjectsCount.2"
   // 0 - 0..1000
   // 1 - 1001..10000
   // 2 - 10001..49000
   // 3 - >= 49001
-  p3a_utils::RecordToHistogramBucket(kSyncedObjectsCountHistogramName,
+  p3a_utils::RecordToHistogramBucket(kSyncedObjectsCountHistogramNameV2,
                                      {1000, 10000, 49000}, total_entities);
 }
 
-}  // namespace p3a
-}  // namespace brave_sync
+void SyncCodeMonitor::RecordCodeGenerated() {
+  code_generated_ = true;
+  base::UmaHistogramEnumeration(kSyncJoinTypeHistogramName,
+                                SyncJoinType::kChainCreated);
+}
+
+void SyncCodeMonitor::RecordCodeSet() {
+  if (!code_generated_) {
+    base::UmaHistogramEnumeration(kSyncJoinTypeHistogramName,
+                                  SyncJoinType::kChainJoined);
+  }
+  code_generated_ = false;
+}
+
+}  // namespace brave_sync::p3a

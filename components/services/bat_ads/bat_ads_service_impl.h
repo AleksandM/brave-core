@@ -8,7 +8,6 @@
 
 #include <memory>
 
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom-forward.h"
 #include "brave/components/services/bat_ads/public/interfaces/bat_ads.mojom.h"
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "mojo/public/cpp/bindings/pending_associated_remote.h"
@@ -20,12 +19,12 @@ namespace bat_ads {
 
 class BatAdsServiceImpl : public mojom::BatAdsService {
  public:
-  // This constructor assumes the BatAdsServiceImpl will be bound to an
-  // externally owned receiver, such as through |mojo::MakeSelfOwnedReceiver()|.
+  // This constructor assumes the `BatAdsServiceImpl` will be bound to an
+  // externally owned receiver, such as through `mojo::MakeSelfOwnedReceiver()`.
   BatAdsServiceImpl();
 
-  explicit BatAdsServiceImpl(
-      mojo::PendingReceiver<mojom::BatAdsService> receiver);
+  explicit BatAdsServiceImpl(mojo::PendingReceiver<mojom::BatAdsService>
+                                 bat_ads_service_pending_receiver);
 
   BatAdsServiceImpl(const BatAdsServiceImpl&) = delete;
   BatAdsServiceImpl& operator=(const BatAdsServiceImpl&) = delete;
@@ -36,18 +35,22 @@ class BatAdsServiceImpl : public mojom::BatAdsService {
   ~BatAdsServiceImpl() override;
 
   // BatAdsService:
-  void Create(mojo::PendingAssociatedRemote<mojom::BatAdsClient> bat_ads_client,
-              mojo::PendingAssociatedReceiver<mojom::BatAds> bat_ads,
+  void Create(const base::FilePath& service_path,
+              mojo::PendingAssociatedRemote<mojom::BatAdsClient>
+                  bat_ads_client_pending_associated_remote,
+              mojo::PendingAssociatedReceiver<mojom::BatAds>
+                  bat_ads_pending_associated_receiver,
               mojo::PendingReceiver<mojom::BatAdsClientNotifier>
-                  bat_ads_client_notifier,
+                  bat_ads_client_notifier_pending_receiver,
               CreateCallback callback) override;
 
  private:
-  mojo::Receiver<mojom::BatAdsService> receiver_{this};
-  mojo::UniqueAssociatedReceiverSet<mojom::BatAds> associated_receivers_;
+  mojo::Receiver<mojom::BatAdsService> bat_ads_service_receiver_{this};
+  mojo::UniqueAssociatedReceiverSet<mojom::BatAds>
+      bat_ads_associated_receivers_;
 
   struct ScopedAllowSyncCall;
-  std::unique_ptr<ScopedAllowSyncCall> scoped_allow_sync_;
+  std::unique_ptr<ScopedAllowSyncCall> scoped_allow_sync_call_;
 };
 
 }  // namespace bat_ads

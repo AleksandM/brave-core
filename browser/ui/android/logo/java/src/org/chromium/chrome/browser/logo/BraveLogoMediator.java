@@ -16,14 +16,19 @@ public class BraveLogoMediator extends LogoMediator {
     private PropertyModel mLogoModel;
     private boolean mShouldShowLogo;
 
-    public BraveLogoMediator(Context context, Callback<LoadUrlParams> logoClickedCallback,
-            PropertyModel logoModel, boolean shouldFetchDoodle,
+    public BraveLogoMediator(
+            Context context,
+            Callback<LoadUrlParams> logoClickedCallback,
+            PropertyModel logoModel,
             Callback<LogoBridge.Logo> onLogoAvailableCallback,
-            Runnable onCachedLogoRevalidatedRunnable, boolean isParentSurfaceShown,
             LogoCoordinator.VisibilityObserver visibilityObserver,
             CachedTintedBitmap defaultGoogleLogo) {
-        super(context, logoClickedCallback, logoModel, shouldFetchDoodle, onLogoAvailableCallback,
-                onCachedLogoRevalidatedRunnable, isParentSurfaceShown, visibilityObserver,
+        super(
+                context,
+                logoClickedCallback,
+                logoModel,
+                onLogoAvailableCallback,
+                visibilityObserver,
                 defaultGoogleLogo);
     }
 

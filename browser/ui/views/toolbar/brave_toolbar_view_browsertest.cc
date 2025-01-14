@@ -3,16 +3,22 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#include "brave/browser/ui/views/toolbar/brave_toolbar_view.h"
+
 #include "base/functional/callback_helpers.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/scoped_feature_list.h"
 #include "brave/browser/ui/views/frame/brave_browser_view.h"
+#include "brave/browser/ui/views/toolbar/ai_chat_button.h"
 #include "brave/browser/ui/views/toolbar/bookmark_button.h"
-#include "brave/browser/ui/views/toolbar/brave_toolbar_view.h"
+#include "brave/browser/ui/views/toolbar/wallet_button.h"
+#include "brave/components/ai_chat/core/browser/utils.h"
+#include "brave/components/ai_chat/core/common/features.h"
+#include "brave/components/ai_chat/core/common/pref_names.h"
+#include "brave/components/brave_wallet/browser/pref_names.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/skus/common/features.h"
 #include "chrome/browser/browser_process.h"
-#include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
@@ -35,7 +41,6 @@
 #include "components/policy/core/common/policy_map.h"
 #include "components/policy/policy_constants.h"
 #include "components/prefs/pref_service.h"
-#include "content/public/browser/notification_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/test_utils.h"
 #include "ui/views/view.h"
@@ -49,12 +54,7 @@
 
 class BraveToolbarViewTest : public InProcessBrowserTest {
  public:
-  BraveToolbarViewTest() {
-#if BUILDFLAG(ENABLE_BRAVE_VPN)
-    scoped_feature_list_.InitWithFeatures(
-        {skus::features::kSkusFeature, brave_vpn::features::kBraveVPN}, {});
-#endif
-  }
+  BraveToolbarViewTest() = default;
   BraveToolbarViewTest(const BraveToolbarViewTest&) = delete;
   BraveToolbarViewTest& operator=(const BraveToolbarViewTest&) = delete;
   ~BraveToolbarViewTest() override = default;
@@ -62,7 +62,6 @@ class BraveToolbarViewTest : public InProcessBrowserTest {
   // InProcessBrowserTest override
   void SetUpOnMainThread() override { Init(browser()); }
 
-#if BUILDFLAG(ENABLE_BRAVE_VPN)
   void SetUpInProcessBrowserTestFixture() override {
     InProcessBrowserTest::SetUpInProcessBrowserTestFixture();
     provider_.SetDefaultReturns(
@@ -71,6 +70,7 @@ class BraveToolbarViewTest : public InProcessBrowserTest {
     policy::BrowserPolicyConnector::SetPolicyProviderForTesting(&provider_);
   }
 
+#if BUILDFLAG(ENABLE_BRAVE_VPN)
   void BlockVPNByPolicy(bool value) {
     policy::PolicyMap policies;
     policies.Set(policy::key::kBraveVPNDisabled, policy::POLICY_LEVEL_MANDATORY,
@@ -82,6 +82,17 @@ class BraveToolbarViewTest : public InProcessBrowserTest {
         value);
   }
 #endif
+
+  void BlockAIChatByPolicy(bool value) {
+    policy::PolicyMap policies;
+    policies.Set(policy::key::kBraveAIChatEnabled,
+                 policy::POLICY_LEVEL_MANDATORY, policy::POLICY_SCOPE_MACHINE,
+                 policy::POLICY_SOURCE_PLATFORM, base::Value(!value), nullptr);
+    provider_.UpdateChromePolicy(policies);
+    EXPECT_EQ(ai_chat::IsAIChatEnabled(browser()->profile()->GetPrefs()),
+              !value);
+  }
+
   void Init(Browser* browser) {
     BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
     ASSERT_NE(browser_view, nullptr);
@@ -101,23 +112,73 @@ class BraveToolbarViewTest : public InProcessBrowserTest {
   }
 
   bool is_bookmark_button_shown() {
-    BookmarkButton* bookmark_button = toolbar_view_->bookmark_button();
+    BraveBookmarkButton* bookmark_button = toolbar_view_->bookmark_button();
     DCHECK(bookmark_button);
     return bookmark_button->GetVisible();
   }
 
- private:
-  raw_ptr<ToolbarButtonProvider> toolbar_button_provider_ = nullptr;
-  raw_ptr<BraveToolbarView> toolbar_view_ = nullptr;
+  bool is_wallet_button_shown(Browser* browser) {
+    BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
+    toolbar_view_ = static_cast<BraveToolbarView*>(browser_view->toolbar());
+    WalletButton* wallet_button = toolbar_view_->wallet_button();
+    return wallet_button->GetVisible();
+  }
 
-#if BUILDFLAG(ENABLE_BRAVE_VPN)
+  bool is_ai_chat_button_shown(Browser* browser) {
+    BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser);
+    toolbar_view_ = static_cast<BraveToolbarView*>(browser_view->toolbar());
+    AIChatButton* button = toolbar_view_->ai_chat_button();
+    if (!button) {
+      return false;
+    }
+    return button->GetVisible();
+  }
+
+  raw_ptr<ToolbarButtonProvider, DanglingUntriaged> toolbar_button_provider_ =
+      nullptr;
+  raw_ptr<BraveToolbarView, DanglingUntriaged> toolbar_view_ = nullptr;
   testing::NiceMock<policy::MockConfigurationPolicyProvider> provider_;
-  base::test::ScopedFeatureList scoped_feature_list_;
-#endif
 };
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
-IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest, VPNButtonVisibility) {
+class BraveToolbarViewTest_VPNEnabled : public BraveToolbarViewTest {
+ public:
+  BraveToolbarViewTest_VPNEnabled() {
+    scoped_feature_list_.InitWithFeatures(
+        {
+            skus::features::kSkusFeature,
+            brave_vpn::features::kBraveVPN,
+        },
+        {});
+  }
+
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+#endif
+
+class BraveToolbarViewTest_AIChatEnabled : public BraveToolbarViewTest {
+ public:
+  BraveToolbarViewTest_AIChatEnabled() {
+    scoped_feature_list_.InitWithFeatures({ai_chat::features::kAIChat}, {});
+  }
+
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+class BraveToolbarViewTest_AIChatDisabled : public BraveToolbarViewTest {
+ public:
+  BraveToolbarViewTest_AIChatDisabled() {
+    scoped_feature_list_.InitWithFeatures({}, {ai_chat::features::kAIChat});
+  }
+
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+#if BUILDFLAG(ENABLE_BRAVE_VPN)
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_VPNEnabled, VPNButtonVisibility) {
   auto* browser_view = static_cast<BraveBrowserView*>(
       BrowserView::GetBrowserViewForBrowser(browser()));
   auto* toolbar = static_cast<BraveToolbarView*>(browser_view->toolbar());
@@ -145,6 +206,67 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest, VPNButtonVisibility) {
   EXPECT_TRUE(prefs->GetBoolean(brave_vpn::prefs::kBraveVPNShowButton));
 }
 #endif
+
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatEnabled,
+                       AIChatButtonVisibility) {
+  auto* prefs = browser()->profile()->GetPrefs();
+
+  // Button is visible by default.
+  EXPECT_TRUE(prefs->GetBoolean(ai_chat::prefs::kBraveAIChatShowToolbarButton));
+  EXPECT_TRUE(is_ai_chat_button_shown(browser()));
+
+  // Hide button.
+  prefs->SetBoolean(ai_chat::prefs::kBraveAIChatShowToolbarButton, false);
+  EXPECT_FALSE(is_ai_chat_button_shown(browser()));
+
+  // Show button.
+  prefs->SetBoolean(ai_chat::prefs::kBraveAIChatShowToolbarButton, true);
+  EXPECT_TRUE(is_ai_chat_button_shown(browser()));
+  BlockAIChatByPolicy(true);
+  EXPECT_TRUE(prefs->GetBoolean(ai_chat::prefs::kBraveAIChatShowToolbarButton));
+  EXPECT_FALSE(is_ai_chat_button_shown(browser()));
+  BlockAIChatByPolicy(false);
+  EXPECT_TRUE(prefs->GetBoolean(ai_chat::prefs::kBraveAIChatShowToolbarButton));
+  EXPECT_TRUE(is_ai_chat_button_shown(browser()));
+}
+
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatEnabled,
+                       AIChatButtonVisibility_PrivateProfile) {
+  auto* incognito_browser = CreateIncognitoBrowser(browser()->profile());
+  EXPECT_EQ(false, is_ai_chat_button_shown(incognito_browser));
+}
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatEnabled,
+                       AIChatButtonVisibility_GuestProfile) {
+  // Open a Guest window.
+  EXPECT_EQ(1U, BrowserList::GetInstance()->size());
+  ui_test_utils::BrowserChangeObserver browser_creation_observer(
+      nullptr, ui_test_utils::BrowserChangeObserver::ChangeType::kAdded);
+  profiles::SwitchToGuestProfile(base::DoNothing());
+  base::RunLoop().RunUntilIdle();
+  browser_creation_observer.Wait();
+  EXPECT_EQ(2U, BrowserList::GetInstance()->size());
+
+  // Retrieve the new Guest profile.
+  Profile* guest = g_browser_process->profile_manager()->GetProfileByPath(
+      ProfileManager::GetGuestProfilePath());
+
+  // Access the browser with the Guest profile and re-init test for it.
+  Browser* browser = chrome::FindAnyBrowser(guest, true);
+  EXPECT_TRUE(browser);
+  Init(browser);
+  EXPECT_EQ(false, is_ai_chat_button_shown(browser));
+}
+
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest_AIChatDisabled,
+                       AIChatButtonVisibility) {
+  // Button is always hidden when feature flag is disabled
+  EXPECT_FALSE(is_ai_chat_button_shown(browser()));
+}
+
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest, ToolbarDividerNotShownTest) {
+  // As we don't use divider in toolbar, it should be null always.
+  EXPECT_TRUE(!toolbar_view_->toolbar_divider_for_testing());
+}
 
 IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest,
                        AvatarButtonNotShownSingleProfile) {
@@ -205,6 +327,20 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest,
   EXPECT_TRUE(browser);
   Init(browser);
   EXPECT_EQ(true, is_avatar_button_shown());
+
+  // Check avatar is positioned at the right before app menu button.
+  views::View* avatar = toolbar_button_provider_->GetAvatarToolbarButton();
+  ASSERT_TRUE(!!avatar);
+  views::View* container = avatar->parent();
+  ASSERT_TRUE(!!container);
+  views::View* app_menu = toolbar_button_provider_->GetAppMenuButton();
+  ASSERT_TRUE(!!app_menu);
+  EXPECT_EQ(container->GetIndexOf(avatar).value(),
+            container->GetIndexOf(app_menu).value() - 1ul);
+
+  // Check avatar button's size.
+  const int avatar_size = GetLayoutConstant(TOOLBAR_BUTTON_HEIGHT);
+  EXPECT_EQ(gfx::Size(avatar_size, avatar_size), avatar->size());
 }
 
 IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest,
@@ -222,4 +358,40 @@ IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest,
   // Reshowing the button should also work.
   prefs->SetBoolean(kShowBookmarksButton, true);
   EXPECT_TRUE(is_bookmark_button_shown());
+}
+
+IN_PROC_BROWSER_TEST_F(BraveToolbarViewTest,
+                       WalletButtonCanBeToggledWithPrefInPrivateTabs) {
+  auto* incognito_browser = CreateIncognitoBrowser(browser()->profile());
+  auto* incognito_prefs = incognito_browser->profile()->GetPrefs();
+  auto* normal_prefs = browser()->profile()->GetPrefs();
+
+  // By default, the button in normal window should be shown.
+  EXPECT_TRUE(is_wallet_button_shown(browser()));
+
+  // By default, the button in private window should be hidden.
+  EXPECT_FALSE(incognito_prefs->GetBoolean(kBraveWalletPrivateWindowsEnabled));
+  EXPECT_FALSE(is_wallet_button_shown(incognito_browser));
+
+  // Turn on brave wallet in private tabs should reveal the button in private
+  // window.
+  incognito_prefs->SetBoolean(kBraveWalletPrivateWindowsEnabled, true);
+  EXPECT_TRUE(is_wallet_button_shown(incognito_browser));
+
+  // Turning off wallet icon should hide icon on both windows.
+  normal_prefs->SetBoolean(kShowWalletIconOnToolbar, false);
+  EXPECT_FALSE(is_wallet_button_shown(browser()));
+  EXPECT_FALSE(is_wallet_button_shown(incognito_browser));
+
+  // Turn on wallet icon should show icons on both windows.
+  incognito_prefs->SetBoolean(kShowWalletIconOnToolbar, true);
+  EXPECT_TRUE(is_wallet_button_shown(browser()));
+  EXPECT_TRUE(is_wallet_button_shown(incognito_browser));
+
+  // Turning off brave wallet in private tabs should hide it again.
+  incognito_prefs->SetBoolean(kBraveWalletPrivateWindowsEnabled, false);
+  EXPECT_FALSE(is_wallet_button_shown(incognito_browser));
+
+  // Normal winwow still has visible button.
+  EXPECT_TRUE(is_wallet_button_shown(browser()));
 }

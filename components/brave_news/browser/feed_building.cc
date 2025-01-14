@@ -30,9 +30,9 @@
 #include "brave/components/brave_news/common/brave_news.mojom-shared.h"
 #include "brave/components/brave_news/common/brave_news.mojom.h"
 #include "brave/components/brave_news/common/features.h"
+#include "brave/components/brave_news/common/subscriptions_snapshot.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/prefs/pref_service.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "url/gurl.h"
 
 namespace brave_news {
@@ -313,9 +313,9 @@ bool BuildFeed(const std::vector<mojom::FeedItemPtr>& feed_items,
                const std::unordered_set<std::string>& history_hosts,
                Publishers* publishers,
                mojom::Feed* feed,
-               PrefService* prefs) {
+               const SubscriptionsSnapshot& subscriptions) {
   Channels channels =
-      ChannelsController::GetChannelsFromPublishers(*publishers, prefs);
+      ChannelsController::GetChannelsFromPublishers(*publishers, subscriptions);
 
   std::list<mojom::ArticlePtr> articles;
   std::list<mojom::PromotedArticlePtr> promoted_articles;

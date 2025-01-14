@@ -13,19 +13,11 @@ export function getInitialState (): HostState {
     requestedView: null,
     rewardsEnabled: false,
     balance: optional<number>(),
-    settings: {
-      adsEnabled: false,
-      adsPerHour: 0,
-      autoContributeEnabled: false,
-      autoContributeAmount: 0
-    },
     options: {
-      autoContributeAmounts: [],
       externalWalletRegions: new Map(),
       vbatDeadline: undefined,
       vbatExpired: false
     },
-    grantCaptchaInfo: null,
     adaptiveCaptchaInfo: null,
     exchangeInfo: {
       currency: 'USD',
@@ -33,6 +25,7 @@ export function getInitialState (): HostState {
     },
     earningsInfo: {
       nextPaymentDate: 0,
+      adsReceivedThisMonth: 0,
       minEarningsThisMonth: 0,
       maxEarningsThisMonth: 0,
       minEarningsLastMonth: 0,
@@ -54,6 +47,8 @@ export function getInitialState (): HostState {
     defaultCountry: '',
     declaredCountry: '',
     userType: 'unconnected',
-    publishersVisitedCount: 0
+    publishersVisitedCount: 0,
+    selfCustodyInviteDismissed: false,
+    isTermsOfServiceUpdateRequired: false
   }
 }

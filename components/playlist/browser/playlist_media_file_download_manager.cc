@@ -10,8 +10,6 @@
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/task/sequenced_task_runner.h"
-#include "base/values.h"
-#include "brave/components/playlist/browser/playlist_constants.h"
 
 namespace playlist {
 
@@ -48,8 +46,9 @@ void PlaylistMediaFileDownloadManager::DownloadMediaFile(
   // If either media file controller is generating a playlist media file,
   // delay the next playlist generation. It will be triggered when the current
   // one is finished.
-  if (!IsCurrentDownloadingInProgress())
+  if (!IsCurrentDownloadingInProgress()) {
     TryStartingDownloadTask();
+  }
 }
 
 void PlaylistMediaFileDownloadManager::CancelDownloadRequest(
@@ -57,7 +56,7 @@ void PlaylistMediaFileDownloadManager::CancelDownloadRequest(
   VLOG(2) << __func__ << " " << id;
 
   // Cancel if currently downloading item is id.
-  // Otherwise, GetNextPlaylistItemTarget() will drop canceled one.
+  // Otherwise, PopNextJob() will drop canceled one.
   if (GetCurrentDownloadingPlaylistItemID() == id) {
     CancelCurrentDownloadingPlaylistItem();
     TryStartingDownloadTask();
@@ -71,11 +70,13 @@ void PlaylistMediaFileDownloadManager::CancelAllDownloadRequests() {
 }
 
 void PlaylistMediaFileDownloadManager::TryStartingDownloadTask() {
-  if (IsCurrentDownloadingInProgress())
+  if (IsCurrentDownloadingInProgress()) {
     return;
+  }
 
-  if (pending_media_file_creation_jobs_.empty())
+  if (pending_media_file_creation_jobs_.empty()) {
     return;
+  }
 
   current_job_ = PopNextJob();
   if (!current_job_) {
@@ -111,13 +112,20 @@ PlaylistMediaFileDownloadManager::PopNextJob() {
 
 std::string
 PlaylistMediaFileDownloadManager::GetCurrentDownloadingPlaylistItemID() const {
-  if (IsCurrentDownloadingInProgress())
-    return media_file_downloader_->current_playlist_id();
+  if (IsCurrentDownloadingInProgress()) {
+    return media_file_downloader_->current_item_id();
+  }
 
   return {};
 }
 
 void PlaylistMediaFileDownloadManager::CancelCurrentDownloadingPlaylistItem() {
+  if (current_job_ && current_job_->on_finish_callback) {
+    std::move(current_job_->on_finish_callback)
+        .Run(current_job_->item->Clone(),
+             base::unexpected(DownloadFailureReason::kCanceled));
+  }
+
   media_file_downloader_->RequestCancelCurrentPlaylistGeneration();
   current_job_.reset();
 }
@@ -149,7 +157,8 @@ void PlaylistMediaFileDownloadManager::OnMediaFileDownloadProgressed(
 
 void PlaylistMediaFileDownloadManager::OnMediaFileReady(
     const std::string& id,
-    const std::string& media_file_path) {
+    const std::string& media_file_path,
+    int64_t received_bytes) {
   VLOG(2) << __func__ << ": " << id << " is ready.";
   if (!current_job_ || !current_job_->item) {
     return;
@@ -161,7 +170,8 @@ void PlaylistMediaFileDownloadManager::OnMediaFileReady(
 
   if (current_job_->on_finish_callback) {
     std::move(current_job_->on_finish_callback)
-        .Run(std::move(current_job_->item), media_file_path);
+        .Run(std::move(current_job_->item),
+             DownloadResult(media_file_path, received_bytes));
   }
   current_job_.reset();
 
@@ -184,7 +194,8 @@ void PlaylistMediaFileDownloadManager::OnMediaFileGenerationFailed(
 
   if (current_job_->on_finish_callback) {
     std::move(current_job_->on_finish_callback)
-        .Run(std::move(current_job_->item), {});
+        .Run(std::move(current_job_->item),
+             base::unexpected(DownloadFailureReason::kFailed));
   }
   current_job_.reset();
   CancelCurrentDownloadingPlaylistItem();

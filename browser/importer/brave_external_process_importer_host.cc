@@ -6,6 +6,7 @@
 #include "brave/browser/importer/brave_external_process_importer_host.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -105,7 +106,7 @@ void BraveExternalProcessImporterHost::InstallExtension(const std::string& id) {
 
   scoped_refptr<WebstoreInstallerForImporting> installer =
       new WebstoreInstallerForImporting(
-          id, profile_,
+          id, profile_, /*parent_window=*/nullptr,
           base::BindOnce(
               &BraveExternalProcessImporterHost::OnExtensionInstalled,
               weak_ptr_factory_.GetWeakPtr(), id));
@@ -125,7 +126,7 @@ void BraveExternalProcessImporterHost::ImportExtensions(
 }
 
 void BraveExternalProcessImporterHost::OnGetChromeExtensionsList(
-    absl::optional<std::vector<std::string>> extensions_list) {
+    std::optional<std::vector<std::string>> extensions_list) {
   if (!extensions_list.has_value()) {
     ExternalProcessImporterHost::NotifyImportEnded();
     return;

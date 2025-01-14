@@ -8,24 +8,20 @@
 
 #include "src/extensions/common/constants.h"  // IWYU pragma: export
 
-EXTENSIONS_EXPORT extern const int kBraveActionGraphicSize;
-EXTENSIONS_EXPORT extern const int kBraveActionLeftMarginExtra;
+inline constexpr int kBraveActionLeftMarginExtra = -2;
 
-EXTENSIONS_EXPORT extern const char brave_extension_id[];
-EXTENSIONS_EXPORT extern const char hangouts_extension_id[];
-EXTENSIONS_EXPORT extern const char widevine_extension_id[];
-EXTENSIONS_EXPORT extern const char crl_set_extension_id[];
+inline constexpr char brave_extension_id[] = "mnojpmjdmbbfmejpflffifhffcmidifd";
+inline constexpr char crl_set_extension_id[] =
+    "hfnkpimlhhgieaddgfemjhofmfblmnib";
 
-EXTENSIONS_EXPORT extern const char brave_webtorrent_extension_id[];
-EXTENSIONS_EXPORT extern const char brave_webtorrent_extension_filename[];
-EXTENSIONS_EXPORT extern const char brave_webtorrent_extension_filename2[];
+inline constexpr char brave_webtorrent_extension_id[] =
+    "lgjmpdmojkpocjcopdikifhejkkjglho";
+inline constexpr char brave_webtorrent_extension_filename[] =
+    "brave_webtorrent.html";
+inline constexpr char brave_webtorrent_extension_filename2[] =
+    "brave_webtorrent2.html";
 
-EXTENSIONS_EXPORT extern const char ipfs_companion_extension_id[];
-EXTENSIONS_EXPORT extern const char ipfs_companion_extension_name[];
-EXTENSIONS_EXPORT extern const char ipfs_companion_extension_public_key[];
-EXTENSIONS_EXPORT extern const char ipfs_companion_beta_extension_id[];
-EXTENSIONS_EXPORT extern const char ipfs_persmission_extension_id[];
-
-EXTENSIONS_EXPORT extern const char google_translate_extension_id[];
+inline constexpr char google_translate_extension_id[] =
+    "aapbdbdomjkkjkaonfhkkikfgjllcleb";
 
 #endif  // BRAVE_CHROMIUM_SRC_EXTENSIONS_COMMON_CONSTANTS_H_

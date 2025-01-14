@@ -38,6 +38,7 @@ class BraveNTPCustomBackgroundServiceDelegateUnitTest : public testing::Test {
   }
 
   void TearDown() override {
+    profile_ = nullptr;
     service_delegate_.reset();
     profile_manager_->DeleteAllTestingProfiles();
     profile_manager_.reset();
@@ -69,7 +70,6 @@ TEST_F(BraveNTPCustomBackgroundServiceDelegateUnitTest, MigrationSuccess) {
     ntp_prefs.SetSelectedValue(std::string());
 
     base::ScopedAllowBlockingForTesting allow_blocking_call;
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     ASSERT_TRUE(base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir));
 

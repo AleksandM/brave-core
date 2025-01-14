@@ -12,8 +12,6 @@
 #include "brave/browser/brave_browser_process.h"
 #include "brave/components/brave_component_updater/browser/brave_component.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
-#include "brave/components/greaselion/browser/buildflags/buildflags.h"
-#include "brave/components/ipfs/buildflags/buildflags.h"
 #include "brave/components/speedreader/common/buildflags/buildflags.h"
 #include "brave/components/tor/brave_tor_pluggable_transport_updater.h"
 #include "brave/components/tor/buildflags/buildflags.h"
@@ -24,7 +22,6 @@
 
 namespace brave {
 class BraveReferralsService;
-class BraveFarblingService;
 }  // namespace brave
 
 namespace brave_component_updater {
@@ -33,7 +30,6 @@ class LocalDataFilesService;
 
 namespace brave_shields {
 class AdBlockService;
-class HTTPSEverywhereService;
 }  // namespace brave_shields
 
 namespace https_upgrade_exceptions {
@@ -48,18 +44,12 @@ namespace brave_stats {
 class BraveStatsUpdater;
 }  // namespace brave_stats
 
-namespace greaselion {
-#if BUILDFLAG(ENABLE_GREASELION)
-class GreaselionDownloadService;
-#endif
-}  // namespace greaselion
-
 namespace debounce {
 class DebounceComponentInstaller;
 }  // namespace debounce
 
 namespace misc_metrics {
-class MenuMetrics;
+class ProcessMiscMetrics;
 }  // namespace misc_metrics
 
 namespace request_otr {
@@ -82,10 +72,6 @@ class BraveTorClientUpdater;
 class BraveTorPluggableTransportUpdater;
 }  // namespace tor
 
-namespace ipfs {
-class BraveIpfsClientUpdater;
-}
-
 namespace speedreader {
 class SpeedreaderRewriterService;
 }
@@ -94,6 +80,10 @@ namespace brave_ads {
 class BraveStatsHelper;
 class ResourceComponent;
 }  // namespace brave_ads
+
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+class DayZeroBrowserUIExptManager;
+#endif
 
 class BraveBrowserProcessImpl : public BraveBrowserProcess,
                                 public BrowserProcessImpl {
@@ -116,9 +106,6 @@ class BraveBrowserProcessImpl : public BraveBrowserProcess,
   https_upgrade_exceptions_service() override;
   localhost_permission::LocalhostPermissionComponent*
   localhost_permission_component() override;
-#if BUILDFLAG(ENABLE_GREASELION)
-  greaselion::GreaselionDownloadService* greaselion_download_service() override;
-#endif
   debounce::DebounceComponentInstaller* debounce_component_installer() override;
 #if BUILDFLAG(ENABLE_REQUEST_OTR)
   request_otr::RequestOTRComponentInstallerPolicy*
@@ -126,16 +113,12 @@ class BraveBrowserProcessImpl : public BraveBrowserProcess,
 #endif
   brave::URLSanitizerComponentInstaller* URLSanitizerComponentInstaller()
       override;
-  brave_shields::HTTPSEverywhereService* https_everywhere_service() override;
   brave_component_updater::LocalDataFilesService* local_data_files_service()
       override;
 #if BUILDFLAG(ENABLE_TOR)
   tor::BraveTorClientUpdater* tor_client_updater() override;
   tor::BraveTorPluggableTransportUpdater* tor_pluggable_transport_updater()
       override;
-#endif
-#if BUILDFLAG(ENABLE_IPFS)
-  ipfs::BraveIpfsClientUpdater* ipfs_client_updater() override;
 #endif
   p3a::P3AService* p3a_service() override;
   brave::BraveReferralsService* brave_referrals_service() override;
@@ -149,10 +132,9 @@ class BraveBrowserProcessImpl : public BraveBrowserProcess,
       override;
 #endif
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
-  brave_vpn::BraveVPNOSConnectionAPI* brave_vpn_os_connection_api() override;
+  brave_vpn::BraveVPNConnectionManager* brave_vpn_connection_manager() override;
 #endif
-  brave::BraveFarblingService* brave_farbling_service() override;
-  misc_metrics::MenuMetrics* menu_metrics() override;
+  misc_metrics::ProcessMiscMetrics* process_misc_metrics() override;
 
  private:
   // BrowserProcessImpl overrides:
@@ -176,6 +158,10 @@ class BraveBrowserProcessImpl : public BraveBrowserProcess,
   brave_component_updater::BraveComponent::Delegate*
   brave_component_updater_delegate();
 
+  // Sequence checker must stay on top to avoid UaF issues when data members use
+  // `g_browser_process->profile_manager()`.
+  SEQUENCE_CHECKER(sequence_checker_);
+
   // local_data_files_service_ should always be first because it needs
   // to be destroyed last
   std::unique_ptr<brave_component_updater::LocalDataFilesService>
@@ -187,10 +173,6 @@ class BraveBrowserProcessImpl : public BraveBrowserProcess,
       https_upgrade_exceptions_service_;
   std::unique_ptr<localhost_permission::LocalhostPermissionComponent>
       localhost_permission_component_;
-#if BUILDFLAG(ENABLE_GREASELION)
-  std::unique_ptr<greaselion::GreaselionDownloadService>
-      greaselion_download_service_;
-#endif
   std::unique_ptr<debounce::DebounceComponentInstaller>
       debounce_component_installer_;
 #if BUILDFLAG(ENABLE_REQUEST_OTR)
@@ -199,18 +181,12 @@ class BraveBrowserProcessImpl : public BraveBrowserProcess,
 #endif
   std::unique_ptr<brave::URLSanitizerComponentInstaller>
       url_sanitizer_component_installer_;
-  bool created_https_everywhere_service_ = false;
-  std::unique_ptr<brave_shields::HTTPSEverywhereService>
-      https_everywhere_service_;
   std::unique_ptr<brave_stats::BraveStatsUpdater> brave_stats_updater_;
   std::unique_ptr<brave::BraveReferralsService> brave_referrals_service_;
 #if BUILDFLAG(ENABLE_TOR)
   std::unique_ptr<tor::BraveTorClientUpdater> tor_client_updater_;
   std::unique_ptr<tor::BraveTorPluggableTransportUpdater>
       tor_pluggable_transport_updater_;
-#endif
-#if BUILDFLAG(ENABLE_IPFS)
-  std::unique_ptr<ipfs::BraveIpfsClientUpdater> ipfs_client_updater_;
 #endif
   scoped_refptr<p3a::P3AService> p3a_service_;
   scoped_refptr<p3a::HistogramsBraveizer> histogram_braveizer_;
@@ -224,15 +200,17 @@ class BraveBrowserProcessImpl : public BraveBrowserProcess,
 #endif
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
-  std::unique_ptr<brave_vpn::BraveVPNOSConnectionAPI>
-      brave_vpn_os_connection_api_;
+  std::unique_ptr<brave_vpn::BraveVPNConnectionManager>
+      brave_vpn_connection_manager_;
 #endif
 
-  std::unique_ptr<brave::BraveFarblingService> brave_farbling_service_;
-  std::unique_ptr<misc_metrics::MenuMetrics> menu_metrics_;
+  std::unique_ptr<misc_metrics::ProcessMiscMetrics> process_misc_metrics_;
   std::unique_ptr<brave_ads::BraveStatsHelper> brave_stats_helper_;
 
-  SEQUENCE_CHECKER(sequence_checker_);
+#if BUILDFLAG(IS_WIN) || BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<DayZeroBrowserUIExptManager>
+      day_zero_browser_ui_expt_manager_;
+#endif
 };
 
 #endif  // BRAVE_BROWSER_BRAVE_BROWSER_PROCESS_IMPL_H_

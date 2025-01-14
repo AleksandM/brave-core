@@ -17,9 +17,19 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Shader;
+import android.widget.ImageView;
 
 import org.chromium.base.ContextUtils;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
+import org.chromium.chrome.browser.ui.favicon.FaviconUtils;
+import org.chromium.components.favicon.LargeIconBridge;
+import org.chromium.components.favicon.LargeIconBridge.GoogleFaviconServerCallback;
+import org.chromium.components.favicon.LargeIconBridge.LargeIconCallback;
+import org.chromium.components.search_engines.TemplateUrlService;
+import org.chromium.net.NetworkTrafficAnnotationTag;
+import org.chromium.url.GURL;
 
 public class ImageUtils {
     public static Bitmap topOffset(Bitmap src, int offsetY) {
@@ -69,18 +79,76 @@ public class ImageUtils {
         }
 
         Paint topPaint = new Paint();
-        LinearGradient topShader = new LinearGradient(0,0,0,height, context.getResources().getColor(R.color.black_alpha_50), Color.TRANSPARENT, Shader.TileMode.CLAMP);
+        LinearGradient topShader =
+                new LinearGradient(
+                        0,
+                        0,
+                        0,
+                        height,
+                        context.getColor(R.color.black_alpha_50),
+                        Color.TRANSPARENT,
+                        Shader.TileMode.CLAMP);
         topPaint.setShader(topShader);
         topPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
         canvas.drawRect(0,0,w,height,topPaint);
 
         //Bottom gradient
         Paint bottomPaint = new Paint();
-        LinearGradient bottomShader = new LinearGradient(0,2*(h/3),0,h, Color.TRANSPARENT, context.getResources().getColor(R.color.black_alpha_30), Shader.TileMode.CLAMP);
+        LinearGradient bottomShader =
+                new LinearGradient(
+                        0,
+                        2 * (h / 3),
+                        0,
+                        h,
+                        Color.TRANSPARENT,
+                        context.getColor(R.color.black_alpha_30),
+                        Shader.TileMode.CLAMP);
         bottomPaint.setShader(bottomShader);
         bottomPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DARKEN));
         canvas.drawRect(0,2*(h/3),w,h,bottomPaint);
 
         return result;
+    }
+
+    public static void loadSearchEngineLogo(
+            Profile profile, ImageView logoView, String searchKeyword) {
+        Context context = ContextUtils.getApplicationContext();
+        LargeIconBridge largeIconBridge = new LargeIconBridge(profile);
+        TemplateUrlService mTemplateUrlService = TemplateUrlServiceFactory.getForProfile(profile);
+        GURL faviconUrl =
+                new GURL(mTemplateUrlService.getSearchEngineUrlFromTemplateUrl(searchKeyword));
+        // Use a placeholder image while trying to fetch the logo.
+        int uiElementSizeInPx =
+                context.getResources().getDimensionPixelSize(R.dimen.search_engine_favicon_size);
+        logoView.setImageBitmap(
+                FaviconUtils.createGenericFaviconBitmap(context, uiElementSizeInPx, null));
+        LargeIconCallback onFaviconAvailable =
+                (icon, fallbackColor, isFallbackColorDefault, iconType) -> {
+                    if (icon != null) {
+                        logoView.setImageBitmap(icon);
+                        largeIconBridge.destroy();
+                    }
+                };
+        GoogleFaviconServerCallback googleServerCallback =
+                (status) -> {
+                    // Update the time the icon was last requested to avoid automatic eviction
+                    // from cache.
+                    largeIconBridge.touchIconFromGoogleServer(faviconUrl);
+                    // The search engine logo will be fetched from google servers, so the actual
+                    // size of the image is controlled by LargeIconService configuration.
+                    // minSizePx=1 is used to accept logo of any size.
+                    largeIconBridge.getLargeIconForUrl(
+                            faviconUrl,
+                            /* minSizePx= */ 1,
+                            /* desiredSizePx= */ uiElementSizeInPx,
+                            onFaviconAvailable);
+                };
+        // If the icon already exists in the cache no network request will be made, but the
+        // callback will be triggered nonetheless.
+        largeIconBridge.getLargeIconOrFallbackStyleFromGoogleServerSkippingLocalCache(
+                faviconUrl,
+                /* shouldTrimPageUrlPath= */ true,
+                NetworkTrafficAnnotationTag.MISSING_TRAFFIC_ANNOTATION,
+                googleServerCallback);
     }
 }

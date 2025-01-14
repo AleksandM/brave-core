@@ -10,8 +10,7 @@
 #include "brave/components/brave_rewards/common/buildflags/buildflags.h"
 #include "build/build_config.h"
 
-namespace brave_rewards {
-namespace features {
+namespace brave_rewards::features {
 
 #if BUILDFLAG(IS_ANDROID)
 BASE_DECLARE_FEATURE(kBraveRewards);
@@ -21,13 +20,18 @@ BASE_DECLARE_FEATURE(kBraveRewards);
 BASE_DECLARE_FEATURE(kGeminiFeature);
 #endif
 
-BASE_DECLARE_FEATURE(kVBatNoticeFeature);
-
 BASE_DECLARE_FEATURE(kVerboseLoggingFeature);
 
 BASE_DECLARE_FEATURE(kAllowUnsupportedWalletProvidersFeature);
 
-}  // namespace features
-}  // namespace brave_rewards
+BASE_DECLARE_FEATURE(kAllowSelfCustodyProvidersFeature);
+
+BASE_DECLARE_FEATURE(kNewRewardsUIFeature);
+
+BASE_DECLARE_FEATURE(kAnimatedBackgroundFeature);
+
+BASE_DECLARE_FEATURE(kPlatformCreatorDetectionFeature);
+
+}  // namespace brave_rewards::features
 
 #endif  // BRAVE_COMPONENTS_BRAVE_REWARDS_COMMON_FEATURES_H_

@@ -6,12 +6,14 @@
 #ifndef BRAVE_COMPONENTS_NTP_BACKGROUND_IMAGES_BROWSER_NTP_SPONSORED_IMAGES_DATA_H_
 #define BRAVE_COMPONENTS_NTP_BACKGROUND_IMAGES_BROWSER_NTP_SPONSORED_IMAGES_DATA_H_
 
+#include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/files/file_path.h"
 #include "base/values.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "brave/components/brave_ads/core/public/serving/targeting/condition_matcher/condition_matcher_util.h"
 #include "ui/gfx/geometry/point.h"
 #include "ui/gfx/geometry/rect.h"
 
@@ -31,7 +33,7 @@ struct TopSite {
   TopSite();
   // For unit test.
   TopSite(const std::string& name,
-          const std::string destination_url,
+          const std::string& destination_url,
           const std::string& image_path,
           const base::FilePath& image_file);
   TopSite(const TopSite& data);
@@ -56,12 +58,13 @@ struct Logo {
 struct SponsoredBackground {
   base::FilePath image_file;
   gfx::Point focal_point;
+  brave_ads::ConditionMatcherMap condition_matchers;
   std::string background_color;
 
   std::string creative_instance_id;
 
   Logo logo;
-  absl::optional<gfx::Rect> viewbox;
+  std::optional<gfx::Rect> viewbox;
 
   SponsoredBackground();
   // For unit test.
@@ -107,9 +110,9 @@ struct NTPSponsoredImagesData {
   void ParseSRProperties(const base::Value::Dict& value,
                          const base::FilePath& installed_dir);
 
-  absl::optional<base::Value::Dict> GetBackgroundAt(size_t campaign_index,
-                                                    size_t background_index);
-  absl::optional<base::Value::Dict> GetBackgroundByAdInfo(
+  std::optional<base::Value::Dict> GetBackgroundAt(size_t campaign_index,
+                                                   size_t background_index);
+  std::optional<base::Value::Dict> GetBackgroundFromAdInfo(
       const brave_ads::NewTabPageAdInfo& ad_info);
 
   bool IsSuperReferral() const;

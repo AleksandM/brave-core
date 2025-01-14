@@ -7,9 +7,11 @@
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
 #include "base/test/bind.h"
-#include "brave/browser/brave_wallet/keyring_service_factory.h"
+#include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/keyring_service.h"
+#include "brave/components/brave_wallet/browser/test_utils.h"
 #include "brave/components/constants/brave_paths.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
@@ -28,8 +30,8 @@
 
 namespace {
 
-std::string CheckForEventScript(const std::string& event_var) {
-  return base::StringPrintf(R"(
+std::string CheckForEventScript(std::string_view event_var) {
+  return absl::StrFormat(R"(
       new Promise(resolve => {
         const timer = setInterval(function () {
           if (%s) {
@@ -39,7 +41,7 @@ std::string CheckForEventScript(const std::string& event_var) {
         }, 100);
       });
     )",
-                            event_var.c_str());
+                         event_var);
 }
 
 }  // namespace
@@ -75,7 +77,6 @@ class EthereumProviderBrowserTest : public InProcessBrowserTest {
     mock_cert_verifier_.mock_cert_verifier()->set_default_result(net::OK);
     host_resolver()->AddRule("*", "127.0.0.1");
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     test_data_dir = test_data_dir.AppendASCII("brave-wallet");
@@ -84,7 +85,8 @@ class EthereumProviderBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(https_server()->Start());
 
     keyring_service_ =
-        KeyringServiceFactory::GetServiceForContext(browser()->profile());
+        BraveWalletServiceFactory::GetServiceForContext(browser()->profile())
+            ->keyring_service();
   }
 
   content::WebContents* web_contents() {
@@ -94,17 +96,8 @@ class EthereumProviderBrowserTest : public InProcessBrowserTest {
   net::EmbeddedTestServer* https_server() { return &https_server_; }
 
   void RestoreWallet() {
-    const char mnemonic[] =
-        "drip caution abandon festival order clown oven regular absorb "
-        "evidence crew where";
-    base::RunLoop run_loop;
-    keyring_service_->RestoreWallet(
-        mnemonic, "brave123", false,
-        base::BindLambdaForTesting([&](bool success) {
-          ASSERT_TRUE(success);
-          run_loop.Quit();
-        }));
-    run_loop.Run();
+    ASSERT_TRUE(keyring_service_->RestoreWalletSync(
+        kMnemonicDripCaution, kTestWalletPassword, false));
   }
 
   void ReloadAndWaitForLoadStop(Browser* browser) {
@@ -115,7 +108,7 @@ class EthereumProviderBrowserTest : public InProcessBrowserTest {
  private:
   content::ContentMockCertVerifier mock_cert_verifier_;
   net::test_server::EmbeddedTestServer https_server_;
-  raw_ptr<KeyringService> keyring_service_ = nullptr;
+  raw_ptr<KeyringService, DanglingUntriaged> keyring_service_ = nullptr;
 };
 
 IN_PROC_BROWSER_TEST_F(EthereumProviderBrowserTest, InactiveTabRequest) {

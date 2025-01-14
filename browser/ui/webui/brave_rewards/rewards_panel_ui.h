@@ -7,19 +7,25 @@
 #define BRAVE_BROWSER_UI_WEBUI_BRAVE_REWARDS_REWARDS_PANEL_UI_H_
 
 #include <memory>
+#include <string>
 
 #include "base/memory/raw_ptr.h"
 #include "brave/components/brave_rewards/common/mojom/rewards_panel.mojom.h"
+#include "chrome/browser/ui/webui/top_chrome/top_chrome_web_ui_controller.h"
+#include "chrome/browser/ui/webui/top_chrome/top_chrome_webui_config.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/receiver.h"
-#include "ui/webui/mojo_bubble_web_ui_controller.h"
+
+namespace content {
+class BrowserContext;
+}
 
 namespace brave_rewards {
 
 class RewardsPanelCoordinator;
 
-class RewardsPanelUI : public ui::MojoBubbleWebUIController,
+class RewardsPanelUI : public TopChromeWebUIController,
                        public mojom::PanelHandlerFactory {
  public:
   explicit RewardsPanelUI(content::WebUI* web_ui);
@@ -29,6 +35,8 @@ class RewardsPanelUI : public ui::MojoBubbleWebUIController,
   RewardsPanelUI& operator=(const RewardsPanelUI&) = delete;
 
   void BindInterface(mojo::PendingReceiver<PanelHandlerFactory> receiver);
+
+  static constexpr std::string GetWebUIName() { return "RewardsPanel"; }
 
  private:
   // mojom::PanelHandlerFactory:
@@ -41,6 +49,18 @@ class RewardsPanelUI : public ui::MojoBubbleWebUIController,
   raw_ptr<RewardsPanelCoordinator> panel_coordinator_ = nullptr;
 
   WEB_UI_CONTROLLER_TYPE_DECL();
+};
+
+class RewardsPanelUIConfig
+    : public DefaultTopChromeWebUIConfig<RewardsPanelUI> {
+ public:
+  RewardsPanelUIConfig();
+
+  // WebUIConfig::
+  bool IsWebUIEnabled(content::BrowserContext* browser_context) override;
+
+  // TopChromeWebUIConfig::
+  bool ShouldAutoResizeHost() override;
 };
 
 }  // namespace brave_rewards

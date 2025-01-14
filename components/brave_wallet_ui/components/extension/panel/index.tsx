@@ -5,12 +5,11 @@
 import * as React from 'react'
 
 // Components
-import { PanelHeader, PanelHeaderSlim } from '../'
+import { PanelHeader } from '../panel-header/index'
+import { PanelHeaderSlim } from '../panel-header-slim/panel-header-slim'
 
 // Styled Components
-import {
-  StyledWrapper
-} from './style'
+import { StyledWrapper } from './style'
 
 // Utils
 import { PanelTypes, PanelHeaderSizes } from '../../../constants/types'
@@ -19,37 +18,29 @@ export interface Props {
   title: string
   headerStyle?: PanelHeaderSizes
   navAction: (path: PanelTypes) => void
-  useSearch?: boolean | undefined
-  searchAction?: (event: any) => void | undefined
 }
 
-export default class Panel extends React.PureComponent<Props> {
-  render () {
-    const {
-      title,
-      headerStyle,
-      navAction,
-      children,
-      searchAction,
-      useSearch
-    } = this.props
+export class Panel extends React.PureComponent<React.PropsWithChildren<Props>> {
+  render() {
+    const { title, headerStyle, navAction, children } = this.props
 
     return (
       <StyledWrapper>
-        {headerStyle === 'slim'
-          ? <PanelHeaderSlim
-              action={navAction}
-              title={title}
-            />
-          : <PanelHeader
-              action={navAction}
-              title={title}
-              searchAction={searchAction}
-              useSearch={useSearch}
-            />
-        }
+        {headerStyle === 'slim' ? (
+          <PanelHeaderSlim
+            action={navAction}
+            title={title}
+          />
+        ) : (
+          <PanelHeader
+            action={navAction}
+            title={title}
+          />
+        )}
         {children}
       </StyledWrapper>
     )
   }
 }
+
+export default Panel

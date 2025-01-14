@@ -5,6 +5,7 @@
 
 #include "brave/browser/ui/views/sidebar/sidebar_add_item_bubble_delegate_view.h"
 
+#include <memory>
 #include <utility>
 
 #include "base/memory/raw_ptr.h"
@@ -15,13 +16,14 @@
 #include "brave/browser/ui/sidebar/sidebar_service_factory.h"
 #include "brave/browser/ui/sidebar/sidebar_utils.h"
 #include "brave/components/l10n/common/localization_util.h"
-#include "brave/components/sidebar/sidebar_service.h"
+#include "brave/components/sidebar/browser/sidebar_service.h"
 #include "brave/grit/brave_generated_resources.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
@@ -42,8 +44,8 @@ sidebar::SidebarService* GetSidebarService(Browser* browser) {
 }
 
 class SidebarAddItemButton : public views::LabelButton {
+  METADATA_HEADER(SidebarAddItemButton, views::LabelButton)
  public:
-  METADATA_HEADER(SidebarAddItemButton);
   // Get theme provider to use browser's theme color in this dialog.
   SidebarAddItemButton(bool bold, const ui::ColorProvider* color_provider)
       : color_provider_(color_provider) {
@@ -69,7 +71,8 @@ class SidebarAddItemButton : public views::LabelButton {
                                    : gfx::Font::Weight::NORMAL));
   }
 
-  gfx::Size CalculatePreferredSize() const override {
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override {
     return kAddItemBubbleEntrySize;
   }
 
@@ -93,7 +96,7 @@ class SidebarAddItemButton : public views::LabelButton {
   const raw_ptr<const ui::ColorProvider> color_provider_;
 };
 
-BEGIN_METADATA(SidebarAddItemButton, views::LabelButton)
+BEGIN_METADATA(SidebarAddItemButton)
 END_METADATA
 
 }  // namespace
@@ -127,7 +130,7 @@ SidebarAddItemBubbleDelegateView::SidebarAddItemBubbleDelegateView(
 
   set_margins(gfx::Insets());
   set_title_margins(gfx::Insets());
-  SetButtons(ui::DIALOG_BUTTON_NONE);
+  SetButtons(static_cast<int>(ui::mojom::DialogButton::kNone));
 
   if (const ui::ColorProvider* color_provider =
           BrowserView::GetBrowserViewForBrowser(browser_)->GetColorProvider()) {
@@ -236,6 +239,5 @@ void SidebarAddItemBubbleDelegateView::CloseOrReLayoutAfterAddingItem() {
   GetWidget()->SetSize(GetWidget()->non_client_view()->GetPreferredSize());
 }
 
-BEGIN_METADATA(SidebarAddItemBubbleDelegateView,
-               views::BubbleDialogDelegateView)
+BEGIN_METADATA(SidebarAddItemBubbleDelegateView)
 END_METADATA

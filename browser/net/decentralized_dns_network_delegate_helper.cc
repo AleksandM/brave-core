@@ -5,14 +5,14 @@
 
 #include "brave/browser/net/decentralized_dns_network_delegate_helper.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
-#include "base/feature_list.h"
-#include "brave/browser/brave_wallet/json_rpc_service_factory.h"
+#include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/json_rpc_service.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
-#include "brave/components/brave_wallet/common/features.h"
 #include "brave/components/decentralized_dns/core/constants.h"
 #include "brave/components/decentralized_dns/core/utils.h"
 #include "brave/components/ipfs/ipfs_utils.h"
@@ -32,12 +32,15 @@ int OnBeforeURLRequest_DecentralizedDnsPreRedirectWork(
     return net::OK;
   }
 
-  auto* json_rpc_service =
-      brave_wallet::JsonRpcServiceFactory::GetServiceForContext(
+  auto* brave_wallet_service =
+      brave_wallet::BraveWalletServiceFactory::GetServiceForContext(
           ctx->browser_context);
-  if (!json_rpc_service) {
+  if (!brave_wallet_service) {
     return net::OK;
   }
+
+  auto* json_rpc_service = brave_wallet_service->json_rpc_service();
+  CHECK(json_rpc_service);
 
   if (IsUnstoppableDomainsTLD(ctx->request_url.host_piece()) &&
       IsUnstoppableDomainsResolveMethodEnabled(
@@ -60,9 +63,7 @@ int OnBeforeURLRequest_DecentralizedDnsPreRedirectWork(
     return net::ERR_IO_PENDING;
   }
 
-  if (base::FeatureList::IsEnabled(
-          brave_wallet::features::kBraveWalletSnsFeature) &&
-      IsSnsTLD(ctx->request_url.host_piece()) &&
+  if (IsSnsTLD(ctx->request_url.host_piece()) &&
       IsSnsResolveMethodEnabled(g_browser_process->local_state())) {
     json_rpc_service->SnsResolveHost(
         ctx->request_url.host(),
@@ -95,9 +96,11 @@ void OnBeforeURLRequest_EnsRedirectWork(
     return;
   }
 
+  GURL resolved_ipfs_uri;
   GURL ipfs_uri = ipfs::ContentHashToCIDv1URL(content_hash);
-  if (ipfs_uri.is_valid()) {
-    ctx->new_url_spec = ipfs_uri.spec();
+  if (ipfs_uri.is_valid() &&
+      ipfs::TranslateIPFSURI(ipfs_uri, &resolved_ipfs_uri, false)) {
+    ctx->new_url_spec = resolved_ipfs_uri.spec();
   }
 
   next_callback.Run();
@@ -106,7 +109,7 @@ void OnBeforeURLRequest_EnsRedirectWork(
 void OnBeforeURLRequest_SnsRedirectWork(
     const brave::ResponseCallback& next_callback,
     std::shared_ptr<brave::BraveRequestInfo> ctx,
-    const absl::optional<GURL>& url,
+    const std::optional<GURL>& url,
     brave_wallet::mojom::SolanaProviderError error,
     const std::string& error_message) {
   if (error == brave_wallet::mojom::SolanaProviderError::kSuccess && url &&
@@ -122,7 +125,7 @@ void OnBeforeURLRequest_SnsRedirectWork(
 void OnBeforeURLRequest_UnstoppableDomainsRedirectWork(
     const brave::ResponseCallback& next_callback,
     std::shared_ptr<brave::BraveRequestInfo> ctx,
-    const absl::optional<GURL>& url,
+    const std::optional<GURL>& url,
     brave_wallet::mojom::ProviderError error,
     const std::string& error_message) {
   if (error == brave_wallet::mojom::ProviderError::kSuccess && url &&

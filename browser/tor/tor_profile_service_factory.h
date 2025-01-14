@@ -6,6 +6,8 @@
 #ifndef BRAVE_BROWSER_TOR_TOR_PROFILE_SERVICE_FACTORY_H_
 #define BRAVE_BROWSER_TOR_TOR_PROFILE_SERVICE_FACTORY_H_
 
+#include <memory>
+
 #include "brave/components/tor/tor_utils.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
@@ -30,7 +32,8 @@ class TorProfileServiceFactory : public BrowserContextKeyedServiceFactory {
   static TorProfileServiceFactory* GetInstance();
 
   static void SetTorDisabled(bool disabled);
-  static bool IsTorDisabled();
+  static bool IsTorManaged(content::BrowserContext* context);
+  static bool IsTorDisabled(content::BrowserContext* context);
   static void SetTorBridgesConfig(const tor::BridgesConfig& config);
   static tor::BridgesConfig GetTorBridgesConfig();
 
@@ -44,7 +47,7 @@ class TorProfileServiceFactory : public BrowserContextKeyedServiceFactory {
   ~TorProfileServiceFactory() override;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;

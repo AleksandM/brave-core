@@ -7,7 +7,7 @@
 
 #include "brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/node_resource.h"
 #include "brave/third_party/blink/renderer/core/brave_page_graph/graphml.h"
-#include "third_party/blink/renderer/platform/wtf/text/text_stream.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder_stream.h"
 
 namespace brave_page_graph {
 
@@ -15,8 +15,14 @@ EdgeRequestStart::EdgeRequestStart(GraphItemContext* context,
                                    GraphNode* out_node,
                                    NodeResource* in_node,
                                    const InspectorId request_id,
+                                   const FrameId& frame_id,
                                    const String& resource_type)
-    : EdgeRequest(context, out_node, in_node, request_id, kRequestStatusStart),
+    : EdgeRequest(context,
+                  out_node,
+                  in_node,
+                  request_id,
+                  frame_id,
+                  kRequestStatusStart),
       resource_type_(resource_type) {}
 
 EdgeRequestStart::~EdgeRequestStart() = default;
@@ -34,9 +40,9 @@ ItemName EdgeRequestStart::GetItemName() const {
 }
 
 ItemDesc EdgeRequestStart::GetItemDesc() const {
-  WTF::TextStream ts;
+  StringBuilder ts;
   ts << EdgeRequest::GetItemDesc() << " [" << resource_type_ << "]";
-  return ts.Release();
+  return ts.ReleaseString();
 }
 
 void EdgeRequestStart::AddGraphMLAttributes(xmlDocPtr doc,

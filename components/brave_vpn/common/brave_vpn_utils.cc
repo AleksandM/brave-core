@@ -7,6 +7,7 @@
 
 #include <utility>
 
+#include "base/containers/fixed_flat_map.h"
 #include "base/feature_list.h"
 #include "base/json/json_writer.h"
 #include "base/json/values_util.h"
@@ -23,27 +24,151 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/version_info/channel.h"
+#include "url/gurl.h"
 
 namespace brave_vpn {
 
 namespace {
+
 void RegisterVPNLocalStatePrefs(PrefRegistrySimple* registry) {
 #if !BUILDFLAG(IS_ANDROID)
   registry->RegisterListPref(prefs::kBraveVPNRegionList);
+  registry->RegisterIntegerPref(prefs::kBraveVPNRegionListVersion, 1);
   registry->RegisterTimePref(prefs::kBraveVPNRegionListFetchedDate, {});
   registry->RegisterStringPref(prefs::kBraveVPNDeviceRegion, "");
   registry->RegisterStringPref(prefs::kBraveVPNSelectedRegion, "");
+  registry->RegisterStringPref(prefs::kBraveVPNSelectedRegionV2, "");
 #endif
   registry->RegisterStringPref(prefs::kBraveVPNEnvironment,
                                skus::GetDefaultEnvironment());
   registry->RegisterStringPref(prefs::kBraveVPNWireguardProfileCredentials, "");
   registry->RegisterDictionaryPref(prefs::kBraveVPNRootPref);
   registry->RegisterDictionaryPref(prefs::kBraveVPNSubscriberCredential);
+  registry->RegisterTimePref(prefs::kBraveVPNLastCredentialExpiry, {});
   registry->RegisterBooleanPref(prefs::kBraveVPNLocalStateMigrated, false);
   registry->RegisterTimePref(prefs::kBraveVPNSessionExpiredDate, {});
+#if BUILDFLAG(ENABLE_BRAVE_VPN_WIREGUARD)
+  registry->RegisterBooleanPref(prefs::kBraveVPNWireguardEnabled, false);
+#endif
+#if BUILDFLAG(IS_MAC)
+  registry->RegisterBooleanPref(prefs::kBraveVPNOnDemandEnabled, false);
+#endif
+  registry->RegisterListPref(prefs::kBraveVPNWidgetUsageWeeklyStorage);
 }
 
+// Region name map between v1 and v2.
+constexpr auto kV1ToV2Map =
+    base::MakeFixedFlatMap<std::string_view, std::string_view>(
+        {{"au-au", "ocn-aus"},      {"eu-at", "eu-at"},
+         {"eu-be", "eu-be"},        {"sa-brazil", "sa-brz"},
+         {"ca-east", "na-can"},     {"sa-cl", "sa-cl"},
+         {"sa-colombia", "sa-co"},  {"eu-cr", "eu-cr"},
+         {"eu-cz", "eu-cz"},        {"eu-dk", "eu-dk"},
+         {"eu-fr", "eu-fr"},        {"eu-de", "eu-de"},
+         {"eu-gr", "eu-gr"},        {"eu-ir", "eu-ie"},
+         {"eu-italy", "eu-it"},     {"asia-jp", "asia-jp"},
+         {"sa-mexico", "sa-mx"},    {"eu-nl", "eu-nl"},
+         {"eu-pl", "eu-pl"},        {"eu-pt", "eu-pt"},
+         {"eu-ro", "eu-ro"},        {"asia-sg", "asia-sg"},
+         {"af-za", "af-za"},        {"eu-es", "eu-es"},
+         {"eu-sweden", "eu-se"},    {"eu-ch", "eu-ch"},
+         {"us-central", "na-usa"},  {"us-east", "na-usa"},
+         {"us-mountain", "na-usa"}, {"us-north-west", "na-usa"},
+         {"us-west", "na-usa"},     {"eu-ua", "eu-ua"},
+         {"eu-en", "eu-en"}});
+
+#if !BUILDFLAG(IS_ANDROID)
+void MigrateFromV1ToV2(PrefService* local_prefs) {
+  const auto selected_region_v1 =
+      local_prefs->GetString(prefs::kBraveVPNSelectedRegion);
+  // Don't need to migrate if user doesn't select region explicitly.
+  // We'll pick proper region instead if not yet selected.
+  if (selected_region_v1.empty()) {
+    local_prefs->SetInteger(prefs::kBraveVPNRegionListVersion, 2);
+    return;
+  }
+
+  // In this migration, selected region name is updated to matched v2's country
+  // name.
+  if (kV1ToV2Map.contains(selected_region_v1)) {
+    local_prefs->SetString(prefs::kBraveVPNSelectedRegionV2,
+                           kV1ToV2Map.at(selected_region_v1));
+  }
+
+  local_prefs->SetInteger(prefs::kBraveVPNRegionListVersion, 2);
+}
+#endif
+
 }  // namespace
+
+std::string_view GetMigratedNameIfNeeded(PrefService* local_prefs,
+                                         const std::string& name) {
+  if (local_prefs->GetInteger(prefs::kBraveVPNRegionListVersion) == 1) {
+    return name;
+  }
+
+  auto it = kV1ToV2Map.find(name);
+  CHECK(it != kV1ToV2Map.end());
+  return it->second;
+}
+
+bool IsBraveVPNWireguardEnabled(PrefService* local_state) {
+  if (!IsBraveVPNFeatureEnabled()) {
+    return false;
+  }
+
+#if BUILDFLAG(ENABLE_BRAVE_VPN_WIREGUARD)
+  auto enabled = local_state->GetBoolean(prefs::kBraveVPNWireguardEnabled);
+#if BUILDFLAG(IS_MAC)
+  enabled = enabled && base::FeatureList::IsEnabled(
+                           brave_vpn::features::kBraveVPNEnableWireguardForOSX);
+#endif  // BUILDFLAG(IS_MAC)
+  return enabled;
+#else
+  return false;
+#endif
+}
+
+#if BUILDFLAG(IS_WIN)
+void EnableWireguardIfPossible(PrefService* local_prefs) {
+  auto* wireguard_enabled_pref =
+      local_prefs->FindPreference(prefs::kBraveVPNWireguardEnabled);
+  if (wireguard_enabled_pref && wireguard_enabled_pref->IsDefaultValue()) {
+    local_prefs->SetBoolean(
+        prefs::kBraveVPNWireguardEnabled,
+        base::FeatureList::IsEnabled(features::kBraveVPNUseWireguardService));
+  }
+}
+#endif  // BUILDFLAG(IS_WIN)
+
+GURL GetManageURLForUIType(mojom::ManageURLType type, const GURL& manage_url) {
+  CHECK(manage_url.is_valid());
+
+  switch (type) {
+    case mojom::ManageURLType::CHECKOUT: {
+      std::string query = "intent=checkout&product=vpn";
+      GURL::Replacements replacements;
+      replacements.SetQueryStr(query);
+      return manage_url.ReplaceComponents(replacements);
+    }
+    case mojom::ManageURLType::RECOVER: {
+      std::string query = "intent=recover&product=vpn";
+      GURL::Replacements replacements;
+      replacements.SetQueryStr(query);
+      return manage_url.ReplaceComponents(replacements);
+    }
+    case mojom::ManageURLType::PRIVACY:
+      return GURL("https://brave.com/privacy/browser/#vpn");
+    case mojom::ManageURLType::ABOUT:
+      return GURL(brave_vpn::kAboutUrl);
+    case mojom::ManageURLType::MANAGE:
+      return manage_url;
+    default:
+      break;
+  }
+
+  NOTREACHED();
+}
 
 void MigrateVPNSettings(PrefService* profile_prefs, PrefService* local_prefs) {
   if (local_prefs->GetBoolean(prefs::kBraveVPNLocalStateMigrated)) {
@@ -134,8 +259,7 @@ std::string GetManageUrl(const std::string& env) {
   if (env == skus::kEnvDevelopment)
     return brave_vpn::kManageUrlDev;
 
-  NOTREACHED();
-  return brave_vpn::kManageUrlProd;
+  NOTREACHED() << "All env handled above.";
 }
 
 // On desktop, the environment is tied to SKUs because you would purchase it
@@ -155,6 +279,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(prefs::kBraveVPNShowButton, true);
 #if BUILDFLAG(IS_WIN)
   registry->RegisterBooleanPref(prefs::kBraveVPNShowNotificationDialog, true);
+  registry->RegisterBooleanPref(prefs::kBraveVPNWireguardFallbackDialog, true);
 #endif
 #if BUILDFLAG(IS_ANDROID)
   registry->RegisterStringPref(prefs::kBraveVPNPurchaseTokenAndroid, "");
@@ -168,6 +293,16 @@ void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
       registry, prefs::kBraveVPNFirstUseTime, prefs::kBraveVPNLastUseTime,
       prefs::kBraveVPNUsedSecondDay, prefs::kBraveVPNDaysInMonthUsed, nullptr);
   RegisterVPNLocalStatePrefs(registry);
+}
+
+void MigrateLocalStatePrefs(PrefService* local_prefs) {
+#if !BUILDFLAG(IS_ANDROID)
+  const int current_version =
+      local_prefs->GetInteger(prefs::kBraveVPNRegionListVersion);
+  if (current_version == 1) {
+    MigrateFromV1ToV2(local_prefs);
+  }
+#endif
 }
 
 bool HasValidSubscriberCredential(PrefService* local_prefs) {

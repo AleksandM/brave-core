@@ -1,20 +1,19 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* Copyright (c) 2021 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import * as React from 'react'
 
+import Icon from '@brave/leo/react/icon'
+
 import { ExternalWallet, getExternalWalletProviderName } from '../../lib/external_wallet'
 import { ExternalWalletAction } from './external_wallet_action'
 
 import { LocaleContext, formatMessage } from '../../lib/locale_context'
-import { GeminiIcon } from '../icons/gemini_icon'
-import { BitflyerIcon } from '../icons/bitflyer_icon'
-import { UpholdIcon } from '../icons/uphold_icon'
+import { WalletProviderIcon } from '../icons/wallet_provider_icon'
 
 import * as style from './external_wallet_bubble.style'
-
-import * as mojom from '../../../shared/lib/mojom'
 
 interface Props {
   externalWallet: ExternalWallet
@@ -31,46 +30,34 @@ export function ExternalWalletBubble (props: Props) {
     return () => { props.onExternalWalletAction(action) }
   }
 
-  function ProviderIcon () {
-    switch (externalWallet.provider) {
-      case 'gemini': return <GeminiIcon />
-      case 'bitflyer': return <BitflyerIcon />
-      case 'uphold': return <UpholdIcon />
-    }
-  }
-
   function getWalletStatus () {
-    switch (externalWallet.status) {
-      case mojom.WalletStatus.kLoggedOut:
-        return getString('walletDisconnected')
-      case mojom.WalletStatus.kConnected:
-        return getString('walletVerified')
+    if (!externalWallet.authenticated) {
+      return getString('walletDisconnected')
     }
-
-    return ''
+    return getString('walletVerified')
   }
 
   function renderAccountLink () {
-    switch (externalWallet.status) {
-      case mojom.WalletStatus.kLoggedOut:
-        return (
-          <button onClick={actionHandler('reconnect')}>
-            {
-              formatMessage(getString('walletLogIntoYourAccount'), [
-                providerName
-              ])
-            }
-          </button>
-        )
-      case mojom.WalletStatus.kConnected:
-        return (
-          <button onClick={actionHandler('view-account')}>
-            {formatMessage(getString('walletAccountLink'), [providerName])}
-          </button>
-        )
+    if (!externalWallet.authenticated) {
+      return (
+        <button onClick={actionHandler('reconnect')}>
+          {
+            formatMessage(getString('walletLogIntoYourAccount'), [
+              providerName
+            ])
+          }
+        </button>
+      )
     }
 
-    return null
+    return (
+      <button onClick={actionHandler('view-account')}>
+        <span>
+          {formatMessage(getString('walletAccountLink'), [providerName])}
+        </span>
+        <Icon name='launch' />
+      </button>
+    )
   }
 
   return (
@@ -78,12 +65,14 @@ export function ExternalWalletBubble (props: Props) {
       <style.content>
         <style.header>
           <style.providerIcon>
-            <ProviderIcon />
+            <WalletProviderIcon provider={externalWallet.provider} />
           </style.providerIcon>
           <style.username>
-            {externalWallet.username}
+            {externalWallet.name}
           </style.username>
-          <style.status className={externalWallet.status === mojom.WalletStatus.kConnected ? 'connected' : ''}>
+          <style.status
+            className={externalWallet.authenticated ? 'connected' : ''}
+          >
             {getWalletStatus()}
           </style.status>
         </style.header>

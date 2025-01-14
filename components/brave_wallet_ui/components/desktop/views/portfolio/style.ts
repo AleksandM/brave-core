@@ -4,8 +4,18 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import styled from 'styled-components'
-import * as leo from '@brave/leo/tokens/css'
+import * as leo from '@brave/leo/tokens/css/variables'
 import Icon from '@brave/leo/react/icon'
+
+// Icons
+import {
+  NoAccountsIconDark,
+  NoAccountsIconLight,
+  NoTransactionsIconDark,
+  NoTransactionsIconLight
+} from '../../../../assets/svg-icons/empty-state-icons'
+
+// Shared Styles
 import {
   AssetIconProps,
   AssetIconFactory,
@@ -54,26 +64,22 @@ export const FiatChange = styled.span<{ isDown?: boolean }>`
   color: ${(p) =>
     p.isDown
       ? leo.color.systemfeedback.errorIcon
-      : leo.color.systemfeedback.successIcon
-  };
+      : leo.color.systemfeedback.successIcon};
 `
 
-export const ButtonRow = styled.div<
-  {
-    noMargin?: boolean,
-    horizontalPadding?: number
-  }>`
+export const ButtonRow = styled.div<{
+  noMargin?: boolean
+  horizontalPadding?: number
+}>`
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  margin: ${(p) => p.noMargin ? '0px' : '20px 0px'};
-  padding: 0px ${(p) =>
-    p.horizontalPadding !== undefined
-      ? p.horizontalPadding
-      : 0
-  }px;
+  margin: ${(p) => (p.noMargin ? '0px' : '20px 0px')};
+  padding: 0px
+    ${(p) => (p.horizontalPadding !== undefined ? p.horizontalPadding : 0)}px;
+  gap: 10px;
 `
 
 export const BalanceRow = styled.div<{ gap?: string }>`
@@ -83,7 +89,7 @@ export const BalanceRow = styled.div<{ gap?: string }>`
   justify-content: center;
   height: 36px;
   vertical-align: middle;
-  gap: ${p => p.gap || 0};
+  gap: ${(p) => p.gap || 0};
 `
 
 // Construct styled-component using JS object instead of string, for editor
@@ -117,56 +123,13 @@ export const PercentBubble = styled.div<{ isDown?: boolean }>`
   padding: 4px 8px;
   border-radius: 4px;
   background-color: ${(p) =>
-    p.isDown
-      ? leo.color.red[10]
-      : leo.color.green[10]
-  };
+    p.isDown ? leo.color.red[20] : leo.color.green[20]};
   font-family: Poppins;
   font-size: 11px;
   line-height: 16px;
   letter-spacing: 0.02em;
   font-weight: 500;
-  color: ${(p) =>
-    p.isDown
-      ? leo.color.red[50]
-      : leo.color.green[50]
-  };
-`
-
-export const EmptyTransactionContainer = styled.div`
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 100%;
-  height: 100px;
-`
-
-export const TransactionPlaceholderText = styled.span`
-  font-family: Poppins;
-  font-size: 13px;
-  line-height: 20px;
-  letter-spacing: 0.01em;
-  font-weight: 600;
-  color: ${(p) => p.theme.color.text03};
-  margin-left: 10px;
-`
-
-export const AssetBalanceDisplay = styled.span`
-  font-family: Poppins;
-  font-size: 14px;
-  line-height: 20px;
-  letter-spacing: 0.01em;
-  font-weight: 600;
-  color: ${(p) => p.theme.color.text02};
-`
-
-export const DividerRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-direction: row;
-  width: 100%;
+  color: ${(p) => (p.isDown ? leo.color.red[50] : leo.color.green[50])};
 `
 
 export const Spacer = styled.div`
@@ -184,45 +147,18 @@ export const CoinGeckoText = styled.span`
   margin: 15px 0px;
 `
 
-export const FilterTokenRow = styled.div<
-  {
-    horizontalPadding?: number
-  }>`
+export const FilterTokenRow = styled.div<{
+  horizontalPadding?: number
+  isV2?: boolean
+}>`
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
   width: 100%;
   gap: 14px;
-  padding: 0px ${(p) =>
-    p.horizontalPadding !== undefined
-      ? p.horizontalPadding
-      : 0
-  }px;
-`
-
-export const BridgeToAuroraButton = styled(WalletButton) <
-  {
-    noBottomMargin?: boolean
-  }>`
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-  padding: 8px 14px;
-  height: 40px;
-  cursor: pointer;
-  outline: none;
-  border-radius: 40px;
-  font-family: 'Poppins';
-  font-style: normal;
-  font-weight: 600;
-  font-size: 14px;
-  line-height: 21px;
-  background-color: ${(p) => p.theme.palette.blurple500};
-  color: ${(p) => p.theme.palette.white};
-  border: none;
-  margin-bottom: ${(p) => p.noBottomMargin ? 0 : 32}px;
-  margin-right: 10px;
+  padding: 0px
+    ${(p) => (p.horizontalPadding !== undefined ? p.horizontalPadding : 0)}px;
+  margin-bottom: ${(p) => (p.isV2 ? '16px' : 0)};
 `
 
 export const SelectTimelineWrapper = styled(Row)`
@@ -235,8 +171,13 @@ export const SelectTimelineWrapper = styled(Row)`
 `
 
 export const ControlsRow = styled(Row)`
-  box-shadow: 0px -1px 1px rgba(0, 0, 0, 0.02);
-  border-radius: 16px;
+  box-shadow: 0px -1px 1px ${leo.color.elevation.primary};
+  border-radius: 16px 16px 0px 0px;
+  padding: 24px 32px;
+  background-color: ${leo.color.container.background};
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    padding: 16px;
+  }
 `
 
 export const BalanceAndButtonsWrapper = styled(Column)`
@@ -254,8 +195,11 @@ export const BalanceAndButtonsWrapper = styled(Column)`
 `
 
 export const BalanceAndChangeWrapper = styled(Column)`
+  position: relative;
+  margin-bottom: 24px;
   @media screen and (max-width: ${layoutSmallWidth}px) {
     align-items: flex-start;
+    margin-bottom: 0px;
   }
   @media screen and (max-width: ${layoutPanelWidth}px) {
     flex-direction: column;
@@ -265,13 +209,8 @@ export const BalanceAndChangeWrapper = styled(Column)`
   }
 `
 
-export const CircleButton = styled(WalletButton) <{
-  marginRight?: number
-}>`
-  --button-border-color: ${leo.color.primary[20]};
-  @media (prefers-color-scheme: dark) {
-    --button-border-color: ${leo.color.primary[50]};
-  }
+export const PortfolioActionButton = styled(WalletButton)`
+  --button-border-color: ${leo.color.divider.interactive};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -279,18 +218,111 @@ export const CircleButton = styled(WalletButton) <{
   outline: none;
   background: none;
   background-color: ${leo.color.container.background};
-  border-radius: 100%;
+  border-radius: 8px;
   border: 1px solid var(--button-border-color);
   height: 36px;
   width: 36px;
-  margin-right: ${(p) =>
-    p.marginRight !== undefined
-      ? p.marginRight
-      : 0
-  }px;
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    height: 28px;
+    width: 28px;
+  }
 `
 
 export const ButtonIcon = styled(Icon)`
   --leo-icon-size: 18px;
   color: ${leo.color.icon.interactive};
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    --leo-icon-size: 16px;
+  }
+`
+
+export const SearchBarWrapper = styled(Row)<{
+  showSearchBar: boolean
+}>`
+  width: 230px;
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    display: ${(p) => (p.showSearchBar ? 'flex' : 'none')};
+    width: 100%;
+  }
+`
+
+export const ControlBarWrapper = styled(Row)<{
+  showSearchBar: boolean
+  isNFTView?: boolean
+}>`
+  padding: 0px 32px;
+  margin-bottom: 16px;
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    padding: ${(p) => (p.showSearchBar ? (p.isNFTView ? '2px' : '0px') : '4px')}
+      16px 0px 16px;
+    margin-bottom: ${(p) => (p.showSearchBar ? 12 : 16)}px;
+  }
+`
+
+export const SearchButtonWrapper = styled(Row)`
+  display: none;
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    display: flex;
+  }
+`
+
+export const EmptyStateIcon = styled.div`
+  width: 100px;
+  height: 100px;
+  background-repeat: no-repeat;
+  background-size: 100%;
+  background-position: center;
+  margin-bottom: 16px;
+`
+
+export const EmptyTransactionsIcon = styled(EmptyStateIcon)`
+  background-image: url(${NoTransactionsIconLight});
+  @media (prefers-color-scheme: dark) {
+    background-image: url(${NoTransactionsIconDark});
+  }
+`
+
+export const EmptyAccountsIcon = styled(EmptyStateIcon)`
+  background-image: url(${NoAccountsIconLight});
+  @media (prefers-color-scheme: dark) {
+    background-image: url(${NoAccountsIconDark});
+  }
+`
+
+export const ToggleVisibilityButton = styled(WalletButton)`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  background: none;
+  pointer-events: auto;
+  border: none;
+`
+
+export const EyeIcon = styled(Icon)`
+  --leo-icon-size: 20px;
+  color: ${leo.color.icon.default};
+`
+
+export const ContentWrapper = styled(Column)<{
+  isPanel: boolean
+}>`
+  background-color: ${(p) =>
+    p.isPanel ? leo.color.container.background : 'transparent'};
+`
+
+export const BalanceAndLineChartWrapper = styled(Column)`
+  position: relative;
+`
+
+export const ActivityWrapper = styled(Column)<{
+  isPanel: boolean
+}>`
+  padding: 0px 32px 32px 32px;
+  background-color: ${(p) =>
+    p.isPanel ? leo.color.container.background : 'transparent'};
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    padding: 0px 16px 16px 16px;
+  }
 `

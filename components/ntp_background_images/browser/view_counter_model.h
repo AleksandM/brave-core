@@ -11,6 +11,7 @@
 
 #include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/timer/timer.h"
 
 class PrefService;
 
@@ -46,16 +47,27 @@ class ViewCounterModel {
 
   bool ShouldShowBrandedWallpaper() const;
   void RegisterPageView();
+  void MaybeResetBrandedWallpaperCount();
+  void NextBrandedImage();
   void Reset();
-  void IncreaseBackgroundWallpaperImageIndex();
+  void RotateBackgroundWallpaperImageIndex();
 
  private:
   friend class NTPBackgroundImagesViewCounterTest;
   FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest, NTPSponsoredImagesTest);
   FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest,
+                           NTPSponsoredImagesCountResetTest);
+  FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest,
+                           NTPSponsoredImagesCountResetMinTest);
+  FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest,
+                           NTPSponsoredImagesCountResetTimerTest);
+  FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest,
                            NTPSponsoredImagesCountToBrandedWallpaperTest);
   FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest, NTPBackgroundImagesTest);
-  FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest, NTPBackgroundImagesOnlyTest);
+  FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest,
+                           NTPBackgroundImagesWithSIDisabledTest);
+  FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest,
+                           NTPBackgroundImagesWithEmptyCampaignTest);
   FRIEND_TEST_ALL_PREFIXES(ViewCounterModelTest,
                            NTPFailedToLoadSponsoredImagesTest);
   FRIEND_TEST_ALL_PREFIXES(NTPBackgroundImagesViewCounterTest, ModelTest);
@@ -66,15 +78,18 @@ class ViewCounterModel {
 
   void RegisterPageViewForBackgroundImages();
 
+  void OnTimerCountsResetExpired();
+
   // For NTP SI.
   raw_ptr<PrefService> prefs_ = nullptr;
-  int count_to_branded_wallpaper_ = 1;
+  int count_to_branded_wallpaper_ = 0;
   bool always_show_branded_wallpaper_ = false;
   bool show_branded_wallpaper_ = true;
   size_t current_campaign_index_ = 0;
   size_t total_campaign_count_ = 0;
   std::vector<size_t> campaigns_total_branded_image_count_;
   std::vector<size_t> campaigns_current_branded_image_index_;
+  base::RepeatingTimer timer_counts_reset_;
 
   // For NTP BI.
   int current_wallpaper_image_index_ = 0;

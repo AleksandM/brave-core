@@ -25,12 +25,13 @@ class BraveBrowserView;
 
 // Monitors mouse event to show sidebar when mouse is around the left or
 // right side of browser window.
+// This widget is only used for kShowOnMouseOver option.
 class SidebarShowOptionsEventDetectWidget : public views::ViewObserver,
                                             public views::WidgetDelegate {
  public:
   class Delegate {
    public:
-    virtual void ShowSidebar() = 0;
+    virtual void ShowSidebarControlView() = 0;
 
    protected:
     virtual ~Delegate() {}
@@ -51,6 +52,7 @@ class SidebarShowOptionsEventDetectWidget : public views::ViewObserver,
 
   // views::ViewObserver overrides:
   void OnViewBoundsChanged(views::View* observed_view) override;
+  void OnViewIsDeleting(views::View* observed_view) override;
 
  private:
   friend class sidebar::SidebarBrowserTest;
@@ -62,7 +64,7 @@ class SidebarShowOptionsEventDetectWidget : public views::ViewObserver,
 
   bool sidebar_on_left_ = true;
   raw_ref<BraveBrowserView> browser_view_;
-  raw_ptr<ContentsView> contents_view_ = nullptr;
+  raw_ptr<ContentsView, DanglingUntriaged> contents_view_ = nullptr;
   raw_ref<Delegate> delegate_;
   std::unique_ptr<views::Widget> widget_;
   base::ScopedObservation<views::View, views::ViewObserver> observation_{this};

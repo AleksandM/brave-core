@@ -9,33 +9,38 @@
 
 #include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_service_delegate.h"
-#include "brave/ios/browser/brave_wallet/json_rpc_service_factory.h"
-#include "brave/ios/browser/brave_wallet/keyring_service_factory.h"
-#include "brave/ios/browser/brave_wallet/tx_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/keyed_service/ios/browser_state_dependency_manager.h"
-#include "ios/chrome/browser/application_context/application_context.h"
-#include "ios/chrome/browser/browser_state/browser_state_otr_helper.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/shared/model/application_context/application_context.h"
+#include "ios/chrome/browser/shared/model/browser_state/browser_state_otr_helper.h"
+#include "ios/chrome/browser/shared/model/profile/profile_ios.h"
 #include "ios/web/public/browser_state.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace brave_wallet {
 
-// static
-mojo::PendingRemote<mojom::BraveWalletService>
-BraveWalletServiceFactory::GetForBrowserState(
-    ChromeBrowserState* browser_state) {
-  return static_cast<BraveWalletService*>(
-             GetInstance()->GetServiceForBrowserState(browser_state, true))
-      ->MakeRemote();
-}
+class BraveWalletServiceDelegateIos : public BraveWalletServiceDelegate {
+ public:
+  explicit BraveWalletServiceDelegateIos(ProfileIOS* profile) {
+    wallet_base_directory_ = profile->GetStatePath();
+    is_private_window_ = profile->IsOffTheRecord();
+  }
+
+  base::FilePath GetWalletBaseDirectory() override {
+    return wallet_base_directory_;
+  }
+  bool IsPrivateWindow() override { return is_private_window_; }
+
+ protected:
+  base::FilePath wallet_base_directory_;
+  bool is_private_window_ = false;
+};
 
 // static
 BraveWalletService* BraveWalletServiceFactory::GetServiceForState(
-    ChromeBrowserState* browser_state) {
+    ProfileIOS* profile) {
   return static_cast<BraveWalletService*>(
-      GetInstance()->GetServiceForBrowserState(browser_state, true));
+      GetInstance()->GetServiceForBrowserState(profile, true));
 }
 
 // static
@@ -47,28 +52,18 @@ BraveWalletServiceFactory* BraveWalletServiceFactory::GetInstance() {
 BraveWalletServiceFactory::BraveWalletServiceFactory()
     : BrowserStateKeyedServiceFactory(
           "BraveWalletService",
-          BrowserStateDependencyManager::GetInstance()) {
-  DependsOn(KeyringServiceFactory::GetInstance());
-  DependsOn(JsonRpcServiceFactory::GetInstance());
-  DependsOn(TxServiceFactory::GetInstance());
-}
+          BrowserStateDependencyManager::GetInstance()) {}
 
 BraveWalletServiceFactory::~BraveWalletServiceFactory() = default;
 
 std::unique_ptr<KeyedService>
 BraveWalletServiceFactory::BuildServiceInstanceFor(
     web::BrowserState* context) const {
-  auto* browser_state = ChromeBrowserState::FromBrowserState(context);
-  auto* keyring_service =
-      KeyringServiceFactory::GetServiceForState(browser_state);
-  auto* json_rpc_service =
-      JsonRpcServiceFactory::GetServiceForState(browser_state);
-  auto* tx_service = TxServiceFactory::GetServiceForState(browser_state);
-  auto shared_url_loader_factory = browser_state->GetSharedURLLoaderFactory();
+  auto* profile = ProfileIOS::FromBrowserState(context);
   std::unique_ptr<BraveWalletService> service(new BraveWalletService(
-      shared_url_loader_factory, std::make_unique<BraveWalletServiceDelegate>(),
-      keyring_service, json_rpc_service, tx_service, browser_state->GetPrefs(),
-      GetApplicationContext()->GetLocalState()));
+      profile->GetSharedURLLoaderFactory(),
+      std::make_unique<BraveWalletServiceDelegateIos>(profile),
+      profile->GetPrefs(), GetApplicationContext()->GetLocalState()));
   return service;
 }
 

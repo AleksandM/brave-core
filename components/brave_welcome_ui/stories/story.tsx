@@ -22,6 +22,7 @@ import Welcome from '../components/welcome'
 import DataContext from '../state/context'
 import { ViewType, Scenes } from '../state/component_types'
 import Background from '../components/background'
+import HelpWDP from '../components/help-wdp'
 
 const payload = [
   {
@@ -103,18 +104,22 @@ export default {
   decorators: [
     (Story: any) => {
       // mock data
-      const [currentSelectedBrowser, setCurrentSelectedBrowser] = React.useState<string | undefined>('Chrome')
+      const [currentSelectedBrowser, setCurrentSelectedBrowser] =
+        React.useState<string | undefined>('Chrome')
       const [scenes, setScenes] = React.useState<Scenes | undefined>(undefined)
 
-      const incrementCount = () => {}
+      const incrementCount = () => { }
 
       const store = {
-        setViewType: () => {},
+        setViewType: () => { },
         setCurrentSelectedBrowser,
         incrementCount,
         setScenes,
         currentSelectedBrowser,
         browserProfiles: payload,
+        currentSelectedBrowserProfiles: payload.filter(
+          (profile) => profile.browserType === currentSelectedBrowser
+        ),
         viewType: ViewType.DefaultBrowser,
         scenes
       }
@@ -129,34 +134,56 @@ export default {
   ]
 }
 
-export const _SelectBrowser = () => {
-  return <SelectBrowser />
+export const _SelectBrowser = {
+  render: () => {
+    return <SelectBrowser />
+  }
 }
 
-export const _SelectProfile = () => {
-  return <SelectProfile />
+export const _SelectProfile = {
+  render: () => {
+    return <SelectProfile />
+  }
 }
 
-export const _SelectTheme = () => {
-  return <SelectTheme />
+export const _SelectTheme = {
+  render: () => {
+    return <SelectTheme />
+  }
 }
 
-export const _HelpImprove = () => {
-  return <HelpImprove />
+export const _HelpImprove = {
+  render: () => {
+    return <HelpImprove />
+  }
 }
 
-export const _ImportInProgress = () => {
-  return <ImportInProgress />
+export const _ImportInProgress = {
+  render: () => {
+    return <ImportInProgress />
+  }
 }
 
-export const _SetupComplete = () => {
-  return <SetupComplete />
+export const _SetupComplete = {
+  render: () => {
+    return <SetupComplete />
+  }
 }
 
-export const _Welcome = () => {
-  return <Welcome />
+export const _Welcome = {
+  render: () => {
+    return <Welcome />
+  }
 }
 
-export const _Background = () => {
-  return <Background static={true} />
+export const _Background = {
+  render: () => {
+    return <Background static={true} />
+  }
+}
+
+export const _HelpWDP = {
+  render: () => {
+    return <HelpWDP />
+  }
 }

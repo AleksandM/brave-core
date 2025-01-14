@@ -3,21 +3,25 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "brave/browser/brave_stats/brave_stats_updater_params.h"
+
 #include <cmath>
 
 #include "base/logging.h"
 #include "base/strings/string_util.h"
 #include "base/system/sys_info.h"
 #include "base/time/time.h"
-#include "brave/browser/brave_stats/brave_stats_updater_params.h"
+#include "brave/browser/brave_stats/features.h"
 #include "brave/browser/brave_stats/first_run_util.h"
-#include "brave/components/brave_ads/common/pref_names.h"
+#include "brave/components/brave_ads/core/public/prefs/pref_names.h"
 #include "brave/components/brave_referrals/common/pref_names.h"
 #include "brave/components/brave_stats/browser/brave_stats_updater_util.h"
 #include "brave/components/brave_wallet/browser/pref_names.h"
 #include "brave/components/constants/pref_names.h"
 #include "build/build_config.h"
+#include "chrome/browser/headless/headless_mode_util.h"
 #include "components/prefs/pref_service.h"
+#include "content/public/common/content_switches.h"
 #include "net/base/url_util.h"
 #include "url/gurl.h"
 
@@ -27,6 +31,12 @@ base::Time BraveStatsUpdaterParams::g_current_time;
 bool BraveStatsUpdaterParams::g_force_first_run = false;
 static constexpr base::TimeDelta g_dtoi_delete_delta =
     base::Seconds(30 * 24 * 60 * 60);
+
+bool IsHeadlessOrAutomationMode() {
+  return headless::IsHeadlessMode() ||
+         base::CommandLine::ForCurrentProcess()->HasSwitch(
+             ::switches::kEnableAutomation);
+}
 
 BraveStatsUpdaterParams::BraveStatsUpdaterParams(
     PrefService* stats_pref_service,
@@ -81,6 +91,10 @@ std::string BraveStatsUpdaterParams::GetDateOfInstallationParam() const {
 }
 
 std::string BraveStatsUpdaterParams::GetReferralCodeParam() const {
+  if (IsHeadlessOrAutomationMode() &&
+      features::IsHeadlessClientRefcodeEnabled()) {
+    return kHeadlessRefcode;
+  }
   return referral_promo_code_.empty() ? "none" : referral_promo_code_;
 }
 
@@ -183,9 +197,9 @@ base::Time BraveStatsUpdaterParams::GetCurrentTimeNow() const {
 
 GURL BraveStatsUpdaterParams::GetUpdateURL(
     const GURL& base_update_url,
-    const std::string platform_id,
-    const std::string channel_name,
-    const std::string full_brave_version) const {
+    std::string_view platform_id,
+    std::string_view channel_name,
+    std::string_view full_brave_version) const {
   GURL update_url(base_update_url);
   update_url = net::AppendQueryParameter(update_url, "platform", platform_id);
   update_url = net::AppendQueryParameter(update_url, "channel", channel_name);

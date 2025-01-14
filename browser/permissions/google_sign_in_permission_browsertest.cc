@@ -5,8 +5,8 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/path_service.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
-#include "brave/components/brave_shields/common/brave_shield_constants.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/core/common/brave_shield_constants.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/google_sign_in_permission/features.h"
@@ -35,25 +35,26 @@
 #include "content/public/test/test_navigation_observer.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/default_handlers.h"
+#include "services/network/public/mojom/cookie_manager.mojom.h"
 #include "url/gurl.h"
 
 using net::test_server::EmbeddedTestServer;
 
 namespace {
 
-const char kAccountsGoogleUrl[] = "https://accounts.google.com";
-const char kEmbeddingPageUrl[] = "/google_sign_in_link.html";
-const char kTestDomain[] = "a.com";
-const char kThirdPartyTestDomain[] = "b.com";
+constexpr char kAccountsGoogleUrl[] = "https://accounts.google.com";
+constexpr char kEmbeddingPageUrl[] = "/google_sign_in_link.html";
+constexpr char kTestDomain[] = "a.com";
+constexpr char kThirdPartyTestDomain[] = "b.com";
 
 // Used to identify the buttons on the test page.
-const char kGoogleAuthButtonHtmlId[] = "auth-button-google";
-const char kFirebaseAuthButtonHtmlId[] = "auth-button-firebase";
-const char kGoogleAuthButtonWithoutParamHtmlId[] =
+constexpr char kGoogleAuthButtonHtmlId[] = "auth-button-google";
+constexpr char kFirebaseAuthButtonHtmlId[] = "auth-button-firebase";
+constexpr char kGoogleAuthButtonWithoutParamHtmlId[] =
     "auth-button-google-without-param";
-const char kFirebaseAuthButtonDiffParamHtmlId[] =
+constexpr char kFirebaseAuthButtonDiffParamHtmlId[] =
     "auth-button-firebase-diff-param";
-const char kGoogleAuthButtonPopupHtmlId[] = "auth-button-google-popup";
+constexpr char kGoogleAuthButtonPopupHtmlId[] = "auth-button-google-popup";
 
 }  // namespace
 
@@ -70,7 +71,6 @@ class GoogleSignInBrowserTest : public InProcessBrowserTest {
     host_resolver()->AddRule("*", "127.0.0.1");
     current_browser_ = InProcessBrowserTest::browser();
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
 
@@ -219,8 +219,8 @@ class GoogleSignInBrowserTest : public InProcessBrowserTest {
                   ContentSettingsType::BRAVE_GOOGLE_SIGN_IN),
               content_setting);
     EXPECT_EQ(cookie_settings()->GetCookieSetting(
-                  GURL(kAccountsGoogleUrl), embedding_url_,
-                  net::CookieSettingOverrides(), nullptr),
+                  GURL(kAccountsGoogleUrl), net::SiteForCookies(),
+                  embedding_url_, net::CookieSettingOverrides(), nullptr),
               cookie_setting);
   }
 
@@ -335,7 +335,7 @@ class GoogleSignInBrowserTest : public InProcessBrowserTest {
   content::ContentMockCertVerifier mock_cert_verifier_;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
   base::test::ScopedFeatureList feature_list_;
-  raw_ptr<Browser> current_browser_;
+  raw_ptr<Browser, DanglingUntriaged> current_browser_;
 
  private:
   std::unique_ptr<permissions::MockPermissionPromptFactory> prompt_factory_;

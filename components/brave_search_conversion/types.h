@@ -10,9 +10,14 @@ namespace brave_search_conversion {
 
 enum class ConversionType {
   kNone = 0,
-  kButton,
-  kBanner,
+  kButton,  // deprecated.
   kNTP,
+  kBannerTypeA,  // deprecated.
+  kBannerTypeB,
+  kBannerTypeC,
+  kBannerTypeD,
+  kDDGBannerTypeC,
+  kDDGBannerTypeD,
 };
 
 }  // namespace brave_search_conversion

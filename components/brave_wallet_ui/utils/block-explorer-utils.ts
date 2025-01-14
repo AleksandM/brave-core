@@ -20,6 +20,10 @@ export const buildExplorerUrl = (
 
   const fallbackURL = `${explorerURL}/${value}`
 
+  if (type === 'lifi') {
+    return `https://scan.li.fi/tx/${value}`
+  }
+
   if (type === 'nft') {
     return id
       ? `${explorerURL}/token/${value}?a=${new Amount(id).format()}`
@@ -44,11 +48,18 @@ export const buildExplorerUrl = (
     network.chainId === BraveWallet.SOLANA_TESTNET ||
     network.chainId === BraveWallet.SOLANA_DEVNET
 
+  const isZecNet = network.chainId === BraveWallet.Z_CASH_MAINNET ||
+                   network.chainId === BraveWallet.Z_CASH_TESTNET
+
   if (isFileCoinNet) {
     return `${explorerURL}?cid=${value}`
   }
 
   if (isFileCoinEvmNet) {
+    return `${explorerURL}/${value}`
+  }
+
+  if (isZecNet) {
     return `${explorerURL}/${value}`
   }
 
@@ -64,6 +75,16 @@ export const buildExplorerUrl = (
     )}/${type}/${value}${explorerURL.substring(explorerIndex)}`
   }
 
+  if (network.chainId === BraveWallet.BITCOIN_MAINNET) {
+    if (type === 'tx') {
+      return `${explorerURL}/transactions/btc/${value}`
+    }
+    if (type === 'address') {
+      return `${explorerURL}/addresses/btc/${value}`
+    }
+    return `${explorerURL}/search?search=${value}`
+  }
+
   return `${explorerURL}/${type}/${value}`
 }
 
@@ -74,7 +95,10 @@ export const openBlockExplorerURL = ({
   value
 }: {
   id?: string | undefined
-  network?: Pick<BraveWallet.NetworkInfo, 'chainId' | 'blockExplorerUrls'>
+  network?: Pick<
+    BraveWallet.NetworkInfo,
+    'chainId' | 'blockExplorerUrls'
+  > | null
   type: BlockExplorerUrlTypes
   value?: string | undefined
 }): (() => void) => {

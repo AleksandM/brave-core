@@ -4,47 +4,18 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "brave/components/brave_ads/core/internal/global_state/global_state.h"
-#include "base/test/task_environment.h"
-#include "brave/components/brave_ads/core/internal/ads_client_mock.h"
-#include "testing/gmock/include/gmock/gmock.h"
-#include "testing/gtest/include/gtest/gtest.h"
+
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads {
 
-using ::testing::NiceMock;
-
-class BraveAdsGlobalStateTest : public ::testing::Test {
- protected:
-  void SetUp() override {
-    global_state_ = std::make_unique<GlobalState>(&ads_client_mock_);
-  }
-
-  base::test::TaskEnvironment task_environment_;
-
-  NiceMock<AdsClientMock> ads_client_mock_;
-
-  std::unique_ptr<GlobalState> global_state_;
-};
+class BraveAdsGlobalStateTest : public test::TestBase {};
 
 TEST_F(BraveAdsGlobalStateTest, HasInstance) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(GlobalState::HasInstance());
-}
-
-TEST_F(BraveAdsGlobalStateTest, HasNoInstanceAfterDestruction) {
-  // Arrange
-  global_state_.reset();
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(GlobalState::HasInstance());
 }
 
 }  // namespace brave_ads

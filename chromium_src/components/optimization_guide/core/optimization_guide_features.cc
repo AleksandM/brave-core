@@ -7,15 +7,15 @@
 
 #include "base/feature_override.h"
 
-namespace optimization_guide {
-namespace features {
+namespace optimization_guide::features {
 
 OVERRIDE_FEATURE_DEFAULT_STATES({{
+    {kOptimizationGuideFetchingForSRP, base::FEATURE_DISABLED_BY_DEFAULT},
+    {kOptimizationGuidePersonalizedFetching, base::FEATURE_DISABLED_BY_DEFAULT},
     {kOptimizationHints, base::FEATURE_DISABLED_BY_DEFAULT},
     {kRemoteOptimizationGuideFetching, base::FEATURE_DISABLED_BY_DEFAULT},
     {kRemoteOptimizationGuideFetchingAnonymousDataConsent,
      base::FEATURE_DISABLED_BY_DEFAULT},
 }});
 
-}  // namespace features
-}  // namespace optimization_guide
+}  // namespace optimization_guide::features

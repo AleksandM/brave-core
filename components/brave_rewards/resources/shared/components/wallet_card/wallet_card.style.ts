@@ -5,7 +5,7 @@
 
 import styled from 'styled-components'
 
-import * as leo from '@brave/leo/tokens/css'
+import * as leo from '@brave/leo/tokens/css/variables'
 
 export const root = styled.div`
   background: linear-gradient(125.83deg, #392DD1 0%, #A91B78 99.09%);
@@ -26,6 +26,10 @@ export const statusIndicator = styled.div`
 export const earnings = styled.div`
   font-size: 11px;
   line-height: 16px;
+
+  &.hidden {
+    visibility: hidden;
+  }
 `
 
 export const earningsHeader = styled.div`
@@ -39,6 +43,7 @@ export const earningsHeaderTitle = styled.div`
 
 export const earningsInfo = styled.div`
   position: relative;
+  display: none;
 
   leo-icon {
     opacity: 0.65;
@@ -61,13 +66,15 @@ export const earningsInfo = styled.div`
   }
 `
 
-export const earningsTooltip = styled.div`
+export const earningsTooltip = styled.div.attrs({
+  'data-theme': 'light'
+})`
   position: relative;
   padding: 16px;
   background: ${leo.color.white};
   box-shadow: 0px 0px 24px rgba(99, 105, 110, 0.36);
   border-radius: 8px;
-  color: ${leo.color.light.text.primary};
+  color: ${leo.color.text.primary};
   font-size: 12px;
   line-height: 18px;
   font-weight: 400;
@@ -84,14 +91,42 @@ export const earningsTooltip = styled.div`
   }
 `
 
+export const manageAds = styled.div.attrs({
+  'data-theme': 'light'
+})`
+  margin-top: 14px;
+
+  button {
+    color: ${leo.color.text.interactive};
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 16px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .icon {
+    height: 9px;
+    width: auto;
+    color: ${leo.color.icon.interactive};
+  }
+`
+
 export const earningsDisplay = styled.div`
   margin-top: 4px;
   display: flex;
   align-items: center;
+  justify-content: end;
   gap: 4px;
 `
 
 export const earningsMonth = styled.div`
+  display: none;
   padding: 2px 4px;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
@@ -148,18 +183,48 @@ export const balanceHeader = styled.div`
 `
 
 export const batAmount = styled.div`
-  font-weight: 500;
-  font-size: 32px;
-  line-height: 48px;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+
+  .amount {
+    font: ${leo.font.default.regular};
+    font-weight: 500;
+    font-size: 32px;
+    line-height: 48px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.04em;
+    padding-right: 4px;
+  }
 
   .currency {
     font-weight: 400;
-    font-size: 14px;
+    font-size: 16px;
     line-height: 24px;
+    margin-top: 14px;
   }
 `
 
+export const batAmountForTesting = styled.div`
+  display: none;
+`
+
 export const balanceSpinner = styled.div`
+  font-size: 14px;
+  line-height: 18px;
+  padding: 16px 0;
+  min-height: 62px;
+
+  animation-name: fade-in;
+  animation-delay: 1s;
+  animation-duration: .5s;
+  animation-fill-mode: both;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: .8; }
+  }
+
   .icon {
     height: 24px;
     vertical-align: middle;
@@ -167,16 +232,19 @@ export const balanceSpinner = styled.div`
   }
 `
 
-export const loading = styled.span`
-  font-size: 14px;
-  line-height: 18px;
-  vertical-align: middle;
-`
-
 export const exchangeAmount = styled.div`
   font-size: 12px;
   line-height: 14px;
   opacity: 0.66;
+
+  .amount {
+    font: ${leo.font.default.regular};
+    font-size: 12px;
+    line-height: 14px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.05em;
+    padding-right: 4px;
+  }
 `
 
 export const hiddenEarnings = styled.div`
@@ -195,30 +263,6 @@ export const hiddenEarnings = styled.div`
 
 export const hiddenEarningsValue = styled.span`
   opacity: 0.65;
-`
-
-export const viewStatement = styled.div`
-  margin-top: 12px;
-  text-align: center;
-
-  button {
-    font-weight: 500;
-    font-size: 13px;
-    line-height: 20px;
-    padding: 0;
-    border-radius: 48px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .icon {
-    width: 15px;
-    height: auto;
-    vertical-align: middle;
-    margin-right: 6px;
-    margin-bottom: 2px;
-  }
 `
 
 export const summaryBox = styled.div`

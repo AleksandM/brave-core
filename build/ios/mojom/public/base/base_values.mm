@@ -5,6 +5,8 @@
 
 #include "brave/build/ios/mojom/public/base/base_values.h"
 
+#include <optional>
+
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/strings/sys_string_conversions.h"
@@ -268,7 +270,7 @@
 
 - (nullable instancetype)initWithJSONString:(NSString*)json {
   auto string = base::SysNSStringToUTF8(json);
-  absl::optional<base::Value> response = base::JSONReader::Read(
+  std::optional<base::Value> response = base::JSONReader::Read(
       string, base::JSON_PARSE_CHROMIUM_EXTENSIONS |
                   base::JSONParserOptions::JSON_PARSE_RFC);
   if (response) {
@@ -329,6 +331,14 @@ base::Value BaseValueFromNSArray(NSArray<MojoBaseValue*>* array) {
   base::Value::List& list = *value.GetIfList();
   for (MojoBaseValue* obj in array) {
     list.Append(obj.cppObjPtr);
+  }
+  return value;
+}
+
+base::Value::List BaseValueListFromNSArray(NSArray<MojoBaseValue*>* array) {
+  base::Value::List value;
+  for (MojoBaseValue* obj in array) {
+    value.Append(obj.cppObjPtr);
   }
   return value;
 }

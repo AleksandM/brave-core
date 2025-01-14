@@ -7,10 +7,10 @@
 
 #include "base/strings/strcat.h"
 #include "brave/browser/ui/webui/webcompat_reporter/webcompat_reporter_dialog.h"
+#include "brave/components/ai_chat/core/common/features.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/constants/webui_url_constants.h"
-#include "brave/components/ipfs/buildflags/buildflags.h"
-#include "brave/components/sidebar/constants.h"
+#include "brave/components/sidebar/browser/constants.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/chrome_pages.h"
@@ -21,39 +21,36 @@
 namespace brave {
 
 void ShowBraveRewards(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL(kBraveUIRewardsURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(kRewardsPageURL));
 }
 
 void ShowBraveAdblock(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL(kBraveUIAdblockURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(kBraveUIAdblockURL));
 }
 
 void ShowSync(Browser* browser) {
-  auto url = chrome::GetSettingsUrl(chrome::kSyncSetupSubPage);
-  NavigateParams params(GetSingletonTabNavigateParams(browser, url));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(
+      browser, chrome::GetSettingsUrl(chrome::kSyncSetupSubPage));
 }
 
 void ShowBraveNewsConfigure(Browser* browser) {
-  NavigateParams params(GetSingletonTabNavigateParams(
-      browser, GURL("brave://newtab/?openSettings=BraveNews")));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(
+      browser, GURL("brave://newtab/?openSettings=BraveNews"));
 }
 
 void ShowShortcutsPage(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL(kShortcutsURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(kShortcutsURL));
 }
 
 void ShowBraveTalk(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL(sidebar::kBraveTalkURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(sidebar::kBraveTalkURL));
+}
+
+void ShowFullpageChat(Browser* browser) {
+  if (!ai_chat::features::IsAIChatHistoryEnabled()) {
+    return;
+  }
+  ShowSingletonTabOverwritingNTP(browser, GURL(kAIChatUIURL));
 }
 
 void ShowWebcompatReporter(Browser* browser) {
@@ -63,50 +60,37 @@ void ShowWebcompatReporter(Browser* browser) {
     return;
   }
 
-  OpenWebcompatReporterDialog(web_contents);
+  webcompat_reporter::OpenReporterDialog(
+      web_contents, webcompat_reporter::UISource::kAppMenu);
 }
 
 void ShowBraveWallet(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL(kBraveUIWalletURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(kBraveUIWalletURL));
 }
 
 void ShowBraveWalletOnboarding(Browser* browser) {
-  NavigateParams params(GetSingletonTabNavigateParams(
-      browser, GURL(kBraveUIWalletOnboardingURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(kBraveUIWalletOnboardingURL));
 }
 
 void ShowBraveWalletAccountCreation(Browser* browser,
                                     brave_wallet::mojom::CoinType coin_type) {
   // Only solana is supported.
-  if (coin_type == brave_wallet::mojom::CoinType::SOL) {
-    NavigateParams params(GetSingletonTabNavigateParams(
-        browser,
-        GURL(base::StrCat({kBraveUIWalletAccountCreationURL, "Solana"}))));
-    ShowSingletonTabOverwritingNTP(browser, &params);
-  } else {
-    NOTREACHED();
-  }
+  CHECK(coin_type == brave_wallet::mojom::CoinType::SOL);
+  ShowSingletonTabOverwritingNTP(
+      browser,
+      GURL(base::StrCat({kBraveUIWalletAccountCreationURL, "Solana"})));
 }
 
 void ShowExtensionSettings(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL(kExtensionSettingsURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(kExtensionSettingsURL));
 }
 
 void ShowWalletSettings(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL(kWalletSettingsURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+  ShowSingletonTabOverwritingNTP(browser, GURL(kWalletSettingsURL));
 }
 
-void ShowIPFS(Browser* browser) {
-  NavigateParams params(
-      GetSingletonTabNavigateParams(browser, GURL(kIPFSWebUIURL)));
-  ShowSingletonTabOverwritingNTP(browser, &params);
+void ShowAppsPage(Browser* browser) {
+  ShowSingletonTabOverwritingNTP(browser, GURL(chrome::kChromeUIAppsURL));
 }
 
 }  // namespace brave

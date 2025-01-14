@@ -7,19 +7,16 @@
 
 #include <utility>
 
-#include "base/check_op.h"
+#include "base/containers/span.h"
 #include "base/logging.h"
 #include "base/ranges/algorithm.h"
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "brave/components/brave_wallet/common/hash_utils.h"
 #include "brave/components/brave_wallet/common/hex_utils.h"
 
 namespace brave_wallet {
-
-namespace {
-constexpr size_t kAddressLength = 20u;
-}  // namespace
 
 EthAddress::EthAddress(std::vector<uint8_t> bytes) : bytes_(std::move(bytes)) {}
 EthAddress::EthAddress(base::span<const uint8_t> bytes)
@@ -37,22 +34,19 @@ bool EthAddress::operator!=(const EthAddress& other) const {
 }
 
 // static
-EthAddress EthAddress::FromPublicKey(const std::vector<uint8_t>& public_key) {
+EthAddress EthAddress::FromPublicKey(base::span<const uint8_t> public_key) {
+  // TODO(apaymyshev): should be a fixed-size span.
   if (public_key.size() != 64) {
     VLOG(1) << __func__ << ": public key size should be 64 bytes";
     return EthAddress();
   }
 
-  std::vector<uint8_t> hash = KeccakHash(public_key);
-  std::vector<uint8_t> result(hash.end() - kAddressLength, hash.end());
-
-  DCHECK_EQ(result.size(), kAddressLength);
-
-  return EthAddress(std::move(result));
+  return EthAddress(
+      base::as_byte_span(KeccakHash(public_key)).last(kEthAddressLength));
 }
 
 // static
-EthAddress EthAddress::FromHex(const std::string& input) {
+EthAddress EthAddress::FromHex(std::string_view input) {
   if (!IsValidAddress(input)) {
     return EthAddress();
   }
@@ -68,7 +62,7 @@ EthAddress EthAddress::FromHex(const std::string& input) {
 
 // static
 EthAddress EthAddress::FromBytes(base::span<const uint8_t> bytes) {
-  if (bytes.size() != kAddressLength) {
+  if (bytes.size() != kEthAddressLength) {
     return EthAddress();
   }
   return EthAddress(bytes);
@@ -76,16 +70,16 @@ EthAddress EthAddress::FromBytes(base::span<const uint8_t> bytes) {
 
 // static
 EthAddress EthAddress::ZeroAddress() {
-  return EthAddress(std::vector<uint8_t>(kAddressLength, 0));
+  return EthAddress(std::vector<uint8_t>(kEthAddressLength, 0));
 }
 
 // static
-bool EthAddress::IsValidAddress(const std::string& input) {
+bool EthAddress::IsValidAddress(std::string_view input) {
   if (!IsValidHexString(input)) {
     VLOG(1) << __func__ << ": input is not a valid hex representation";
     return false;
   }
-  if (input.size() - 2 != kAddressLength * 2) {
+  if (input.size() - 2 != kEthAddressLength * 2) {
     VLOG(1) << __func__ << ": input should be 20 bytes long";
     return false;
   }
@@ -93,27 +87,44 @@ bool EthAddress::IsValidAddress(const std::string& input) {
 }
 
 std::string EthAddress::ToHex() const {
-  const std::string input(bytes_.begin(), bytes_.end());
-  return ::brave_wallet::ToHex(input);
+  return ::brave_wallet::ToHex(bytes_);
+}
+
+// static
+std::optional<std::string> EthAddress::ToEip1191ChecksumAddress(
+    std::string_view address,
+    std::string_view chain_id) {
+  if (address.empty()) {
+    return "";
+  }
+
+  const auto eth_addr = EthAddress::FromHex(address);
+  if (eth_addr.IsEmpty()) {
+    return std::nullopt;
+  }
+  uint256_t chain;
+  if (!HexValueToUint256(chain_id, &chain)) {
+    return std::nullopt;
+  }
+
+  return eth_addr.ToChecksumAddress(chain);
 }
 
 std::string EthAddress::ToChecksumAddress(uint256_t eip1191_chaincode) const {
   std::string result = "0x";
-  std::string input;
+  std::string prefix;
 
   if (eip1191_chaincode == static_cast<uint256_t>(30) ||
       eip1191_chaincode == static_cast<uint256_t>(31)) {
     // TODO(jocelyn): We will need to revise this if there are supported chains
     // with ID larger than uint64_t.
-    input +=
+    prefix =
         base::NumberToString(static_cast<uint64_t>(eip1191_chaincode)) + "0x";
   }
 
-  input += std::string(ToHex().data() + 2);
-
-  const std::string hash_str(KeccakHash(input).data() + 2);
-  const std::string address_str =
-      base::ToLowerASCII(base::HexEncode(bytes_.data(), bytes_.size()));
+  const std::string address_str = HexEncodeLower(bytes_);
+  const std::string hash_str = base::HexEncode(
+      KeccakHash(base::as_byte_span(base::StrCat({prefix, address_str}))));
 
   for (size_t i = 0; i < address_str.length(); ++i) {
     if (isdigit(address_str[i])) {

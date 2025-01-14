@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2023 The Brave Authors. All rights reserved.
+# Copyright (c) 2018 The Brave Authors. All rights reserved.
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at https://mozilla.org/MPL/2.0/.
@@ -32,17 +32,16 @@ def main():
     webpack_gen_dir = output_path_absolute
 
     depfile_path = os.path.abspath(args.depfile_path[0])
-    transpile_options = dict(
-        production=args.production,
-        target_gen_dir=webpack_gen_dir,
-        root_gen_dir=root_gen_dir,
-        entry_points=args.entry,
-        depfile_path=depfile_path,
-        depfile_sourcename=grd_path,
-        webpack_aliases=args.webpack_alias,
-        extra_modules=args.extra_modules,
-        public_asset_path=args.public_asset_path
-    )
+    transpile_options = dict(production=args.production,
+                             target_gen_dir=webpack_gen_dir,
+                             root_gen_dir=root_gen_dir,
+                             entry_points=args.entry,
+                             depfile_path=depfile_path,
+                             depfile_sourcename=grd_path,
+                             webpack_aliases=args.webpack_alias,
+                             output_module=args.output_module,
+                             extra_modules=args.extra_modules,
+                             public_asset_path=args.public_asset_path)
     transpile_web_uis(transpile_options)
     generate_grd(output_path_absolute, args.grd_name[0], args.resource_name[0],
                  resource_path_prefix)
@@ -68,6 +67,7 @@ def parse_args():
                         help='Webpack alias',
                         required=False,
                         default=[])
+    parser.add_argument('--output_module', action='store_true')
     parser.add_argument(
         "--resource_path_prefix",
         nargs='?',
@@ -92,7 +92,7 @@ def clean_target_dir(target_dir):
         if os.path.exists(target_dir):
             shutil.rmtree(target_dir)
     except Exception as e:
-        raise Exception("Error removing previous webpack target dir", e)
+        raise Exception("Error removing previous webpack target dir") from e
 
 
 def transpile_web_uis(options):
@@ -106,19 +106,27 @@ def transpile_web_uis(options):
         args.append("--mode=development")
 
     if options['public_asset_path'] is not None:
-        args.append("--output-public-path=" + options['public_asset_path'])
+        args.append("--env=output_public_path=" + options['public_asset_path'])
 
     # web pack aliases
-    for alias in options['webpack_aliases']:
-        args.append("--webpack_alias=" + alias)
+    if options['webpack_aliases']:
+        args.append("--env=webpack_aliases=" +
+                    ",".join(options['webpack_aliases']))
+
+    if options['output_module']:
+        args.append("--env=output_module")
 
     # extra module locations
-    for module_path in options['extra_modules']:
-        args.append("--extra_modules=" + module_path)
+    if options['extra_modules']:
+        args.append("--env=extra_modules=" + ",".join(options['extra_modules']))
 
-    # entrypoints
-    for entry in options['entry_points']:
-        args.append(entry)
+    # In webpack.config.js there is a custom parser to support named entry
+    # points. As webpack-cli no longer supports named entries, we provide them
+    # via in a custom variable, comma-separated and with
+    # "[name]=[path]" syntax.
+    args.append("--env=brave_entries=" + ",".join(options['entry_points']))
+
+    # We should use webpack-cli env param to not pollute environment
     env["ROOT_GEN_DIR"] = options['root_gen_dir']
     env["TARGET_GEN_DIR"] = options['target_gen_dir']
     env["DEPFILE_PATH"] = options['depfile_path']

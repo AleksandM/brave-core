@@ -18,11 +18,13 @@ import android.widget.CheckBox;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
 import org.chromium.base.BravePreferenceKeys;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 
 public class SetDefaultBrowserBottomSheetFragment extends BottomSheetDialogFragment {
     private static final String IS_FROM_MENU = "is_from_menu";
@@ -57,21 +59,26 @@ public class SetDefaultBrowserBottomSheetFragment extends BottomSheetDialogFragm
 
     @Override
     public void onViewCreated(View view, Bundle savedInstanceState) {
+        ((BottomSheetDialog) getDialog())
+                .getBehavior()
+                .setState(BottomSheetBehavior.STATE_EXPANDED);
         Button nextButton = view.findViewById(R.id.btn_next);
-        nextButton.setOnClickListener((new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (getActivity() != null) {
-                    BraveSetDefaultBrowserUtils.setDefaultBrowser(getActivity());
-                }
-                dismiss();
-            }
-        }));
+        nextButton.setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (getActivity() != null) {
+                            BraveSetDefaultBrowserUtils.setDefaultBrowser(getActivity());
+                        }
+                        dismiss();
+                    }
+                });
 
         CheckBox dontAskCheckBox = view.findViewById(R.id.checkbox_dont_ask);
 
-        int braveDefaultModalCount = SharedPreferencesManager.getInstance().readInt(
-                BravePreferenceKeys.BRAVE_SET_DEFAULT_BOTTOM_SHEET_COUNT);
+        int braveDefaultModalCount =
+                ChromeSharedPreferences.getInstance()
+                        .readInt(BravePreferenceKeys.BRAVE_SET_DEFAULT_BOTTOM_SHEET_COUNT);
 
         if (braveDefaultModalCount > 2 && !isFromMenu) {
             dontAskCheckBox.setVisibility(View.VISIBLE);
@@ -90,15 +97,16 @@ public class SetDefaultBrowserBottomSheetFragment extends BottomSheetDialogFragm
         });
 
         Button cancelButton = view.findViewById(R.id.btn_cancel);
-        cancelButton.setOnClickListener((new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (dontAskCheckBox.isChecked()) {
-                    BraveSetDefaultBrowserUtils.setBraveDefaultDontAsk();
-                }
-                dismiss();
-            }
-        }));
+        cancelButton.setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (dontAskCheckBox.isChecked()) {
+                            BraveSetDefaultBrowserUtils.setBraveDefaultDontAsk();
+                        }
+                        dismiss();
+                    }
+                });
     }
 
     @Override

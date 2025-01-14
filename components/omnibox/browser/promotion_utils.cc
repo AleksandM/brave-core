@@ -27,30 +27,18 @@ void SortBraveSearchPromotionMatch(AutocompleteResult* result) {
   if (result->size() == 0)
     return;
 
-  ACMatches::iterator brave_search_conversion_match =
-      base::ranges::find_if(*result, IsBraveSearchPromotionMatch);
-
-  // Early return when |result| doesn't include promotion match.
-  if (brave_search_conversion_match == result->end())
-    return;
-
   // If first match is not from search query with default provider,
   // it means there are better matches from other providers.
   // In this case, remove the promotion match from |result|.
   // NOTE: SEARCH_WHAT_YOU_TYPED : The input is a search query (with the
   // default engine).
   if (result->begin()->type != AutocompleteMatchType::SEARCH_WHAT_YOU_TYPED) {
-    result->RemoveMatch(brave_search_conversion_match);
+    result->EraseMatchesWhere(IsBraveSearchPromotionMatch);
     return;
   }
 
-  // Put as a second match for button type. Otherwise, put at last.
-  const int target_index =
-      GetConversionTypeFromMatch(*brave_search_conversion_match) ==
-              ConversionType::kButton
-          ? 1
-          : -1;
-  result->ReorderMatch(brave_search_conversion_match, target_index);
+  // Put banner type match at last.
+  result->MoveMatchToBeLast(IsBraveSearchPromotionMatch);
 }
 
 bool IsBraveSearchPromotionMatch(const AutocompleteMatch& match) {
@@ -58,8 +46,10 @@ bool IsBraveSearchPromotionMatch(const AutocompleteMatch& match) {
 }
 
 ConversionType GetConversionTypeFromMatch(const AutocompleteMatch& match) {
+  // TODO: `GetAdditionalInfoForDebugging()` shouldn't be used for non-debugging
+  // purposes.
   const std::string type_string =
-      match.GetAdditionalInfo(kBraveSearchPromotionTypeProperty);
+      match.GetAdditionalInfoForDebugging(kBraveSearchPromotionTypeProperty);
   // |match| doesn't have type info.
   if (type_string.empty())
     return ConversionType::kNone;
@@ -67,7 +57,8 @@ ConversionType GetConversionTypeFromMatch(const AutocompleteMatch& match) {
   if (!base::StringToInt(type_string, &type_int))
     return ConversionType::kNone;
   const ConversionType type = static_cast<ConversionType>(type_int);
-  DCHECK(type == ConversionType::kButton || type == ConversionType::kBanner);
+  CHECK((type >= ConversionType::kBannerTypeB &&
+         type <= ConversionType::kDDGBannerTypeD));
   return type;
 }
 

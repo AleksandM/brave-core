@@ -1,11 +1,11 @@
 diff --git a/services/network/cors/cors_url_loader.cc b/services/network/cors/cors_url_loader.cc
-index 07469d65375352487311fc9a4def7cfa8b970ebc..fa41f03f82ea8e7148bdae46da9ba0105819e2f6 100644
+index 12bd8b062bd180c9c516ab312d56bbbf8d854f84..06d1829e9c0b52c3c0a9b7a07343f507d8fede40 100644
 --- a/services/network/cors/cors_url_loader.cc
 +++ b/services/network/cors/cors_url_loader.cc
-@@ -726,6 +726,7 @@ void CorsURLLoader::StartRequest() {
-       (fetch_cors_flag_ ||
-        (request_.method != net::HttpRequestHeaders::kGetMethod &&
-         request_.method != net::HttpRequestHeaders::kHeadMethod))) {
+@@ -901,6 +901,7 @@ void CorsURLLoader::StartRequest() {
+   };
+ 
+   if (should_include_origin_header()) {
 +    BRAVE_CORS_URL_LOADER_START_REQUEST
      if (tainted_) {
        request_.headers.SetHeader(net::HttpRequestHeaders::kOrigin,

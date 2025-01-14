@@ -15,18 +15,19 @@ import androidx.test.filters.SmallTest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import org.chromium.base.test.BaseJUnit4ClassRunner;
 import org.chromium.base.test.util.Batch;
+import org.chromium.brave_wallet.mojom.AccountId;
 import org.chromium.brave_wallet.mojom.BlockchainToken;
-import org.chromium.brave_wallet.mojom.BraveWalletConstants;
 import org.chromium.brave_wallet.mojom.CoinType;
 import org.chromium.brave_wallet.mojom.GasEstimation1559;
 import org.chromium.brave_wallet.mojom.NetworkInfo;
-import org.chromium.brave_wallet.mojom.SwapParams;
+import org.chromium.brave_wallet.mojom.RoutePriority;
+import org.chromium.brave_wallet.mojom.SwapQuoteParams;
 import org.chromium.brave_wallet.mojom.TxData;
 import org.chromium.brave_wallet.mojom.TxData1559;
 import org.chromium.chrome.browser.crypto_wallet.util.Utils;
 import org.chromium.chrome.browser.crypto_wallet.util.Validations;
-import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.url.mojom.Url;
 
 import java.util.Arrays;
@@ -34,7 +35,7 @@ import java.util.List;
 import java.util.Locale;
 
 @Batch(Batch.PER_CLASS)
-@RunWith(ChromeJUnit4ClassRunner.class)
+@RunWith(BaseJUnit4ClassRunner.class)
 public class BraveWalletUtilsTest {
     @Test
     @SmallTest
@@ -172,34 +173,6 @@ public class BraveWalletUtilsTest {
         assertEquals(Utils.isJSONValid("'name': 'brave'"), false);
     }
 
-    @Test
-    @SmallTest
-    public void getContractAddressTest() {
-        assertEquals(Utils.getContractAddress(BraveWalletConstants.GOERLI_CHAIN_ID, "USDC",
-                             "0xdef1c0ded9bec7f1a1670819833240f027b25eff"),
-                "0x2f3a40a3db8a7e3d09b0adfefbce4f6f81927557");
-        assertEquals(Utils.getContractAddress(BraveWalletConstants.GOERLI_CHAIN_ID, "DAI",
-                             "0xdef1c0ded9bec7f1a1670819833240f027b25eff"),
-                "0x73967c6a0904aa032c103b4104747e88c566b1a2");
-        assertEquals(Utils.getContractAddress(BraveWalletConstants.GOERLI_CHAIN_ID, "BAT",
-                             "0xdef1c0ded9bec7f1a1670819833240f027b25eff"),
-                "0xdef1c0ded9bec7f1a1670819833240f027b25eff");
-        assertEquals(Utils.getContractAddress(BraveWalletConstants.SEPOLIA_CHAIN_ID, "USDC",
-                             "0xdef1c0ded9bec7f1a1670819833240f027b25eff"),
-                "0xdef1c0ded9bec7f1a1670819833240f027b25eff");
-    }
-
-    @Test
-    @SmallTest
-    public void getGoerliContractAddressTest() {
-        assertEquals(Utils.getGoerliContractAddress("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
-                "0x2f3a40a3db8a7e3d09b0adfefbce4f6f81927557");
-        assertEquals(Utils.getGoerliContractAddress("0x6b175474e89094c44da98b954eedeac495271d0f"),
-                "0x73967c6a0904aa032c103b4104747e88c566b1a2");
-        assertEquals(
-                Utils.getGoerliContractAddress("0xdef1c0ded9bec7f1a1670819833240f027b25eff"), "");
-    }
-
     private static String getStackTrace(Exception ex) {
         String stack = "";
         StackTraceElement[] st = ex.getStackTrace();
@@ -228,10 +201,15 @@ public class BraveWalletUtilsTest {
                         continue;
                     }
                     if (v == null) {
-                        String message = "Check that " + varName + " is initialized everywhere\n"
-                                + "in Java files, where BlockchainToken object is created. It\n"
-                                + "could be safely added to the above if to skip that var on checks\n"
-                                + "after that.";
+                        String message =
+                                "Check that "
+                                        + varName
+                                        + " is initialized everywhere\n"
+                                        + "in Java files, where BlockchainToken object is created."
+                                        + " It\n"
+                                        + "could be safely added to the above if to skip that var"
+                                        + " on checks\n"
+                                        + "after that.";
                         fail(message);
                     }
                 }
@@ -261,8 +239,8 @@ public class BraveWalletUtilsTest {
 
     @Test
     @SmallTest
-    public void validateSwapParamsTest() {
-        SwapParams testStruct = new SwapParams();
+    public void validateSwapQuoteParamsTest() {
+        SwapQuoteParams testStruct = new SwapQuoteParams();
         java.lang.reflect.Field[] fields = testStruct.getClass().getDeclaredFields();
         for (java.lang.reflect.Field f : fields) {
             try {
@@ -270,16 +248,28 @@ public class BraveWalletUtilsTest {
                 java.lang.Object v = f.get(testStruct);
                 if (!t.isPrimitive()) {
                     String varName = f.getName();
-                    if (varName.equals("takerAddress") || varName.equals("sellAmount")
-                            || varName.equals("buyAmount") || varName.equals("buyToken")
-                            || varName.equals("sellToken") || varName.equals("gasPrice")) {
+                    if (varName.equals("fromAccountId")
+                            || varName.equals("fromChainId")
+                            || varName.equals("fromToken")
+                            || varName.equals("fromAmount")
+                            || varName.equals("toAccountId")
+                            || varName.equals("toChainId")
+                            || varName.equals("toToken")
+                            || varName.equals("toAmount")
+                            || varName.equals("slippagePercentage")
+                            || varName.equals("routePriority")) {
                         continue;
                     }
                     if (v == null) {
-                        String message = "Check that " + varName + " is initialized everywhere\n"
-                                + "in Java files, where SwapParams object is created. It\n"
-                                + "could be safely added to the above if to skip that var on checks\n"
-                                + "after that.";
+                        String message =
+                                "Check that "
+                                        + varName
+                                        + " is initialized everywhere\n"
+                                        + "in Java files, where SwapQuoteParams object is created."
+                                        + " It\n"
+                                        + "could be safely added to the above if to skip that var"
+                                        + " on checks\n"
+                                        + "after that.";
                         fail(message);
                     }
                 }
@@ -288,21 +278,31 @@ public class BraveWalletUtilsTest {
                 // interested in public members of a mojom structure
             }
         }
-        testStruct.takerAddress = "";
-        testStruct.sellAmount = "";
-        testStruct.buyAmount = "";
-        testStruct.buyToken = "";
-        testStruct.sellToken = "";
-        testStruct.gasPrice = "";
+        testStruct.fromAccountId = new AccountId();
+        testStruct.fromAccountId.address = "";
+        testStruct.fromAccountId.uniqueKey = "";
+        testStruct.fromChainId = "";
+        testStruct.fromToken = "";
+        testStruct.fromAmount = "";
+        testStruct.toAccountId = new AccountId();
+        testStruct.toAccountId.address = "";
+        testStruct.toAccountId.uniqueKey = "";
+        testStruct.toChainId = "";
+        testStruct.toToken = "";
+        testStruct.toAmount = "";
+        testStruct.slippagePercentage = "";
+        testStruct.routePriority = RoutePriority.CHEAPEST;
+
         try {
             java.nio.ByteBuffer byteBuffer = testStruct.serialize();
-            SwapParams testStructDeserialized = SwapParams.deserialize(byteBuffer);
+            SwapQuoteParams testStructDeserialized = SwapQuoteParams.deserialize(byteBuffer);
         } catch (Exception exc) {
-            String message = "Check that a variable with a type in the exception below is\n"
-                    + "initialized everywhere in Java files, where SwapParams object is\n"
-                    + "created('git grep \"new SwapParams\"' inside src/brave).\n"
-                    + "Initialisation of it could be safely added to the test to pass it,\n"
-                    + "but only after all places where it's created are fixed.\n";
+            String message =
+                    "Check that a variable with a type in the exception below is\n"
+                        + "initialized everywhere in Java files, where SwapQuoteParams object is\n"
+                        + "created('git grep \"new SwapQuoteParams\"' inside src/brave).\n"
+                        + "Initialisation of it could be safely added to the test to pass it,\n"
+                        + "but only after all places where it's created are fixed.\n";
             fail(message + "\n" + getStackTrace(exc));
         }
     }
@@ -325,10 +325,14 @@ public class BraveWalletUtilsTest {
                         continue;
                     }
                     if (v == null) {
-                        String message = "Check that " + varName + " is initialized everywhere\n"
-                                + "in Java files, where TxData object is created. It\n"
-                                + "could be safely added to the above if to skip that var on checks\n"
-                                + "after that.";
+                        String message =
+                                "Check that "
+                                        + varName
+                                        + " is initialized everywhere\n"
+                                        + "in Java files, where TxData object is created. It\n"
+                                        + "could be safely added to the above if to skip that var"
+                                        + " on checks\n"
+                                        + "after that.";
                         fail(message);
                     }
                 }
@@ -378,10 +382,15 @@ public class BraveWalletUtilsTest {
                         continue;
                     }
                     if (v == null) {
-                        String message = "Check that " + varName + " is initialized everywhere\n"
-                                + "in Java files, where GasEstimation1559 object is created. It\n"
-                                + "could be safely added to the above if to skip that var on checks\n"
-                                + "after that.";
+                        String message =
+                                "Check that "
+                                        + varName
+                                        + " is initialized everywhere\n"
+                                        + "in Java files, where GasEstimation1559 object is"
+                                        + " created. It\n"
+                                        + "could be safely added to the above if to skip that var"
+                                        + " on checks\n"
+                                        + "after that.";
                         fail(message);
                     }
                 }
@@ -427,10 +436,14 @@ public class BraveWalletUtilsTest {
                         continue;
                     }
                     if (v == null) {
-                        String message = "Check that " + varName + " is initialized everywhere\n"
-                                + "in Java files, where TxData1559 object is created. It\n"
-                                + "could be safely added to the above if to skip that var on checks\n"
-                                + "after that.";
+                        String message =
+                                "Check that "
+                                        + varName
+                                        + " is initialized everywhere\n"
+                                        + "in Java files, where TxData1559 object is created. It\n"
+                                        + "could be safely added to the above if to skip that var"
+                                        + " on checks\n"
+                                        + "after that.";
                         fail(message);
                     }
                 }
@@ -481,18 +494,26 @@ public class BraveWalletUtilsTest {
                 java.lang.Object v = f.get(testStruct);
                 if (!t.isPrimitive()) {
                     String varName = f.getName();
-                    if (varName.equals("chainId") || varName.equals("chainName")
-                            || varName.equals("blockExplorerUrls") || varName.equals("iconUrls")
+                    if (varName.equals("chainId")
+                            || varName.equals("chainName")
+                            || varName.equals("blockExplorerUrls")
+                            || varName.equals("iconUrls")
                             || varName.equals("rpcEndpoints")
-                            || varName.equals("activeRpcEndpointIndex") || varName.equals("symbol")
-                            || varName.equals("symbolName") || varName.equals("isEip1559")) {
+                            || varName.equals("supportedKeyrings")
+                            || varName.equals("activeRpcEndpointIndex")
+                            || varName.equals("symbol")
+                            || varName.equals("symbolName")) {
                         continue;
                     }
                     if (v == null) {
-                        String message = "Check that " + varName + " is initialized everywhere\n"
-                                + "in Java files, where NetworkInfo object is created. It\n"
-                                + "could be safely added to the above if to skip that var on checks\n"
-                                + "after that.";
+                        String message =
+                                "Check that "
+                                        + varName
+                                        + " is initialized everywhere\n"
+                                        + "in Java files, where NetworkInfo object is created. It\n"
+                                        + "could be safely added to the above if to skip that var"
+                                        + " on checks\n"
+                                        + "after that.";
                         fail(message);
                     }
                 }
@@ -502,6 +523,7 @@ public class BraveWalletUtilsTest {
             }
         }
         testStruct.chainId = "";
+        testStruct.supportedKeyrings = new int[0];
         testStruct.chainName = "";
         testStruct.blockExplorerUrls = new String[0];
         testStruct.iconUrls = new String[0];

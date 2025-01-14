@@ -10,7 +10,7 @@ declare namespace RewardsInternals {
 
   export interface State {
     balance: import(
-      'gen/brave/components/brave_rewards/common/mojom/ledger_types.mojom.m.js'
+      'gen/brave/components/brave_rewards/common/mojom/rewards.mojom.m.js'
     ).Balance
     info: {
       isKeyInfoSeedValid: boolean
@@ -20,10 +20,9 @@ declare namespace RewardsInternals {
       walletCreationEnvironment?: Environment
     }
     contributions: ContributionInfo[]
-    promotions: Promotion[]
     log: string
     fullLog: string
-    externalWallet: ExternalWallet
+    externalWallet?: ExternalWallet
     eventLogs: EventLog[]
     adDiagnostics: AdDiagnostics
     environment: Environment
@@ -47,19 +46,7 @@ declare namespace RewardsInternals {
     contributedAmount: number
   }
 
-  export interface Promotion {
-    amount: number
-    promotionId: string
-    expiresAt: number
-    type: number
-    status: number
-    claimedAt: number
-    legacyClaimed: boolean
-    claimId: string
-    version: number
-  }
-
-  type WalletStatus = import('gen/brave/components/brave_rewards/common/mojom/ledger_types.mojom.m.js').WalletStatus
+  type WalletStatus = import('gen/brave/components/brave_rewards/common/mojom/rewards_types.mojom.m.js').WalletStatus
 
   export type WalletType = 'uphold' | 'bitflyer' | 'gemini'
 
@@ -87,5 +74,5 @@ declare namespace RewardsInternals {
     diagnosticId: string
   }
 
-  type Environment = import('gen/brave/components/brave_rewards/common/mojom/ledger_types.mojom.m.js').Environment
+  type Environment = import('gen/brave/components/brave_rewards/common/mojom/rewards_types.mojom.m.js').Environment
 }

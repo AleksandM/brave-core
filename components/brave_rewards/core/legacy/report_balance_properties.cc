@@ -5,11 +5,12 @@
 
 #include "brave/components/brave_rewards/core/legacy/report_balance_properties.h"
 
+#include <string_view>
+
 #include "base/check.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/logging.h"
-#include "base/notreached.h"
 #include "brave/components/brave_rewards/core/legacy/bat_util.h"
 
 namespace brave_rewards::internal {
@@ -17,14 +18,14 @@ namespace brave_rewards::internal {
 namespace {
 
 // Do not change these values as they are required to transition legacy state
-const char kAutoContributionsKey[] = "auto_contribute";
-const char kAdEarningsKey[] = "earning_from_ads";
-const char kGrantsKey[] = "grants";
-const char kOneTimeDonationsKey[] = "one_time_donation";
-const char kRecurringDonationsKey[] = "recurring_donation";
+constexpr char kAutoContributionsKey[] = "auto_contribute";
+constexpr char kAdEarningsKey[] = "earning_from_ads";
+constexpr char kGrantsKey[] = "grants";
+constexpr char kOneTimeDonationsKey[] = "one_time_donation";
+constexpr char kRecurringDonationsKey[] = "recurring_donation";
 
 bool GetPropertyFromDict(const base::Value::Dict& dict,
-                         base::StringPiece key,
+                         std::string_view key,
                          double* value) {
   DCHECK(value);
 
@@ -91,7 +92,6 @@ bool ReportBalanceProperties::FromValue(const base::Value::Dict& dict) {
   bool result = GetPropertyFromDict(dict, kGrantsKey, &grants);
 
   if (!result) {
-    NOTREACHED();
     return false;
   }
 
@@ -99,7 +99,6 @@ bool ReportBalanceProperties::FromValue(const base::Value::Dict& dict) {
   result = GetPropertyFromDict(dict, kAdEarningsKey, &ad_earnings);
 
   if (!result) {
-    NOTREACHED();
     return false;
   }
 
@@ -108,7 +107,6 @@ bool ReportBalanceProperties::FromValue(const base::Value::Dict& dict) {
       GetPropertyFromDict(dict, kAutoContributionsKey, &auto_contributions);
 
   if (!result) {
-    NOTREACHED();
     return false;
   }
 
@@ -117,7 +115,6 @@ bool ReportBalanceProperties::FromValue(const base::Value::Dict& dict) {
       GetPropertyFromDict(dict, kRecurringDonationsKey, &recurring_donations);
 
   if (!result) {
-    NOTREACHED();
     return false;
   }
 
@@ -125,7 +122,6 @@ bool ReportBalanceProperties::FromValue(const base::Value::Dict& dict) {
   result = GetPropertyFromDict(dict, kOneTimeDonationsKey, &one_time_donations);
 
   if (!result) {
-    NOTREACHED();
     return false;
   }
 

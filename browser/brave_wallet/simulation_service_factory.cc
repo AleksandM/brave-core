@@ -5,10 +5,13 @@
 
 #include "brave/browser/brave_wallet/simulation_service_factory.h"
 
+#include <memory>
 #include <utility>
 
 #include "base/no_destructor.h"
 #include "brave/browser/brave_wallet/brave_wallet_context_utils.h"
+#include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/simulation_service.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
@@ -59,22 +62,24 @@ void SimulationServiceFactory::BindForContext(
 SimulationServiceFactory::SimulationServiceFactory()
     : BrowserContextKeyedServiceFactory(
           "SimulationService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          BrowserContextDependencyManager::GetInstance()) {
+  DependsOn(BraveWalletServiceFactory::GetInstance());
+}
 
 SimulationServiceFactory::~SimulationServiceFactory() = default;
 
-KeyedService* SimulationServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SimulationServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  auto* default_storage_partition = context->GetDefaultStoragePartition();
-  auto shared_url_loader_factory =
-      default_storage_partition->GetURLLoaderFactoryForBrowserProcess();
-
-  return new SimulationService(shared_url_loader_factory);
+  return std::make_unique<SimulationService>(
+      context->GetDefaultStoragePartition()
+          ->GetURLLoaderFactoryForBrowserProcess(),
+      BraveWalletServiceFactory::GetServiceForContext(context));
 }
 
 content::BrowserContext* SimulationServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return GetBrowserContextRedirectedInIncognito(context);
 }
 
 }  // namespace brave_wallet

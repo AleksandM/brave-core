@@ -24,7 +24,8 @@ class FilTransaction;
 class FilTxMeta : public TxMeta {
  public:
   FilTxMeta();
-  explicit FilTxMeta(std::unique_ptr<FilTransaction> tx);
+  FilTxMeta(const mojom::AccountIdPtr& from,
+            std::unique_ptr<FilTransaction> tx);
   FilTxMeta(const FilTxMeta&) = delete;
   FilTxMeta operator=(const FilTxMeta&) = delete;
   bool operator==(const FilTxMeta&) const;
@@ -33,6 +34,7 @@ class FilTxMeta : public TxMeta {
   // TxMeta
   base::Value::Dict ToValue() const override;
   mojom::TransactionInfoPtr ToTransactionInfo() const override;
+  mojom::CoinType GetCoinType() const override;
 
   FilTransaction* tx() const { return tx_.get(); }
   void set_tx(std::unique_ptr<FilTransaction> tx) { tx_ = std::move(tx); }

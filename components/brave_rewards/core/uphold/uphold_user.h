@@ -11,8 +11,14 @@
 namespace brave_rewards::internal::uphold {
 
 struct User {
-  std::string name = "";
-  std::string member_id = "";
+  User();
+
+  User(const User&);
+  User& operator=(const User&);
+
+  std::string name;
+  std::string member_id;
+  std::string country_id;
   bool bat_not_allowed = true;
 };
 

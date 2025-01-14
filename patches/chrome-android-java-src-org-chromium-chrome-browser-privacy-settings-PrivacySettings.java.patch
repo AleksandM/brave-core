@@ -1,26 +1,26 @@
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java b/chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java
-index a9da397ba2eaf4162ec45152856f9a2a8c74ec0d..1effc179def1b8d55145042608564fc1b1b1529d 100644
+index e3b5027f95fba7619f4ff58cd51a343a9c105043..2744dd404dc879c9915eaac9aebf0df670a854f9 100644
 --- a/chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/privacy/settings/PrivacySettings.java
-@@ -60,7 +60,7 @@ import org.chromium.ui.text.SpanApplier;
- /**
-  * Fragment to keep track of the all the privacy related preferences.
-  */
--public class PrivacySettings extends PreferenceFragmentCompat
+@@ -55,7 +55,7 @@ import org.chromium.components.user_prefs.UserPrefs;
+ import org.chromium.ui.text.SpanApplier;
+ 
+ /** Fragment to keep track of the all the privacy related preferences. */
+-public class PrivacySettings extends ChromeBaseSettingsFragment
 +public class PrivacySettings extends org.chromium.chrome.browser.settings.BravePreferenceFragment
-         implements Preference.OnPreferenceChangeListener, FragmentHelpAndFeedbackLauncher,
-                    ProfileDependentSetting {
+         implements Preference.OnPreferenceChangeListener {
      private static final String PREF_CAN_MAKE_PAYMENT = "can_make_payment";
-@@ -332,6 +332,7 @@ public class PrivacySettings extends PreferenceFragmentCompat
+     private static final String PREF_PRELOAD_PAGES = "preload_pages";
+@@ -428,6 +428,7 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
      @Override
      public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
          menu.clear();
 +        super.onCreateOptionsMenu(menu, inflater);
          MenuItem help =
                  menu.add(Menu.NONE, R.id.menu_id_targeted_help, Menu.NONE, R.string.menu_help);
-         help.setIcon(TraceEventVectorDrawableCompat.create(
-@@ -345,7 +346,7 @@ public class PrivacySettings extends PreferenceFragmentCompat
-                     getActivity(), getString(R.string.help_context_privacy), null);
+         help.setIcon(
+@@ -442,7 +443,7 @@ public class PrivacySettings extends ChromeBaseSettingsFragment
+                     .show(getActivity(), getString(R.string.help_context_privacy), null);
              return true;
          }
 -        return false;

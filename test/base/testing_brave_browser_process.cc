@@ -7,16 +7,20 @@
 
 #include <utility>
 
-#include "brave/components/brave_shields/browser/ad_block_service.h"
-#include "brave/components/ipfs/buildflags/buildflags.h"
+#include "base/files/file_path.h"
+#include "base/functional/callback_helpers.h"
+#include "base/memory/scoped_refptr.h"
+#include "base/task/sequenced_task_runner.h"
+#include "base/task/thread_pool.h"
+#include "brave/components/brave_shields/content/browser/ad_block_service.h"
+#include "brave/components/brave_vpn/common/buildflags/buildflags.h"
 #include "brave/components/tor/buildflags/buildflags.h"
 
+#if BUILDFLAG(ENABLE_BRAVE_VPN)
+#include "brave/components/brave_vpn/browser/connection/brave_vpn_connection_manager.h"
+#endif
 namespace tor {
 class BraveTorClientUpdater;
-}
-
-namespace ipfs {
-class BraveIpfsClientUpdater;
 }
 
 // static
@@ -54,35 +58,34 @@ TestingBraveBrowserProcess::~TestingBraveBrowserProcess() = default;
 void TestingBraveBrowserProcess::StartBraveServices() {}
 
 brave_shields::AdBlockService* TestingBraveBrowserProcess::ad_block_service() {
-  DCHECK(ad_block_service_);
+  if (!ad_block_service_) {
+    scoped_refptr<base::SequencedTaskRunner> task_runner(
+        base::ThreadPool::CreateSequencedTaskRunner(
+            {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
+             base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}));
+    ad_block_service_ = std::make_unique<brave_shields::AdBlockService>(
+        /*local_state*/ nullptr, /*locale*/ "en", /*component_updater*/ nullptr,
+        task_runner,
+        /*subscription_download_manager_getter*/ base::DoNothing(),
+        /*profile_dir*/ base::FilePath(FILE_PATH_LITERAL("")));
+  }
   return ad_block_service_.get();
 }
 
-#if BUILDFLAG(ENABLE_GREASELION)
-greaselion::GreaselionDownloadService*
-TestingBraveBrowserProcess::greaselion_download_service() {
-  NOTREACHED();
-  return nullptr;
-}
-#endif
-
 debounce::DebounceComponentInstaller*
 TestingBraveBrowserProcess::debounce_component_installer() {
-  NOTREACHED();
   return nullptr;
 }
 
 #if BUILDFLAG(ENABLE_REQUEST_OTR)
 request_otr::RequestOTRComponentInstallerPolicy*
 TestingBraveBrowserProcess::request_otr_component_installer() {
-  NOTREACHED();
   return nullptr;
 }
 #endif
 
 brave::URLSanitizerComponentInstaller*
 TestingBraveBrowserProcess::URLSanitizerComponentInstaller() {
-  NOTREACHED();
   return nullptr;
 }
 
@@ -96,15 +99,8 @@ TestingBraveBrowserProcess::localhost_permission_component() {
   return nullptr;
 }
 
-brave_shields::HTTPSEverywhereService*
-TestingBraveBrowserProcess::https_everywhere_service() {
-  NOTREACHED();
-  return nullptr;
-}
-
 brave_component_updater::LocalDataFilesService*
 TestingBraveBrowserProcess::local_data_files_service() {
-  NOTREACHED();
   return nullptr;
 }
 
@@ -119,70 +115,55 @@ TestingBraveBrowserProcess::tor_pluggable_transport_updater() {
 }
 #endif
 
-#if BUILDFLAG(ENABLE_IPFS)
-ipfs::BraveIpfsClientUpdater*
-TestingBraveBrowserProcess::ipfs_client_updater() {
-  return nullptr;
-}
-#endif
 
 p3a::P3AService* TestingBraveBrowserProcess::p3a_service() {
-  NOTREACHED();
   return nullptr;
 }
 
 brave::BraveReferralsService*
 TestingBraveBrowserProcess::brave_referrals_service() {
-  NOTREACHED();
   return nullptr;
 }
 
 brave_stats::BraveStatsUpdater*
 TestingBraveBrowserProcess::brave_stats_updater() {
-  NOTREACHED();
   return nullptr;
 }
 
 brave_ads::BraveStatsHelper*
 TestingBraveBrowserProcess::ads_brave_stats_helper() {
-  NOTREACHED();
   return nullptr;
 }
 
 ntp_background_images::NTPBackgroundImagesService*
 TestingBraveBrowserProcess::ntp_background_images_service() {
-  NOTREACHED();
   return nullptr;
 }
 
 #if BUILDFLAG(ENABLE_SPEEDREADER)
 speedreader::SpeedreaderRewriterService*
 TestingBraveBrowserProcess::speedreader_rewriter_service() {
-  NOTREACHED();
   return nullptr;
 }
 #endif
 
 brave_ads::ResourceComponent* TestingBraveBrowserProcess::resource_component() {
-  NOTREACHED();
-  return nullptr;
-}
-
-brave::BraveFarblingService*
-TestingBraveBrowserProcess::brave_farbling_service() {
-  NOTREACHED();
   return nullptr;
 }
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
-brave_vpn::BraveVPNOSConnectionAPI*
-TestingBraveBrowserProcess::brave_vpn_os_connection_api() {
-  return nullptr;
+brave_vpn::BraveVPNConnectionManager*
+TestingBraveBrowserProcess::brave_vpn_connection_manager() {
+  return brave_vpn_connection_manager_.get();
+}
+void TestingBraveBrowserProcess::SetBraveVPNConnectionManagerForTesting(
+    std::unique_ptr<brave_vpn::BraveVPNConnectionManager> manager) {
+  brave_vpn_connection_manager_ = std::move(manager);
 }
 #endif
 
-misc_metrics::MenuMetrics* TestingBraveBrowserProcess::menu_metrics() {
-  NOTREACHED();
+misc_metrics::ProcessMiscMetrics*
+TestingBraveBrowserProcess::process_misc_metrics() {
   return nullptr;
 }
 
@@ -190,7 +171,6 @@ void TestingBraveBrowserProcess::SetAdBlockService(
     std::unique_ptr<brave_shields::AdBlockService> service) {
   ad_block_service_ = std::move(service);
 }
-
 ///////////////////////////////////////////////////////////////////////////////
 
 TestingBraveBrowserProcessInitializer::TestingBraveBrowserProcessInitializer() {

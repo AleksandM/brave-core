@@ -5,39 +5,42 @@
 
 #include "brave/components/brave_rewards/core/state/state_migration_v13.h"
 
+#include <utility>
 #include <vector>
 
 #include "base/ranges/algorithm.h"
 #include "brave/components/brave_rewards/core/global_constants.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/wallet/wallet_util.h"
 
 namespace brave_rewards::internal::state {
 
-StateMigrationV13::StateMigrationV13(LedgerImpl& ledger) : ledger_(ledger) {}
+StateMigrationV13::StateMigrationV13(RewardsEngine& engine) : engine_(engine) {}
 
 StateMigrationV13::~StateMigrationV13() = default;
 
 bool StateMigrationV13::MigrateExternalWallet(const std::string& wallet_type) {
-  if (!wallet::GetWalletIf(*ledger_, wallet_type,
+  if (!wallet::GetWalletIf(*engine_, wallet_type,
                            {mojom::WalletStatus::kConnected})) {
-    BLOG(1, "User doesn't have a connected " << wallet_type << " wallet.");
+    engine_->Log(FROM_HERE)
+        << "User doesn't have a connected " << wallet_type << " wallet.";
   } else {
-    ledger_->client()->ExternalWalletConnected();
+    engine_->client()->ExternalWalletConnected();
   }
 
   return true;
 }
 
-void StateMigrationV13::Migrate(LegacyResultCallback callback) {
-  callback(base::ranges::all_of(
-               std::vector{constant::kWalletBitflyer, constant::kWalletGemini,
-                           constant::kWalletUphold},
-               [this](const std::string& wallet_type) {
-                 return MigrateExternalWallet(wallet_type);
-               })
-               ? mojom::Result::LEDGER_OK
-               : mojom::Result::LEDGER_ERROR);
+void StateMigrationV13::Migrate(ResultCallback callback) {
+  std::move(callback).Run(
+      base::ranges::all_of(
+          std::vector{constant::kWalletBitflyer, constant::kWalletGemini,
+                      constant::kWalletUphold},
+          [this](const std::string& wallet_type) {
+            return MigrateExternalWallet(wallet_type);
+          })
+          ? mojom::Result::OK
+          : mojom::Result::FAILED);
 }
 
 }  // namespace brave_rewards::internal::state

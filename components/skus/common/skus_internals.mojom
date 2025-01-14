@@ -5,8 +5,15 @@
 
 module skus.mojom;
 
+import "brave/components/skus/common/skus_sdk.mojom";
+
 interface SkusInternals {
   GetEventLog() => (string response);
   GetSkusState() => (string response);
+  GetVpnState() => (string response);
+  GetLeoState() => (string response);
+  CopySkusStateToClipboard();
+  DownloadSkusState();
   ResetSkusState();
+  CreateOrderFromReceipt(string domain, string receipt) => (SkusResult response);
 };

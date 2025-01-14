@@ -9,7 +9,8 @@
 #include "brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_script.h"
 #include "brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/html/node_html_element.h"
 #include "brave/third_party/blink/renderer/core/brave_page_graph/graphml.h"
-#include "third_party/blink/renderer/platform/wtf/text/text_stream.h"
+#include "brave/third_party/blink/renderer/core/brave_page_graph/types.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder_stream.h"
 
 namespace brave_page_graph {
 
@@ -17,10 +18,12 @@ EdgeEventListenerAction::EdgeEventListenerAction(
     GraphItemContext* context,
     NodeActor* out_node,
     NodeHTMLElement* in_node,
+    const FrameId& frame_id,
     const String& event_type,
     const EventListenerId listener_id,
     NodeActor* listener_script)
     : GraphEdge(context, out_node, in_node),
+      frame_id_(frame_id),
       event_type_(event_type),
       listener_id_(listener_id),
       listener_script_(listener_script) {}
@@ -35,22 +38,24 @@ ScriptId EdgeEventListenerAction::GetListenerScriptId() const {
 }
 
 ItemDesc EdgeEventListenerAction::GetItemDesc() const {
-  WTF::TextStream ts;
+  StringBuilder ts;
   ts << GraphEdge::GetItemDesc() << " [" << event_type_ << "]"
      << " [listener id: " << listener_id_ << "]"
      << " [listener script id: " << GetListenerScriptId() << "]";
-  return ts.Release();
+  return ts.ReleaseString();
 }
 
 void EdgeEventListenerAction::AddGraphMLAttributes(
     xmlDocPtr doc,
     xmlNodePtr parent_node) const {
   GraphEdge::AddGraphMLAttributes(doc, parent_node);
+  GraphMLAttrDefForType(kGraphMLAttrDefEdgeFrameId)
+      ->AddValueNode(doc, parent_node, frame_id_);
   GraphMLAttrDefForType(kGraphMLAttrDefKey)
       ->AddValueNode(doc, parent_node, event_type_);
   GraphMLAttrDefForType(kGraphMLAttrDefEventListenerId)
       ->AddValueNode(doc, parent_node, listener_id_);
-  GraphMLAttrDefForType(kGraphMLAttrDefScriptIdForEdge)
+  GraphMLAttrDefForType(kGraphMLAttrDefEdgeScriptId)
       ->AddValueNode(doc, parent_node, GetListenerScriptId());
 }
 

@@ -14,26 +14,25 @@ namespace brave_ads::database {
 
 void DeleteCreativeNewTabPageAds() {
   const table::CreativeNewTabPageAds database_table;
-  database_table.Delete(base::BindOnce([](const bool success) {
+  database_table.Delete(base::BindOnce([](bool success) {
     if (!success) {
-      return BLOG(0, "Failed to delete creative new tab page ads");
+      BLOG(0, "Failed to delete creative new tab page ads");
     }
   }));
 }
 
 void DeleteCreativeNewTabPageAdWallpapers() {
   const table::CreativeNewTabPageAdWallpapers database_table;
-  database_table.Delete(base::BindOnce([](const bool success) {
+  database_table.Delete(base::BindOnce([](bool success) {
     if (!success) {
-      return BLOG(0, "Failed to delete creative new tab page ad wallpapers");
+      BLOG(0, "Failed to delete creative new tab page ad wallpapers");
     }
   }));
 }
 
 void SaveCreativeNewTabPageAds(const CreativeNewTabPageAdList& creative_ads) {
   table::CreativeNewTabPageAds database_table;
-
-  database_table.Save(creative_ads, base::BindOnce([](const bool success) {
+  database_table.Save(creative_ads, base::BindOnce([](bool success) {
                         if (!success) {
                           return BLOG(
                               0, "Failed to save creative new tab page ads");

@@ -5,26 +5,86 @@
 
 package org.chromium.chrome.browser.vpn.models;
 
-public class BraveVpnServerRegion {
-    private String mContinent;
-    private String mName;
-    private String mNamePretty;
+import androidx.annotation.NonNull;
 
-    public BraveVpnServerRegion(String continent, String name, String namePretty) {
+public class BraveVpnServerRegion {
+    private final boolean mIsAutoSelected;
+    private final String mCountry;
+    private final String mContinent;
+    private final String mCountryIsoCode;
+    private final String mRegionName;
+    private final String mRegionNamePretty;
+    private final String mRegionPrecision;
+
+    public BraveVpnServerRegion(
+            boolean isAutoSelected,
+            String country,
+            String continent,
+            String countryIsoCode,
+            String regionName,
+            String regionNamePretty,
+            String regionPrecision) {
+        this.mIsAutoSelected = isAutoSelected;
+        this.mCountry = country;
         this.mContinent = continent;
-        this.mName = name;
-        this.mNamePretty = namePretty;
+        this.mCountryIsoCode = countryIsoCode;
+        this.mRegionName = regionName;
+        this.mRegionNamePretty = regionNamePretty;
+        this.mRegionPrecision = regionPrecision;
+    }
+
+    public boolean isAutoSelected() {
+        return mIsAutoSelected;
+    }
+
+    public String getCountry() {
+        return mCountry;
     }
 
     public String getContinent() {
         return mContinent;
     }
 
-    public String getName() {
-        return mName;
+    public String getCountryIsoCode() {
+        return mCountryIsoCode;
     }
 
-    public String getNamePretty() {
-        return mNamePretty;
+    public String getRegionName() {
+        return mRegionName;
+    }
+
+    public String getRegionNamePretty() {
+        return mRegionNamePretty;
+    }
+
+    public String getRegionPrecision() {
+        return mRegionPrecision;
+    }
+
+    @NonNull
+    @Override
+    public String toString() {
+        return "BraveVpnServerRegion{"
+                + "mIsAutoSelected="
+                + mIsAutoSelected
+                + ", mCountry='"
+                + mCountry
+                + '\''
+                + ", mContinent='"
+                + mContinent
+                + '\''
+                + ", mCountryIsoCode='"
+                + mCountryIsoCode
+                + '\''
+                + ", mRegionName='"
+                + mRegionName
+                + '\''
+                + ", mRegionNamePretty='"
+                + mRegionNamePretty
+                + '\''
+                + ", mRegionPrecision='"
+                + mRegionPrecision
+                + '\''
+                + '}';
     }
 }

@@ -4,9 +4,12 @@
  * you can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "third_party/blink/renderer/modules/speech/speech_synthesis.h"
+
+#include <array>
+
+#include "base/compiler_specific.h"
 #include "brave/third_party/blink/renderer/brave_farbling_constants.h"
 #include "brave/third_party/blink/renderer/core/farbling/brave_session_cache.h"
-#include "third_party/abseil-cpp/absl/random/random.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
 
 #define OnSetVoiceList OnSetVoiceList_ChromiumImpl
@@ -19,7 +22,9 @@ void SpeechSynthesis::OnSetVoiceList(
     Vector<mojom::blink::SpeechSynthesisVoicePtr> mojom_voices) {
   voice_list_.clear();
   BraveFarblingLevel farbling_level = brave::GetBraveFarblingLevelFor(
-      GetExecutionContext(), BraveFarblingLevel::OFF);
+      GetExecutionContext(),
+      ContentSettingsType::BRAVE_WEBCOMPAT_SPEECH_SYNTHESIS,
+      BraveFarblingLevel::OFF);
   if (farbling_level == BraveFarblingLevel::OFF) {
     // farbling off -> call upstream function
     OnSetVoiceList_ChromiumImpl(std::move(mojom_voices));
@@ -39,12 +44,11 @@ void SpeechSynthesis::OnSetVoiceList(
         fake_voice->is_default = false;
         brave::FarblingPRNG prng = brave::BraveSessionCache::From(*context)
                                        .MakePseudoRandomGenerator();
-        const char* kFakeNames[] = {
-            "Hubert", "Vernon", "Rudolph",   "Clayton",    "Irving",
-            "Wilson", "Alva",   "Harley",    "Beauregard", "Cleveland",
-            "Cecil",  "Reuben", "Sylvester", "Jasper"};
-        const int kFakeNamesCount = std::size(kFakeNames);
-        fake_voice->name = WTF::String(kFakeNames[prng() % kFakeNamesCount]);
+        auto kFakeNames = std::to_array<const char*>(
+            {"Hubert", "Vernon", "Rudolph", "Clayton", "Irving", "Wilson",
+             "Alva", "Harley", "Beauregard", "Cleveland", "Cecil", "Reuben",
+             "Sylvester", "Jasper"});
+        fake_voice->name = WTF::String(kFakeNames[prng() % kFakeNames.size()]);
       }
     }
     voice_list_.push_back(

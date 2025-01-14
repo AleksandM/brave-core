@@ -7,8 +7,7 @@
 
 #include "base/feature_override.h"
 
-namespace permissions {
-namespace features {
+namespace permissions::features {
 
 // Enables the option of an automatic permission expiration time.
 BASE_FEATURE(kPermissionLifetime,
@@ -20,10 +19,9 @@ OVERRIDE_FEATURE_DEFAULT_STATES({{
      base::FEATURE_DISABLED_BY_DEFAULT},
 #if !BUILDFLAG(IS_ANDROID)
     {kPermissionsPromptSurvey, base::FEATURE_DISABLED_BY_DEFAULT},
-    {kPermissionStorageAccessAPI, base::FEATURE_DISABLED_BY_DEFAULT},
-    {kRecordPermissionExpirationTimestamps, base::FEATURE_DISABLED_BY_DEFAULT},
 #endif
+    {kShowRelatedWebsiteSetsPermissionGrants,
+     base::FEATURE_DISABLED_BY_DEFAULT},
 }});
 
-}  // namespace features
-}  // namespace permissions
+}  // namespace permissions::features

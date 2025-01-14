@@ -5,6 +5,9 @@
 
 #include "brave/components/brave_ads/core/internal/common/strings/string_strip_util.h"
 
+#include <string>
+
+#include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds*
@@ -12,23 +15,13 @@
 namespace brave_ads {
 
 TEST(BraveAdsStringStripUtilTest, StripNonAlphaCharactersFromEmptyContent) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  const std::string stripped_text = StripNonAlphaCharacters("");
-  EXPECT_TRUE(stripped_text.empty());
+  // Act & Assert
+  EXPECT_THAT(StripNonAlphaCharacters(""), ::testing::IsEmpty());
 }
 
 TEST(BraveAdsStringStripUtilTest, StripNonAlphaCharactersFromWhitespace) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  const std::string stripped_text = StripNonAlphaCharacters("   ");
-  EXPECT_TRUE(stripped_text.empty());
+  // Act & Assert
+  EXPECT_THAT(StripNonAlphaCharacters("   "), ::testing::IsEmpty());
 }
 
 TEST(BraveAdsStringStripUtilTest, StripNonAlphaCharacters) {
@@ -54,30 +47,19 @@ TEST(BraveAdsStringStripUtilTest, StripNonAlphaCharacters) {
       "Zwerg ξεσκεπάζω την ψυχοφθόρα βδελυγμία いろはにほへど ちりぬるを "
       "わがよたれぞ つねならむ うゐのおくやま けふこえて あさきゆめみじ "
       "ゑひもせず";
-
   EXPECT_EQ(expected_stripped_content, stripped_content);
 }
 
 TEST(BraveAdsStringStripUtilTest,
      StripNonAlphaNumericCharactersFromEmptyContent) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  const std::string stripped_text = StripNonAlphaNumericCharacters("");
-  EXPECT_TRUE(stripped_text.empty());
+  // Act & Assert
+  EXPECT_THAT(StripNonAlphaNumericCharacters(""), ::testing::IsEmpty());
 }
 
 TEST(BraveAdsStringStripUtilTest,
      StripNonAlphaNumericCharactersFromWhitespace) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  const std::string stripped_text = StripNonAlphaNumericCharacters("   ");
-  EXPECT_TRUE(stripped_text.empty());
+  // Act & Assert
+  EXPECT_THAT(StripNonAlphaNumericCharacters("   "), ::testing::IsEmpty());
 }
 
 TEST(BraveAdsStringStripUtilTest, StripNonAlphaNumericCharacters) {
@@ -103,7 +85,6 @@ TEST(BraveAdsStringStripUtilTest, StripNonAlphaNumericCharacters) {
       "von Xylophonmusik quält jeden größeren Zwerg ξεσκεπάζω την ψυχοφθόρα "
       "βδελυγμία いろはにほへど ちりぬるを わがよたれぞ つねならむ "
       "うゐのおくやま けふこえて あさきゆめみじ ゑひもせず";
-
   EXPECT_EQ(expected_stripped_content, stripped_content);
 }
 

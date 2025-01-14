@@ -7,6 +7,8 @@ import * as React from 'react'
 import { render } from 'react-dom'
 import { Provider } from 'react-redux'
 import { bindActionCreators } from 'redux'
+
+import './load_time_data'
 import { getActions as getUtilActions, setActions } from './utils'
 
 // Components
@@ -40,10 +42,6 @@ function balance (balance: mojom.Balance) {
 
 function contributions (contributions: RewardsInternals.ContributionInfo[]) {
   getActions().onContributions(contributions)
-}
-
-function promotions (promotions: RewardsInternals.Promotion[]) {
-  getActions().onPromotions(promotions)
 }
 
 function partialLog (log: string) {
@@ -87,7 +85,6 @@ window.brave_rewards_internals = {
   onGetRewardsInternalsInfo,
   balance,
   contributions,
-  promotions,
   partialLog,
   fullLog,
   onGetExternalWallet,

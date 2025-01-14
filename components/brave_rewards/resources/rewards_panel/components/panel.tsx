@@ -6,6 +6,7 @@
 import * as React from 'react'
 
 import { HostContext, useHostListener } from '../lib/host_context'
+import { shouldShowSelfCustodyInvite } from '../lib/derived_state'
 import { TabOpenerContext } from '../../shared/components/new_tab_link'
 import { OnboardingResult, RewardsOptIn } from '../../shared/components/onboarding'
 import { WalletCard } from '../../shared/components/wallet_card'
@@ -14,6 +15,8 @@ import { LimitedView } from './limited_view'
 import { NavBar } from './navbar'
 import { PanelOverlays } from './panel_overlays'
 import { PublisherCard } from './publisher_card'
+import { SelfCustodyInvite } from './self_custody_invite'
+import { TosUpdateNotice } from '../../shared/components/tos_update_notice'
 
 import * as urls from '../../shared/lib/rewards_urls'
 
@@ -27,7 +30,6 @@ export function Panel () {
 
   const [userType, setUserType] = React.useState(host.state.userType)
   const [balance, setBalance] = React.useState(host.state.balance)
-  const [settings, setSettings] = React.useState(host.state.settings)
   const [externalWallet, setExternalWallet] =
     React.useState(host.state.externalWallet)
   const [exchangeInfo, setExchangeInfo] =
@@ -55,11 +57,14 @@ export function Panel () {
     React.useState(host.state.rewardsEnabled)
   const [declaredCountry, setDeclaredCountry] =
     React.useState(host.state.declaredCountry)
+  const [showSelfCustodyInvite, setShowSelfCustodyInvite] =
+    React.useState(shouldShowSelfCustodyInvite(host.state))
+  const [tosUpdateRequired, setTosUpdateRequired] =
+    React.useState(host.state.isTermsOfServiceUpdateRequired)
 
   useHostListener(host, (state) => {
     setUserType(state.userType)
     setBalance(state.balance)
-    setSettings(state.settings)
     setExternalWallet(state.externalWallet)
     setExchangeInfo(state.exchangeInfo)
     setEarningsInfo(state.earningsInfo)
@@ -72,6 +77,8 @@ export function Panel () {
     setDeclaredCountry(state.declaredCountry)
     setAvailableCountries(state.availableCountries)
     setDefaultCountry(state.defaultCountry)
+    setShowSelfCustodyInvite(shouldShowSelfCustodyInvite(state))
+    setTosUpdateRequired(state.isTermsOfServiceUpdateRequired)
   })
 
   const needsCountry = rewardsEnabled && !declaredCountry
@@ -114,9 +121,11 @@ export function Panel () {
     return (
       <>
         <WalletCard
+          userType={userType}
           balance={balance}
           externalWallet={externalWallet}
           providerPayoutStatus={providerPayoutStatus}
+          adsReceivedThisMonth={earningsInfo.adsReceivedThisMonth}
           minEarningsThisMonth={earningsInfo.minEarningsThisMonth}
           maxEarningsThisMonth={earningsInfo.maxEarningsThisMonth}
           minEarningsLastMonth={earningsInfo.minEarningsLastMonth}
@@ -126,8 +135,9 @@ export function Panel () {
           exchangeCurrency={exchangeInfo.currency}
           showSummary={activeView === 'summary'}
           summaryData={summaryData}
-          autoContributeEnabled={settings.autoContributeEnabled}
+          autoContributeEnabled={false}
           onExternalWalletAction={host.handleExternalWalletAction}
+          onManageAds={onSettingsClick}
         />
         {activeView === 'tip' && <PublisherCard />}
         <NavBar
@@ -142,6 +152,19 @@ export function Panel () {
 
   if (onboardingResult || !rewardsEnabled || needsCountry) {
     return renderOnboaring()
+  }
+
+  if (tosUpdateRequired) {
+    return (
+      <TosUpdateNotice
+        onAccept={host.acceptTermsOfServiceUpdate}
+        onResetRewards={host.resetRewards}
+      />
+    )
+  }
+
+  if (showSelfCustodyInvite) {
+    return <SelfCustodyInvite />
   }
 
   return (

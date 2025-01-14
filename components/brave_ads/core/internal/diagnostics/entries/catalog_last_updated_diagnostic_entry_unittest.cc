@@ -6,28 +6,25 @@
 #include "brave/components/brave_ads/core/internal/diagnostics/entries/catalog_last_updated_diagnostic_entry.h"
 
 #include "brave/components/brave_ads/core/internal/catalog/catalog_util.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_time_util.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
+#include "brave/components/brave_ads/core/internal/common/test/time_test_util.h"
 #include "brave/components/brave_ads/core/internal/diagnostics/diagnostic_entry_types.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds.*
 
 namespace brave_ads {
 
-class BraveAdsCatalogLastUpdatedDiagnosticEntryTest : public UnitTestBase {};
+class BraveAdsCatalogLastUpdatedDiagnosticEntryTest : public test::TestBase {};
 
 TEST_F(BraveAdsCatalogLastUpdatedDiagnosticEntryTest, CatalogLastUpdated) {
   // Arrange
-  AdvanceClockTo(
-      TimeFromString("Wed, 18 Nov 1970 12:34:56", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("Wed, 18 Nov 1970 12:34:56"));
 
-  SetCatalogLastUpdated(Now());
+  SetCatalogLastUpdated(test::Now());
 
   const CatalogLastUpdatedDiagnosticEntry diagnostic_entry;
 
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_EQ(DiagnosticEntryType::kCatalogLastUpdated,
             diagnostic_entry.GetType());
   EXPECT_EQ("Catalog last updated", diagnostic_entry.GetName());
@@ -39,13 +36,11 @@ TEST_F(BraveAdsCatalogLastUpdatedDiagnosticEntryTest, CatalogNeverUpdated) {
   // Arrange
   const CatalogLastUpdatedDiagnosticEntry diagnostic_entry;
 
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_EQ(DiagnosticEntryType::kCatalogLastUpdated,
             diagnostic_entry.GetType());
   EXPECT_EQ("Catalog last updated", diagnostic_entry.GetName());
-  EXPECT_EQ("", diagnostic_entry.GetValue());
+  EXPECT_THAT(diagnostic_entry.GetValue(), ::testing::IsEmpty());
 }
 
 }  // namespace brave_ads

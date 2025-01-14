@@ -3,20 +3,20 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
-import Button from '$web-components/button'
+import Flex from '$web-common/Flex'
+import { getLocale } from '$web-common/locale'
 import TextInput from '$web-components/input'
+import Button from '@brave/leo/react/button'
 import * as React from 'react'
 import { useState } from 'react'
 import styled from 'styled-components'
-import { getLocale } from '$web-common/locale'
-import { useBraveNews, useChannels } from './Context'
-import Flex from '../../../Flex'
+import { useBraveNews, useChannels } from '../../../../../brave_news/browser/resources/shared/Context'
 import ChannelCard from './ChannelCard'
 import DiscoverSection from './DiscoverSection'
-import FeedCard, { DirectFeedCard } from './FeedCard'
-import useSearch from './useSearch'
-import { SuggestionsCarousel } from './Suggestions'
+import PublisherCard, { DirectPublisherCard } from '../../../../../brave_news/browser/resources/shared/PublisherCard'
 import { PopularCarousel } from './Popular'
+import { SuggestionsCarousel } from './Suggestions'
+import useSearch from './useSearch'
 
 const Header = styled.span`
   font-size: 24px;
@@ -89,17 +89,17 @@ function SearchResults (props: SearchResultsProps) {
       }
       <DiscoverSection name={getLocale('braveNewsAllSourcesHeader')}>
         {search.filteredSources.publisherIds.map(publisherId =>
-          <FeedCard key={publisherId} publisherId={publisherId} />
+          <PublisherCard key={publisherId} publisherId={publisherId} />
         )}
         {showFetchPermissionButton &&
           <div>
-            <Button scale='tiny' onClick={() => search.setCanFetchUrl(true)} isLoading={search.loading}>
+            <Button size='tiny' kind='plain-faint' onClick={() => search.setCanFetchUrl(true)} isLoading={search.loading}>
               {getLocale('braveNewsDirectSearchButton').replace('$1', search.feedUrlQuery ?? '')}
             </Button>
           </div>
         }
         {search.filteredSources.direct.map(r =>
-          <DirectFeedCard key={r.feedUrl.url} feedUrl={r.feedUrl.url} title={r.feedTitle} />)}
+          <DirectPublisherCard key={r.feedUrl.url} feedUrl={r.feedUrl.url} title={r.feedTitle} />)}
         {!search.canQueryFilterSources &&
           getLocale('braveNewsSearchQueryTooShort')
         }

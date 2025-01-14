@@ -5,26 +5,35 @@
 
 #include "brave/ios/app/brave_main_delegate.h"
 
+#include "base/apple/bundle_locations.h"
 #include "base/base_paths.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/files/file_path.h"
-#include "base/mac/bundle_locations.h"
 #include "base/path_service.h"
 #include "brave/components/brave_component_updater/browser/brave_component.h"
 #include "brave/components/brave_component_updater/browser/features.h"
 #include "brave/components/brave_component_updater/browser/switches.h"
 #include "brave/components/brave_sync/buildflags.h"
 #include "brave/components/update_client/buildflags.h"
+#include "brave/components/variations/command_line_utils.h"
 #include "components/browser_sync/browser_sync_switches.h"
 #include "components/component_updater/component_updater_switches.h"
 #include "components/sync/base/command_line_switches.h"
-#include "components/sync/base/model_type.h"
+#include "components/sync/base/data_type.h"
+#include "components/variations/variations_switches.h"
 #include "ios/chrome/browser/flags/chrome_switches.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
+
+// Dummy class used to locate the containing NSBundle
+@interface BundleLookupClass : NSObject
+@end
+
+@implementation BundleLookupClass
+@end
 
 namespace {
 
@@ -42,10 +51,9 @@ std::string GetUpdateURLHost() {
 }  // namespace
 
 BraveMainDelegate::BraveMainDelegate() {
-  base::FilePath path;
-  base::PathService::Get(base::DIR_MODULE, &path);
-  base::mac::SetOverrideFrameworkBundlePath(path);
-  base::mac::SetOverrideOuterBundlePath(path);
+  NSBundle* bundle = [NSBundle bundleForClass:[BundleLookupClass class]];
+  base::apple::SetOverrideOuterBundle(bundle);
+  base::apple::SetOverrideFrameworkBundle(bundle);
 }
 
 BraveMainDelegate::~BraveMainDelegate() {}
@@ -63,6 +71,8 @@ void BraveMainDelegate::BasicStartupComplete() {
     command_line->AppendSwitchASCII(syncer::kSyncServiceURL,
                                     BUILDFLAG(BRAVE_SYNC_ENDPOINT));
   }
+
+  variations::AppendBraveCommandLineOptions(*command_line);
 
   if (!command_line->HasSwitch(switches::kVModule)) {
     command_line->AppendSwitchASCII(switches::kVModule, "*/brave/*=0");

@@ -3,6 +3,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(https://github.com/brave/brave-browser/issues/41661): Remove this and
+// convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "brave/components/brave_sync/time_limited_words.h"
 
 #include <cmath>
@@ -27,6 +33,14 @@ namespace {
 
 static constexpr char kWordsv1SunsetDate[] = "Mon, 1 Aug 2022 00:00:00 GMT";
 static constexpr char kWordsv2Epoch[] = "Tue, 10 May 2022 00:00:00 GMT";
+
+static constexpr size_t kWordsV2Count = 25u;
+
+std::vector<std::string> SplitWords(const std::string& words_string) {
+  return base::SplitString(words_string, " \n\t",
+                           base::WhitespaceHandling::TRIM_WHITESPACE,
+                           base::SplitResult::SPLIT_WANT_NONEMPTY);
+}
 
 }  // namespace
 
@@ -55,10 +69,7 @@ int TimeLimitedWords::GetIndexByWord(const std::string& word) {
   std::string word_prepared = base::ToLowerASCII(word);
 
   struct words* mnemonic_w = nullptr;
-  if (bip39_get_wordlist(nullptr, &mnemonic_w) != WALLY_OK) {
-    DCHECK(false);
-    return -1;
-  }
+  CHECK_EQ(bip39_get_wordlist(nullptr, &mnemonic_w), WALLY_OK);
 
   DCHECK_NE(mnemonic_w, nullptr);
   size_t idx = wordlist_lookup_word(mnemonic_w, word_prepared.c_str());
@@ -137,13 +148,10 @@ TimeLimitedWords::ParseImpl(const std::string& time_limited_words,
   using ValidationStatus = TimeLimitedWords::ValidationStatus;
 
   static constexpr size_t kPureWordsCount = 24u;
-  static constexpr size_t kWordsV2Count = 25u;
 
   auto now = Time::Now();
 
-  std::vector<std::string> words = base::SplitString(
-      time_limited_words, " ", base::WhitespaceHandling::TRIM_WHITESPACE,
-      base::SplitResult::SPLIT_WANT_NONEMPTY);
+  std::vector<std::string> words = SplitWords(time_limited_words);
 
   size_t num_words = words.size();
 
@@ -185,9 +193,7 @@ TimeLimitedWords::ParseImpl(const std::string& time_limited_words,
   } else {
     return base::unexpected(ValidationStatus::kWrongWordsNumber);
   }
-
   NOTREACHED();
-  return base::unexpected(ValidationStatus::kNotValidPureWords);
 }
 
 base::expected<std::string, TimeLimitedWords::ValidationStatus>
@@ -208,6 +214,45 @@ std::string TimeLimitedWords::GenerateResultToText(
     case TimeLimitedWords::GenerateResult::kNotAfterEarlierThanEpoch:
       return "Requested not_after is earlier than sync words v2 epoch";
   }
+}
+
+// static
+base::Time TimeLimitedWords::GetNotAfter(
+    const std::string& time_limited_words) {
+  std::vector<std::string> words = SplitWords(time_limited_words);
+  size_t num_words = words.size();
+  if (num_words != kWordsV2Count) {
+    return base::Time();
+  }
+
+  int days_encoded = GetIndexByWord(words[kWordsV2Count - 1u]);
+  const base::Time anchor_time = GetWordsV2Epoch() + base::Days(days_encoded);
+
+  // We need to find not_after as the offset from the anchor time which would
+  // satisfy this pseudo equation derived from TimeLimitedWords::ParseImpl:
+  //
+  //    GetRoundedDaysDiff(anchor + x, anchor) = 2
+  //        expand GetRoundedDaysDiff:
+  //    round(anchor - (anchor + x)) = 2
+  //    round(x) = 2
+  //    x=1.5...2.49999
+  //        and we need the smallest value of x, so it is 1.5 days or 36 hours.
+  const base::TimeDelta k1_5dayOffset = base::Hours(36);
+  base::Time not_after = anchor_time + k1_5dayOffset;
+
+  // Re-check in debug build the solution is correct.
+  // We should have two days rounded difference for our result, which means code
+  // words are rejected. And a moment before our result diffecence should be 1,
+  // which means code words are accepted.
+  DCHECK_EQ(GetRoundedDaysDiff(anchor_time, not_after), 2);
+  DCHECK_EQ(GetRoundedDaysDiff(anchor_time, not_after - base::Seconds(1)), 1);
+
+  return not_after;
+}
+
+// static
+int TimeLimitedWords::GetWordsCount(const std::string& time_limited_words) {
+  return SplitWords(time_limited_words).size();
 }
 
 }  // namespace brave_sync

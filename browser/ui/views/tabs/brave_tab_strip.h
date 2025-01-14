@@ -7,20 +7,24 @@
 #define BRAVE_BROWSER_UI_VIEWS_TABS_BRAVE_TAB_STRIP_H_
 
 #include <memory>
+#include <optional>
 
+#include "base/gtest_prod_util.h"
+#include "base/memory/weak_ptr.h"
+#include "brave/browser/ui/tabs/split_view_browser_data.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
 
 class Tab;
 class BraveTabStrip : public TabStrip {
+  METADATA_HEADER(BraveTabStrip, TabStrip)
  public:
-  METADATA_HEADER(BraveTabStrip);
-
   explicit BraveTabStrip(std::unique_ptr<TabStripController> controller);
   ~BraveTabStrip() override;
   BraveTabStrip(const BraveTabStrip&) = delete;
   BraveTabStrip& operator=(const BraveTabStrip&) = delete;
 
   bool IsVerticalTabsFloating() const;
+  TabTiledState GetTiledStateForTab(int index) const;
 
   // TabStrip:
   void UpdateHoverCard(Tab* tab, HoverCardUpdateType update_type) override;
@@ -29,24 +33,29 @@ class BraveTabStrip : public TabStrip {
       const ui::LocatedEvent& event,
       const ui::ListSelectionModel& original_selection) override;
   void AddedToWidget() override;
+  std::optional<int> GetCustomBackgroundId(
+      BrowserFrameActiveState active_state) const override;
+  bool IsTabTiled(const Tab* tab) const override;
+  bool IsFirstTabInTile(const Tab* tab) const override;
 
  private:
-  FRIEND_TEST_ALL_PREFIXES(ColorPaletteTest, LightThemeMinimumContrast);
+  FRIEND_TEST_ALL_PREFIXES(VerticalTabStripBrowserTest, ScrollBarVisibility);
 
   void UpdateTabContainer();
   bool ShouldShowVerticalTabs() const;
 
+  std::optional<TabTile> GetTileForTab(const Tab* tab) const;
+
+  TabContainer* GetTabContainerForTesting();
+
   // TabStrip overrides:
-  SkColor GetTabBackgroundColor(
-      TabActive active,
-      BrowserFrameActiveState active_state) const override;
-  SkColor GetTabSeparatorColor() const override;
   bool ShouldDrawStrokes() const override;
-  int GetStrokeThickness() const override;
-  void Layout() override;
+  void Layout(PassKey) override;
 
   // Exposed for testing.
-  static constexpr float kBraveMinimumContrastRatioForOutlines = 1.2797f;
+  static constexpr float kBraveMinimumContrastRatioForOutlines = 1.0816f;
+
+  base::WeakPtrFactory<BraveTabStrip> weak_factory_{this};
 };
 
 #endif  // BRAVE_BROWSER_UI_VIEWS_TABS_BRAVE_TAB_STRIP_H_

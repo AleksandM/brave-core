@@ -6,12 +6,12 @@
 #include "brave/browser/extensions/brave_component_loader.h"
 
 #include <string>
+#include <utility>
 
 #include "base/command_line.h"
-#include "base/feature_list.h"
 #include "base/functional/bind.h"
-#include "brave/browser/brave_rewards/rewards_util.h"
-#include "brave/browser/component_updater/brave_component_installer.h"
+#include "base/json/json_reader.h"
+#include "brave/components/brave_component_updater/browser/brave_component_installer.h"
 #include "brave/components/brave_component_updater/browser/brave_on_demand_updater.h"
 #include "brave/components/brave_extension/grit/brave_extension.h"
 #include "brave/components/brave_webtorrent/grit/brave_webtorrent_resources.h"
@@ -29,13 +29,11 @@
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/constants.h"
 #include "extensions/common/mojom/manifest.mojom.h"
+#include "ui/base/resource/resource_bundle.h"
 
 #if BUILDFLAG(ETHEREUM_REMOTE_CLIENT_ENABLED)
 #include "brave/browser/ethereum_remote_client/ethereum_remote_client_constants.h"
-#include "brave/browser/ethereum_remote_client/pref_names.h"
 #include "brave/browser/extensions/ethereum_remote_client_util.h"
-#include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
-#include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #endif
 
 using extensions::mojom::ManifestLocation;
@@ -46,12 +44,19 @@ BraveComponentLoader::BraveComponentLoader(ExtensionSystem* extension_system,
                                            Profile* profile)
     : ComponentLoader(extension_system, profile),
       profile_(profile),
-      profile_prefs_(profile->GetPrefs()) {}
+      profile_prefs_(profile->GetPrefs()) {
+  pref_change_registrar_.Init(profile_prefs_);
+
+  pref_change_registrar_.Add(
+      kWebDiscoveryEnabled,
+      base::BindRepeating(&BraveComponentLoader::UpdateBraveExtension,
+                          base::Unretained(this)));
+}
 
 BraveComponentLoader::~BraveComponentLoader() = default;
 
 void BraveComponentLoader::OnComponentRegistered(std::string extension_id) {
-  brave_component_updater::BraveOnDemandUpdater::GetInstance()->OnDemandUpdate(
+  brave_component_updater::BraveOnDemandUpdater::GetInstance()->EnsureInstalled(
       extension_id);
 }
 
@@ -64,14 +69,14 @@ void BraveComponentLoader::OnComponentReady(std::string extension_id,
     ExtensionPrefs::Get(profile_)->SetAllowFileAccess(extension_id, true);
   }
 #if BUILDFLAG(ETHEREUM_REMOTE_CLIENT_ENABLED)
-  if (extension_id == ethereum_remote_client_extension_id) {
-    ReinstallAsNonComponent(ethereum_remote_client_extension_id);
+  if (extension_id == kEthereumRemoteClientExtensionId) {
+    ReinstallAsNonComponent(kEthereumRemoteClientExtensionId);
   }
 #endif
 }
 
 void BraveComponentLoader::ReinstallAsNonComponent(
-    const std::string extension_id) {
+    const std::string& extension_id) {
   extensions::ExtensionService* service =
       extensions::ExtensionSystem::Get(profile_)->extension_service();
   extensions::ExtensionRegistry* registry =
@@ -99,45 +104,22 @@ void BraveComponentLoader::AddExtension(const std::string& extension_id,
                           base::Unretained(this), extension_id, true));
 }
 
-void BraveComponentLoader::AddHangoutServicesExtension() {
-  if (!profile_prefs_->FindPreference(kHangoutsEnabled) ||
-      profile_prefs_->GetBoolean(kHangoutsEnabled)) {
-    ForceAddHangoutServicesExtension();
-  }
-}
-
-void BraveComponentLoader::ForceAddHangoutServicesExtension() {
-  ComponentLoader::AddHangoutServicesExtension();
-}
-
 void BraveComponentLoader::AddDefaultComponentExtensions(
     bool skip_session_components) {
   ComponentLoader::AddDefaultComponentExtensions(skip_session_components);
-
-  const base::CommandLine& command_line =
-      *base::CommandLine::ForCurrentProcess();
-  if (!command_line.HasSwitch(switches::kDisableBraveExtension)) {
-    base::FilePath brave_extension_path(FILE_PATH_LITERAL(""));
-    brave_extension_path =
-        brave_extension_path.Append(FILE_PATH_LITERAL("brave_extension"));
-    Add(IDR_BRAVE_EXTENSION, brave_extension_path);
-  }
+  UpdateBraveExtension();
 }
 
 #if BUILDFLAG(ETHEREUM_REMOTE_CLIENT_ENABLED)
 void BraveComponentLoader::AddEthereumRemoteClientExtension() {
-  AddExtension(ethereum_remote_client_extension_id,
-               ethereum_remote_client_extension_name,
-               ethereum_remote_client_extension_public_key);
+  AddExtension(kEthereumRemoteClientExtensionId,
+               kEthereumRemoteClientExtensionName,
+               kEthereumRemoteClientExtensionPublicKey);
 }
 
 void BraveComponentLoader::AddEthereumRemoteClientExtensionOnStartup() {
   // Only load Crypto Wallets if it is set as the default wallet
-  auto default_wallet = brave_wallet::GetDefaultEthereumWallet(profile_prefs_);
-  const bool is_opted_into_cw =
-      profile_prefs_->GetBoolean(kERCOptedIntoCryptoWallets);
-  if (HasInfuraProjectID() && is_opted_into_cw &&
-      default_wallet == brave_wallet::mojom::DefaultWallet::CryptoWallets) {
+  if (ShouldLoadEthereumRemoteClientExtension(profile_prefs_)) {
     AddEthereumRemoteClientExtension();
   }
 }
@@ -146,7 +128,7 @@ void BraveComponentLoader::UnloadEthereumRemoteClientExtension() {
   extensions::ExtensionService* service =
       extensions::ExtensionSystem::Get(profile_)->extension_service();
   DCHECK(service);
-  service->UnloadExtension(ethereum_remote_client_extension_id,
+  service->UnloadExtension(kEthereumRemoteClientExtensionId,
                            extensions::UnloadedExtensionReason::DISABLE);
 }
 #endif
@@ -162,6 +144,50 @@ void BraveComponentLoader::AddWebTorrentExtension() {
         brave_webtorrent_path.Append(FILE_PATH_LITERAL("brave_webtorrent"));
     Add(IDR_BRAVE_WEBTORRENT, brave_webtorrent_path);
   }
+}
+
+bool BraveComponentLoader::UseBraveExtensionBackgroundPage() {
+  // Keep sync with `pref_change_registrar_` in the ctor.
+  return profile_prefs_->GetBoolean(kWebDiscoveryEnabled);
+}
+
+void BraveComponentLoader::UpdateBraveExtension() {
+  const base::CommandLine& command_line =
+      *base::CommandLine::ForCurrentProcess();
+  if (command_line.HasSwitch(switches::kDisableBraveExtension)) {
+    return;
+  }
+
+  base::FilePath brave_extension_path(FILE_PATH_LITERAL(""));
+  brave_extension_path =
+      brave_extension_path.Append(FILE_PATH_LITERAL("brave_extension"));
+  auto& resource_bundle = ui::ResourceBundle::GetSharedInstance();
+  std::optional<base::Value::Dict> manifest = base::JSONReader::ReadDict(
+      resource_bundle.LoadDataResourceString(IDR_BRAVE_EXTENSION));
+  CHECK(manifest) << "invalid Brave Extension manifest";
+
+  // The background page is a conditional. Replace MAYBE_background in the
+  // manifest to "background" or remove it.
+  auto background_value = manifest->Extract("MAYBE_background");
+  if (UseBraveExtensionBackgroundPage() && background_value) {
+    manifest->Set("background", std::move(*background_value));
+  }
+
+  extensions::ExtensionRegistry* registry =
+      extensions::ExtensionRegistry::Get(profile_);
+  const Extension* current_extension =
+      registry->GetInstalledExtension(brave_extension_id);
+
+  if (current_extension) {
+    const auto* current_manifest = current_extension->manifest();
+    if (current_manifest && *current_manifest->value() == *manifest) {
+      return;  // Skip reload, nothing is actually changed.
+    }
+    Remove(brave_extension_id);
+  }
+
+  const auto id = Add(std::move(*manifest), brave_extension_path);
+  CHECK_EQ(id, brave_extension_id);
 }
 
 }  // namespace extensions

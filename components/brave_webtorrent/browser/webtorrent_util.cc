@@ -10,7 +10,6 @@
 #include "base/strings/string_util.h"
 #include "brave/components/constants/network_constants.h"
 #include "brave/components/constants/pref_names.h"
-#include "chrome/browser/profiles/profile.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/browser/extension_registry.h"
@@ -21,12 +20,13 @@
 namespace webtorrent {
 
 bool TorrentFileNameMatched(const net::HttpResponseHeaders* headers) {
-  std::string disposition;
-  if (!headers->GetNormalizedHeader("Content-Disposition", &disposition)) {
+  std::optional<std::string> disposition =
+      headers->GetNormalizedHeader("Content-Disposition");
+  if (!disposition) {
     return false;
   }
 
-  net::HttpContentDisposition cd_headers(disposition, std::string());
+  net::HttpContentDisposition cd_headers(*disposition, std::string());
   if (base::EndsWith(cd_headers.filename(), ".torrent",
         base::CompareCase::INSENSITIVE_ASCII) ||
       base::EndsWith(cd_headers.filename(), ".torrent\"",
@@ -49,11 +49,6 @@ bool IsWebtorrentEnabled(content::BrowserContext* browser_context) {
     return false;
   }
   return registry->enabled_extensions().Contains(brave_webtorrent_extension_id);
-}
-
-bool IsWebtorrentPrefEnabled(content::BrowserContext* browser_context) {
-  return Profile::FromBrowserContext(browser_context)->
-      GetPrefs()->GetBoolean(kWebTorrentEnabled);
 }
 
 void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
@@ -94,4 +89,3 @@ bool IsTorrentFile(const GURL& url, const net::HttpResponseHeaders* headers) {
 }
 
 }  // namespace webtorrent
-

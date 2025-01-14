@@ -12,16 +12,13 @@
 namespace brave_ads {
 
 class PaddedImageView : public views::ImageView {
+  METADATA_HEADER(PaddedImageView, views::ImageView)
  public:
-  METADATA_HEADER(PaddedImageView);
 
   PaddedImageView();
 
   PaddedImageView(const PaddedImageView&) = delete;
   PaddedImageView& operator=(const PaddedImageView&) = delete;
-
-  PaddedImageView(PaddedImageView&&) noexcept = delete;
-  PaddedImageView& operator=(PaddedImageView&&) noexcept = delete;
 
   ~PaddedImageView() override = default;
 };

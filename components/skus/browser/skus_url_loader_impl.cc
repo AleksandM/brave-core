@@ -11,6 +11,7 @@
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "brave/components/skus/browser/rs/cxx/src/lib.rs.h"
+#include "brave/components/skus/common/skus_sdk.mojom.h"
 #include "net/base/load_flags.h"
 #include "net/http/http_status_code.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
@@ -92,10 +93,10 @@ void SkusUrlLoaderImpl::OnFetchComplete(
   bool success = api_request_result.IsResponseCodeValid();
 
   // Body might be empty here which is still a success.
+  auto body = api_request_result.SerializeBodyToString();
   std::vector<uint8_t> body_bytes;
-  if (!api_request_result.body().empty()) {
-    body_bytes.assign(api_request_result.body().begin(),
-                      api_request_result.body().end());
+  if (!body.empty()) {
+    body_bytes.assign(body.begin(), body.end());
   }
 
   std::vector<std::string> headers;
@@ -106,8 +107,14 @@ void SkusUrlLoaderImpl::OnFetchComplete(
     headers.push_back(std::move(new_header_value));
   }
 
+  skus::SkusResult result = {
+      success ? skus::mojom::SkusResultCode::Ok
+              : skus::mojom::SkusResultCode::RequestFailed,
+      body,
+  };
+
   skus::HttpResponse resp = {
-      success ? skus::SkusResult::Ok : skus::SkusResult::RequestFailed,
+      result,
       response_code,
       headers,
       body_bytes,

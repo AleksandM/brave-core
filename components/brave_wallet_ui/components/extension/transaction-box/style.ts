@@ -4,6 +4,7 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import styled from 'styled-components'
+import * as leo from '@brave/leo/tokens/css/variables'
 
 export const CodeSnippet = styled.pre`
   display: block;
@@ -55,6 +56,17 @@ export const DetailRow = styled.div`
 export const DetailColumn = styled(DetailRow)`
   flex-direction: column;
   gap: 8px;
+`
+
+export const BitcoinDetailColumn = styled(DetailRow)`
+  flex-direction: column;
+  gap: 8px;
+`
+
+export const CodeDetailLine = styled.code`
+  overflow-wrap: anywhere;
+  display: block;
+  color: ${leo.color.text.tertiary};
 `
 
 export const DetailText = styled.span`

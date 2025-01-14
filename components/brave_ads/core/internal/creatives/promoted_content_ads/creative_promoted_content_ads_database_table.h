@@ -10,9 +10,7 @@
 #include <vector>
 
 #include "base/check_op.h"
-#include "base/functional/callback_forward.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
-#include "brave/components/brave_ads/core/ads_client_callback.h"
+#include "base/functional/callback.h"
 #include "brave/components/brave_ads/core/internal/account/deposits/deposits_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/campaigns_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/creative_ads_database_table.h"
@@ -22,6 +20,8 @@
 #include "brave/components/brave_ads/core/internal/creatives/segments_database_table.h"
 #include "brave/components/brave_ads/core/internal/database/database_table_interface.h"
 #include "brave/components/brave_ads/core/internal/segments/segment_alias.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom-forward.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client_callback.h"
 
 namespace brave_ads::database::table {
 
@@ -43,10 +43,6 @@ class CreativePromotedContentAds final : public TableInterface {
   CreativePromotedContentAds& operator=(const CreativePromotedContentAds&) =
       delete;
 
-  CreativePromotedContentAds(CreativePromotedContentAds&&) noexcept = delete;
-  CreativePromotedContentAds& operator=(CreativePromotedContentAds&&) noexcept =
-      delete;
-
   ~CreativePromotedContentAds() override;
 
   void Save(const CreativePromotedContentAdList& creative_ads,
@@ -61,9 +57,10 @@ class CreativePromotedContentAds final : public TableInterface {
   void GetForSegments(const SegmentList& segments,
                       GetCreativePromotedContentAdsCallback callback) const;
 
-  void GetAll(GetCreativePromotedContentAdsCallback callback) const;
+  void GetForActiveCampaigns(
+      GetCreativePromotedContentAdsCallback callback) const;
 
-  void SetBatchSize(const int batch_size) {
+  void SetBatchSize(int batch_size) {
     CHECK_GT(batch_size, 0);
 
     batch_size_ = batch_size;
@@ -71,15 +68,18 @@ class CreativePromotedContentAds final : public TableInterface {
 
   std::string GetTableName() const override;
 
-  void Create(mojom::DBTransactionInfo* transaction) override;
-  void Migrate(mojom::DBTransactionInfo* transaction, int to_version) override;
+  void Create(const mojom::DBTransactionInfoPtr& mojom_db_transaction) override;
+  void Migrate(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
+               int to_version) override;
 
  private:
-  void InsertOrUpdate(mojom::DBTransactionInfo* transaction,
-                      const CreativePromotedContentAdList& creative_ads);
+  void MigrateToV45(const mojom::DBTransactionInfoPtr& mojom_db_transaction);
 
-  std::string BuildInsertOrUpdateSql(
-      mojom::DBCommandInfo* command,
+  void Insert(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
+              const CreativePromotedContentAdList& creative_ads);
+
+  std::string BuildInsertSql(
+      const mojom::DBActionInfoPtr& mojom_db_action,
       const CreativePromotedContentAdList& creative_ads) const;
 
   int batch_size_;

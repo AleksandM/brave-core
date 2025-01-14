@@ -24,7 +24,7 @@ import threading
 sys.path.append(os.path.join(os.path.dirname(__file__),
                              os.pardir, os.pardir, os.pardir,
                              "build"))
-import gn_helpers # pylint: disable=wrong-import-position
+import gn_helpers
 
 CONCURRENT_TASKS=4
 
@@ -192,7 +192,7 @@ def GenerateSymbols(options, binaries):
                 if not os.access(dump_syms_bin, os.X_OK):
                     raise Exception(f'Cannot find dump_syms: {dump_syms_bin}')
 
-                syms = GetCommandOutput([dump_syms_bin, '-c', binary])
+                syms = GetCommandOutput([dump_syms_bin, '-d', '-m', binary])
                 module_line = re.match("MODULE [^ ]+ [^ ]+ ([0-9A-F]+) (.*)\n",
                                        syms)
                 output_path = os.path.join(options.symbols_dir,
@@ -203,7 +203,7 @@ def GenerateSymbols(options, binaries):
                 f = open(os.path.join(output_path, symbol_file), 'w')
                 f.write(syms)
                 f.close()
-            except Exception as inst: # pylint: disable=broad-except
+            except Exception as inst:
                 with print_lock:
                     print(f'Symbol failure {binary} {type(inst)} {inst}')
             finally:

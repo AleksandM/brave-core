@@ -11,9 +11,7 @@
 
 namespace brave_ads {
 
-struct ConfirmationInfo;
-
-class ConfirmationsDelegateMock : public ConfirmationsDelegate {
+class ConfirmationsDelegateMock : public ConfirmationDelegate {
  public:
   ConfirmationsDelegateMock();
 
@@ -21,19 +19,11 @@ class ConfirmationsDelegateMock : public ConfirmationsDelegate {
   ConfirmationsDelegateMock& operator=(const ConfirmationsDelegateMock&) =
       delete;
 
-  ConfirmationsDelegateMock(ConfirmationsDelegateMock&&) noexcept = delete;
-  ConfirmationsDelegateMock& operator=(ConfirmationsDelegateMock&&) noexcept =
-      delete;
-
   ~ConfirmationsDelegateMock() override;
 
-  MOCK_METHOD(void,
-              OnDidRedeemConfirmation,
-              (const ConfirmationInfo& confirmation));
+  MOCK_METHOD(void, OnDidConfirm, (const ConfirmationInfo& confirmation));
 
-  MOCK_METHOD(void,
-              OnFailedToRedeemConfirmation,
-              (const ConfirmationInfo& confirmation));
+  MOCK_METHOD(void, OnFailedToConfirm, (const ConfirmationInfo& confirmation));
 };
 
 }  // namespace brave_ads

@@ -3,7 +3,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "brave/components/ntp_background_images/browser/view_counter_service.h"
+
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -12,9 +15,11 @@
 #include "base/memory/raw_ptr.h"
 #include "base/test/task_environment.h"
 #include "brave/components/brave_ads/browser/ads_service_mock.h"
-#include "brave/components/brave_ads/core/new_tab_page_ad_info.h"
+#include "brave/components/brave_ads/core/public/ad_units/new_tab_page_ad/new_tab_page_ad_info.h"
 #include "brave/components/brave_referrals/browser/brave_referrals_service.h"
 #include "brave/components/brave_referrals/common/pref_names.h"
+#include "brave/components/brave_rewards/common/pref_names.h"
+#include "brave/components/brave_rewards/common/pref_registry.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/ntp_background_images/browser/features.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_data.h"
@@ -23,7 +28,6 @@
 #include "brave/components/ntp_background_images/browser/ntp_sponsored_images_data.h"
 #include "brave/components/ntp_background_images/browser/url_constants.h"
 #include "brave/components/ntp_background_images/browser/view_counter_model.h"
-#include "brave/components/ntp_background_images/browser/view_counter_service.h"
 #include "brave/components/ntp_background_images/buildflags/buildflags.h"
 #include "brave/components/ntp_background_images/common/pref_names.h"
 #include "build/build_config.h"
@@ -150,6 +154,7 @@ class NTPBackgroundImagesViewCounterTest : public testing::Test {
     // Need ntp_sponsored_images prefs
     auto* registry = prefs()->registry();
     ViewCounterService::RegisterProfilePrefs(registry);
+    brave_rewards::RegisterProfilePrefs(registry);
     auto* local_registry = local_pref_.registry();
     brave::RegisterPrefsForBraveReferralsService(local_registry);
     NTPBackgroundImagesService::RegisterLocalStatePrefs(local_registry);
@@ -226,10 +231,10 @@ class NTPBackgroundImagesViewCounterTest : public testing::Test {
   }
 
   int GetInitialCountToBrandedWallpaper() const {
-    return features::kInitialCountToBrandedWallpaper.Get();
+    return features::kInitialCountToBrandedWallpaper.Get() - 1;
   }
 
-  absl::optional<base::Value::Dict> TryGetFirstSponsoredImageWallpaper() {
+  std::optional<base::Value::Dict> TryGetFirstSponsoredImageWallpaper() {
     // Loading initial count times.
     for (int i = 0; i < GetInitialCountToBrandedWallpaper(); ++i) {
       auto wallpaper = view_counter_->GetCurrentWallpaperForDisplay();
@@ -252,15 +257,15 @@ class NTPBackgroundImagesViewCounterTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment;
   TestingPrefServiceSimple local_pref_;
   sync_preferences::TestingPrefServiceSyncable prefs_;
-  std::unique_ptr<ViewCounterService> view_counter_;
+  std::unique_ptr<NTPBackgroundImagesService> service_;
 
 #if BUILDFLAG(ENABLE_CUSTOM_BACKGROUND)
   std::unique_ptr<BraveNTPCustomBackgroundService> custom_bi_service_;
   raw_ptr<TestDelegate> delegate_ = nullptr;
 #endif
 
-  std::unique_ptr<NTPBackgroundImagesService> service_;
-  brave_ads::AdsServiceMock ads_service_mock_;
+  std::unique_ptr<ViewCounterService> view_counter_;
+  brave_ads::AdsServiceMock ads_service_mock_{nullptr};
 };
 
 TEST_F(NTPBackgroundImagesViewCounterTest, SINotActiveInitially) {
@@ -354,7 +359,7 @@ TEST_F(NTPBackgroundImagesViewCounterTest, IsActiveOptedIn) {
 TEST_F(NTPBackgroundImagesViewCounterTest, PrefsWithModelTest) {
   auto& model = view_counter_->model_;
 
-  EXPECT_EQ(features::kInitialCountToBrandedWallpaper.Get(),
+  EXPECT_EQ(features::kInitialCountToBrandedWallpaper.Get() - 1,
             model.show_branded_wallpaper_);
   EXPECT_TRUE(model.show_wallpaper_);
   EXPECT_TRUE(model.show_branded_wallpaper_);
@@ -419,7 +424,7 @@ TEST_F(NTPBackgroundImagesViewCounterTest, GetCurrentWallpaperTest) {
   delegate_->image_enabled_ = true;
   background = view_counter_->GetCurrentWallpaper();
   bg_url = background->FindString(kWallpaperImageURLKey);
-  EXPECT_TRUE(base::StartsWith(*bg_url, kCustomWallpaperURL))
+  EXPECT_TRUE(bg_url->starts_with(kCustomWallpaperURL))
       << "actual url " << *bg_url;
 
   // Disable custom image background.
@@ -440,8 +445,9 @@ TEST_F(NTPBackgroundImagesViewCounterTest,
        GetSponsoredImageWallpaperAdsServiceDisabled) {
   InitBackgroundAndSponsoredImageWallpapers();
 
-  EXPECT_CALL(ads_service_mock_, IsEnabled()).WillRepeatedly(Return(false));
-  EXPECT_CALL(ads_service_mock_, GetPrefetchedNewTabPageAdForDisplay())
+  prefs()->SetBoolean(brave_rewards::prefs::kEnabled, false);
+
+  EXPECT_CALL(ads_service_mock_, MaybeGetPrefetchedNewTabPageAdForDisplay())
       .Times(0);
   EXPECT_CALL(ads_service_mock_, PrefetchNewTabPageAd()).Times(0);
 
@@ -460,9 +466,10 @@ TEST_F(NTPBackgroundImagesViewCounterTest,
 TEST_F(NTPBackgroundImagesViewCounterTest, SponsoredImageAdFrequencyCapped) {
   InitBackgroundAndSponsoredImageWallpapers();
 
-  EXPECT_CALL(ads_service_mock_, IsEnabled()).WillRepeatedly(Return(true));
-  EXPECT_CALL(ads_service_mock_, GetPrefetchedNewTabPageAdForDisplay())
-      .WillOnce(Return(absl::nullopt));
+  prefs()->SetBoolean(brave_rewards::prefs::kEnabled, true);
+
+  EXPECT_CALL(ads_service_mock_, MaybeGetPrefetchedNewTabPageAdForDisplay())
+      .WillOnce(Return(std::nullopt));
   EXPECT_CALL(ads_service_mock_, PrefetchNewTabPageAd())
       .Times(GetInitialCountToBrandedWallpaper());
   EXPECT_CALL(ads_service_mock_, OnFailedToPrefetchNewTabPageAd(_, _)).Times(0);
@@ -483,8 +490,9 @@ TEST_F(NTPBackgroundImagesViewCounterTest, SponsoredImageAdServed) {
   brave_ads::NewTabPageAdInfo ad_info = CreateNewTabPageAdInfo();
   EXPECT_TRUE(AdInfoMatchesSponsoredImage(ad_info, 0, 1));
 
-  EXPECT_CALL(ads_service_mock_, IsEnabled()).WillRepeatedly(Return(true));
-  EXPECT_CALL(ads_service_mock_, GetPrefetchedNewTabPageAdForDisplay())
+  prefs()->SetBoolean(brave_rewards::prefs::kEnabled, true);
+
+  EXPECT_CALL(ads_service_mock_, MaybeGetPrefetchedNewTabPageAdForDisplay())
       .WillOnce(Return(ad_info));
   EXPECT_CALL(ads_service_mock_, PrefetchNewTabPageAd())
       .Times(GetInitialCountToBrandedWallpaper());
@@ -511,8 +519,9 @@ TEST_F(NTPBackgroundImagesViewCounterTest, WrongSponsoredImageAdServed) {
   ad_info.creative_instance_id = "wrong_creative_instance_id";
   EXPECT_FALSE(AdInfoMatchesSponsoredImage(ad_info, 0, 1));
 
-  EXPECT_CALL(ads_service_mock_, IsEnabled()).WillRepeatedly(Return(true));
-  EXPECT_CALL(ads_service_mock_, GetPrefetchedNewTabPageAdForDisplay())
+  prefs()->SetBoolean(brave_rewards::prefs::kEnabled, true);
+
+  EXPECT_CALL(ads_service_mock_, MaybeGetPrefetchedNewTabPageAdForDisplay())
       .WillOnce(Return(ad_info));
   EXPECT_CALL(ads_service_mock_, PrefetchNewTabPageAd())
       .Times(GetInitialCountToBrandedWallpaper());

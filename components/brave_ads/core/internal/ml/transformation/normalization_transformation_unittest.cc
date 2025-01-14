@@ -5,10 +5,9 @@
 
 #include "brave/components/brave_ads/core/internal/ml/transformation/normalization_transformation.h"
 
-#include <string>
 #include <vector>
 
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
 #include "brave/components/brave_ads/core/internal/ml/data/text_data.h"
 #include "brave/components/brave_ads/core/internal/ml/data/vector_data.h"
 #include "brave/components/brave_ads/core/internal/ml/ml_alias.h"
@@ -19,7 +18,21 @@
 
 namespace brave_ads::ml {
 
-class BraveAdsNormalizationTransformationTest : public UnitTestBase {};
+class BraveAdsNormalizationTransformationTest : public test::TestBase {};
+
+TEST_F(BraveAdsNormalizationTransformationTest, WrongInputDataTest) {
+  // Arrange
+  constexpr char kTestString[] = "quite a small test string";
+  std::unique_ptr<Data> text_data = std::make_unique<TextData>(kTestString);
+
+  const NormalizationTransformation normalization;
+
+  // Act
+  const std::unique_ptr<Data> output_data = normalization.Apply(text_data);
+
+  // Assert
+  EXPECT_FALSE(output_data.get());
+}
 
 TEST_F(BraveAdsNormalizationTransformationTest, NormalizationTest) {
   // Arrange
@@ -29,8 +42,8 @@ TEST_F(BraveAdsNormalizationTransformationTest, NormalizationTest) {
   std::unique_ptr<Data> data = std::make_unique<TextData>(kTestString);
 
   const HashedNGramsTransformation hashed_ngrams(
-      /*bucket_count*/ 10,
-      /*subgrams*/ std::vector<int>{3, 4});
+      /*bucket_count=*/10,
+      /*subgrams=*/std::vector<uint32_t>{3, 4});
   const NormalizationTransformation normalization;
 
   // Act
@@ -83,10 +96,8 @@ TEST_F(BraveAdsNormalizationTransformationTest, ChainingTest) {
   ASSERT_TRUE(vector_data);
 
   // Assert
-  ASSERT_EQ(kDefaultBucketCount, vector_data->GetDimensionCount());
-
-  // Hashes for [t, i, n, y, ti, in, ny, tin, iny, tiny] -- 10 in total
-  EXPECT_EQ(10U, vector_data->GetData().size());
+  EXPECT_EQ(kDefaultBucketCount, vector_data->GetDimensionCount());
+  EXPECT_THAT(vector_data->GetData(), ::testing::SizeIs(10));
 }
 
 }  // namespace brave_ads::ml

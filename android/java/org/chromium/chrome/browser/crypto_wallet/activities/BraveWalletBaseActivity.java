@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.crypto_wallet.activities;
 
 import android.view.MenuItem;
 
+import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.brave_wallet.mojom.AssetRatioService;
 import org.chromium.brave_wallet.mojom.BlockchainRegistry;
 import org.chromium.brave_wallet.mojom.BraveWalletP3a;
@@ -20,20 +21,20 @@ import org.chromium.brave_wallet.mojom.TxService;
 import org.chromium.chrome.browser.crypto_wallet.AssetRatioServiceFactory;
 import org.chromium.chrome.browser.crypto_wallet.BlockchainRegistryFactory;
 import org.chromium.chrome.browser.crypto_wallet.BraveWalletServiceFactory;
-import org.chromium.chrome.browser.crypto_wallet.JsonRpcServiceFactory;
-import org.chromium.chrome.browser.crypto_wallet.KeyringServiceFactory;
-import org.chromium.chrome.browser.crypto_wallet.TxServiceFactory;
 import org.chromium.chrome.browser.crypto_wallet.observers.KeyringServiceObserverImpl;
 import org.chromium.chrome.browser.crypto_wallet.observers.KeyringServiceObserverImpl.KeyringServiceObserverImplDelegate;
 import org.chromium.chrome.browser.crypto_wallet.observers.TxServiceObserverImpl;
 import org.chromium.chrome.browser.crypto_wallet.observers.TxServiceObserverImpl.TxServiceObserverImplDelegate;
+import org.chromium.chrome.browser.init.ActivityProfileProvider;
 import org.chromium.chrome.browser.init.AsyncInitializationActivity;
+import org.chromium.chrome.browser.profiles.ProfileProvider;
 import org.chromium.mojo.bindings.ConnectionErrorHandler;
 import org.chromium.mojo.system.MojoException;
 
 public abstract class BraveWalletBaseActivity extends AsyncInitializationActivity
-        implements ConnectionErrorHandler, KeyringServiceObserverImplDelegate,
-                   TxServiceObserverImplDelegate {
+        implements ConnectionErrorHandler,
+                KeyringServiceObserverImplDelegate,
+                TxServiceObserverImplDelegate {
     protected KeyringService mKeyringService;
     protected BlockchainRegistry mBlockchainRegistry;
     protected JsonRpcService mJsonRpcService;
@@ -84,54 +85,55 @@ public abstract class BraveWalletBaseActivity extends AsyncInitializationActivit
         mAssetRatioService = null;
         mBraveWalletP3A = null;
         mBraveWalletService = null;
-        InitKeyringService();
-        InitBlockchainRegistry();
-        InitJsonRpcService();
-        InitTxService();
-        InitEthTxManagerProxy();
-        InitSolanaTxManagerProxy();
-        InitAssetRatioService();
-        InitBraveWalletP3A();
-        InitBraveWalletService();
+        initKeyringService();
+        initBlockchainRegistry();
+        initJsonRpcService();
+        initTxService();
+        initEthTxManagerProxy();
+        initSolanaTxManagerProxy();
+        initAssetRatioService();
+        initBraveWalletP3A();
+        initBraveWalletService();
     }
 
-    protected void InitTxService() {
+    protected void initTxService() {
         if (mTxService != null) {
             return;
         }
 
-        mTxService = TxServiceFactory.getInstance().getTxService(this);
+        mTxService = BraveWalletServiceFactory.getInstance().getTxService(this);
         mTxServiceObserver = new TxServiceObserverImpl(this);
         mTxService.addObserver(mTxServiceObserver);
     }
 
-    protected void InitEthTxManagerProxy() {
+    protected void initEthTxManagerProxy() {
         if (mEthTxManagerProxy != null) {
             return;
         }
 
-        mEthTxManagerProxy = TxServiceFactory.getInstance().getEthTxManagerProxy(this);
+        mEthTxManagerProxy = BraveWalletServiceFactory.getInstance().getEthTxManagerProxy(this);
     }
 
-    protected void InitSolanaTxManagerProxy() {
+    protected void initSolanaTxManagerProxy() {
         if (mSolanaTxManagerProxy != null) {
             return;
         }
 
-        mSolanaTxManagerProxy = TxServiceFactory.getInstance().getSolanaTxManagerProxy(this);
+        mSolanaTxManagerProxy =
+                BraveWalletServiceFactory.getInstance().getSolanaTxManagerProxy(this);
     }
 
-    protected void InitKeyringService() {
+    protected void initKeyringService() {
         if (mKeyringService != null) {
             return;
         }
 
-        mKeyringService = KeyringServiceFactory.getInstance().getKeyringService(this);
+        mKeyringService = BraveWalletServiceFactory.getInstance().getKeyringService(this);
         mKeyringServiceObserver = new KeyringServiceObserverImpl(this);
         mKeyringService.addObserver(mKeyringServiceObserver);
     }
 
-    protected void InitBlockchainRegistry() {
+    protected void initBlockchainRegistry() {
         if (mBlockchainRegistry != null) {
             return;
         }
@@ -139,15 +141,15 @@ public abstract class BraveWalletBaseActivity extends AsyncInitializationActivit
         mBlockchainRegistry = BlockchainRegistryFactory.getInstance().getBlockchainRegistry(this);
     }
 
-    protected void InitJsonRpcService() {
+    protected void initJsonRpcService() {
         if (mJsonRpcService != null) {
             return;
         }
 
-        mJsonRpcService = JsonRpcServiceFactory.getInstance().getJsonRpcService(this);
+        mJsonRpcService = BraveWalletServiceFactory.getInstance().getJsonRpcService(this);
     }
 
-    protected void InitAssetRatioService() {
+    protected void initAssetRatioService() {
         if (mAssetRatioService != null) {
             return;
         }
@@ -155,7 +157,7 @@ public abstract class BraveWalletBaseActivity extends AsyncInitializationActivit
         mAssetRatioService = AssetRatioServiceFactory.getInstance().getAssetRatioService(this);
     }
 
-    protected void InitBraveWalletP3A() {
+    protected void initBraveWalletP3A() {
         if (mBraveWalletP3A != null) {
             return;
         }
@@ -163,7 +165,7 @@ public abstract class BraveWalletBaseActivity extends AsyncInitializationActivit
         mBraveWalletP3A = BraveWalletServiceFactory.getInstance().getBraveWalletP3A(this);
     }
 
-    protected void InitBraveWalletService() {
+    protected void initBraveWalletService() {
         if (mBraveWalletService != null) {
             return;
         }
@@ -220,15 +222,15 @@ public abstract class BraveWalletBaseActivity extends AsyncInitializationActivit
     @Override
     public void finishNativeInitialization() {
         super.finishNativeInitialization();
-        InitKeyringService();
-        InitBlockchainRegistry();
-        InitJsonRpcService();
-        InitTxService();
-        InitEthTxManagerProxy();
-        InitSolanaTxManagerProxy();
-        InitAssetRatioService();
-        InitBraveWalletP3A();
-        InitBraveWalletService();
+        initKeyringService();
+        initBlockchainRegistry();
+        initJsonRpcService();
+        initTxService();
+        initEthTxManagerProxy();
+        initSolanaTxManagerProxy();
+        initAssetRatioService();
+        initBraveWalletP3A();
+        initBraveWalletService();
     }
 
     @Override
@@ -273,4 +275,9 @@ public abstract class BraveWalletBaseActivity extends AsyncInitializationActivit
 
     @Override
     public void onTransactionStatusChanged(TransactionInfo txInfo) {}
+
+    @Override
+    protected OneshotSupplier<ProfileProvider> createProfileProvider() {
+        return new ActivityProfileProvider(getLifecycleDispatcher());
+    }
 }

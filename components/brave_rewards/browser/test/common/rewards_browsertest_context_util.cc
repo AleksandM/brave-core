@@ -10,7 +10,9 @@
 
 namespace brave_rewards::test_util {
 
-static const char kWaitForElementToAppearScript[] = R"(
+namespace {
+
+constexpr char kWaitForElementToAppearScript[] = R"(
     const waitForElementToAppear = (selector) => {
       const TIMEOUT_SECONDS = 10;
 
@@ -44,6 +46,8 @@ static const char kWaitForElementToAppearScript[] = R"(
       });
     };
 )";
+
+}  // namespace
 
 void WaitForElementToAppear(
     content::WebContents* context,
@@ -92,7 +96,7 @@ void WaitForElementToEqual(
 
       try {
         let element = await waitForElementToAppear(selector);
-        currentValue = element.innerText.replace(/\xa0/g, ' ');
+        currentValue = element.innerText.replace(/\xa0|\n/g, ' ');
         if (currentValue === expectedValue) {
           resolve(true);
           return;
@@ -112,7 +116,7 @@ void WaitForElementToEqual(
             return;
           }
 
-          currentValue = element.innerText.replace(/\xa0/g, ' ');
+          currentValue = element.innerText.replace(/\xa0|\n/g, ' ');
           if (currentValue === expectedValue) {
             clearTimeout(timerID);
             observer.disconnect();
@@ -154,7 +158,7 @@ void WaitForElementToContain(
             try {
               let element = await waitForElementToAppear(selector);
 
-              currentText = element.innerText.replace(/\xa0/g, ' ');
+              currentText = element.innerText.replace(/\xa0|\n/g, ' ');
               if (currentText.indexOf(substring) !== -1) {
                 resolve(true);
                 return;
@@ -174,7 +178,7 @@ void WaitForElementToContain(
                   return;
                 }
 
-                currentText = element.innerText.replace(/\xa0/g, ' ');
+                currentText = element.innerText.replace(/\xa0|\n/g, ' ');
                 if (currentText.indexOf(substring) !== -1) {
                   clearTimeout(timerID);
                   observer.disconnect();
@@ -449,7 +453,7 @@ std::vector<double> GetSiteBannerTipOptions(content::WebContents* context) {
       content::ISOLATED_WORLD_ID_CONTENT_END).ExtractList();
 
   std::vector<double> result;
-  for (const auto& value : options.GetList()) {
+  for (const auto& value : options) {
     result.push_back(value.GetDouble());
   }
   return result;

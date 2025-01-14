@@ -4,23 +4,49 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
+import { useParams } from 'react-router'
 import { skipToken } from '@reduxjs/toolkit/query/react'
 
 // types
 import { BraveWallet } from '../../../constants/types'
 
+// options
+import {
+  defaultQuerySubscriptionOptions //
+} from '../../../common/slices/constants'
+
 // utils
 import Amount from '../../../utils/amount'
 import { getLocale } from '../../../../common/locale'
-import { checkIfTokenNeedsNetworkIcon } from '../../../utils/asset-utils'
+import {
+  checkIfTokenNeedsNetworkIcon,
+  getAssetIdKey
+} from '../../../utils/asset-utils'
+import {
+  getTokenPriceAmountFromRegistry,
+  getPriceIdForToken
+} from '../../../utils/pricing-utils'
+
+// hooks
+import {
+  useGetNetworkQuery,
+  useGetTokenSpotPricesQuery
+} from '../../../common/slices/api.slice'
 
 // components
-import { IconsWrapper, MediumAssetIcon, NetworkIconWrapper } from '../style'
-import { withPlaceholderIcon, CreateNetworkIcon } from '..'
+import {
+  IconsWrapper,
+  MediumAssetIcon,
+  NetworkIconWrapper,
+  Row
+} from '../style'
+import { withPlaceholderIcon } from '../create-placeholder-icon/index'
+import { CreateNetworkIcon } from '../create-network-icon/index'
+import { NftIcon } from '../nft-icon/nft-icon'
 
 // styles
 import {
-  BuyAssetOptionWrapper,
+  AssetButton,
   AssetName,
   NameAndIcon,
   NameColumn,
@@ -28,128 +54,132 @@ import {
   PriceContainer,
   PriceText
 } from './buy-asset-option.styles'
-import { useApiProxy } from '../../../common/hooks/use-api-proxy'
-import { getTokenParam } from '../../../utils/api-utils'
 import { LoadIcon } from './buy-option-item-styles'
-import { useGetNetworkQuery } from '../../../common/slices/api.slice'
 
 interface Props {
   onClick?: (token: BraveWallet.BlockchainToken) => void
   token: BraveWallet.BlockchainToken
-  isSelected?: boolean
   isPanel?: boolean
   /** Set this to a currency-code to fetch & display the token's price */
   selectedCurrency?: string
 }
 
-const AssetIconWithPlaceholder = withPlaceholderIcon(MediumAssetIcon, { size: 'big', marginLeft: 0, marginRight: 8 })
+const ICON_CONFIG = { size: 'big', marginLeft: 0, marginRight: 8 } as const
+const AssetIconWithPlaceholder = withPlaceholderIcon(
+  MediumAssetIcon,
+  ICON_CONFIG
+)
+const NftAssetIconWithPlaceholder = withPlaceholderIcon(NftIcon, ICON_CONFIG)
 
-export const BuyAssetOptionItem = React.forwardRef<HTMLButtonElement, Props>(({
-  onClick,
-  token,
-  isSelected,
-  isPanel,
-  selectedCurrency
-}: Props, forwardedRef) => {
-  // state
-  const [price, setPrice] = React.useState('')
-  const [isFetchingPrice, setIsFetchingPrice] = React.useState(!!selectedCurrency)
+export const BuyAssetOptionItem = React.forwardRef<HTMLDivElement, Props>(
+  ({ onClick, token, isPanel, selectedCurrency }, ref) => {
+    // routing
+    const { assetId: selectedOnRampAssetId } = useParams<{ assetId: string }>()
 
-  // queries
-  const { data: tokenNetwork } = useGetNetworkQuery(token ?? skipToken)
+    // query Params
+    const tokenIds = React.useMemo(() => {
+      return [getPriceIdForToken(token)]
+    }, [token])
 
-  // custom hooks
-  const { assetRatioService } = useApiProxy()
+    // queries
+    const {
+      data: priceRegistry,
+      isFetching: isFetchingPrice,
+      isLoading: isLoadingPrice
+    } = useGetTokenSpotPricesQuery(
+      !tokenIds.length || !selectedCurrency
+        ? skipToken
+        : {
+            ids: tokenIds,
+            toCurrency: selectedCurrency
+          },
+      // refresh every 15 seconds
+      defaultQuerySubscriptionOptions
+    )
+    const { data: tokenNetwork } = useGetNetworkQuery(token ?? skipToken)
 
-  // memos
-  const networkDescription: string = React.useMemo(() => {
-    if (tokenNetwork && !isPanel) {
-      return getLocale('braveWalletPortfolioAssetNetworkDescription')
-        .replace('$1', token.symbol)
-        .replace('$2', tokenNetwork.chainName ?? '')
+    // memos
+    const networkDescription: string = React.useMemo(() => {
+      if (tokenNetwork && !isPanel) {
+        return getLocale('braveWalletPortfolioAssetNetworkDescription')
+          .replace('$1', token.symbol)
+          .replace('$2', tokenNetwork.chainName ?? '')
+      }
+      return token.symbol
+    }, [tokenNetwork, isPanel, token])
+
+    const price = React.useMemo(() => {
+      return priceRegistry
+        ? getTokenPriceAmountFromRegistry(priceRegistry, token)
+        : Amount.empty()
+    }, [priceRegistry, token])
+
+    // methods
+    const handleOnClick = React.useCallback(() => {
+      if (onClick) {
+        onClick(token)
+      }
+    }, [onClick, token])
+
+    // computed
+    const isSelected = getAssetIdKey(token) === selectedOnRampAssetId
+
+    // render
+    if (!token.visible) {
+      return null
     }
-    return token.symbol
-  }, [tokenNetwork, isPanel, token])
 
-  // methods
-  const handleOnClick = React.useCallback(() => {
-    if (onClick) {
-      onClick(token)
-    }
-  }, [onClick, token])
+    return (
+      <Row
+        padding='6px 12px'
+        ref={ref}
+      >
+        <AssetButton
+          isSelected={isSelected}
+          onClick={handleOnClick}
+        >
+          <NameAndIcon>
+            <IconsWrapper marginRight='14px'>
+              {token.isErc721 || token.isNft ? (
+                <NftAssetIconWithPlaceholder asset={token} />
+              ) : (
+                <AssetIconWithPlaceholder asset={token} />
+              )}
+              {tokenNetwork &&
+                !isPanel &&
+                checkIfTokenNeedsNetworkIcon(
+                  tokenNetwork,
+                  token.contractAddress
+                ) && (
+                  <NetworkIconWrapper>
+                    <CreateNetworkIcon
+                      network={tokenNetwork}
+                      marginRight={0}
+                    />
+                  </NetworkIconWrapper>
+                )}
+            </IconsWrapper>
+            <NameColumn>
+              <AssetName>{token.name}</AssetName>
+              <NetworkDescriptionText>
+                {networkDescription}
+              </NetworkDescriptionText>
+            </NameColumn>
+          </NameAndIcon>
 
-  // effects
-  React.useEffect(() => {
-    // fetch asset price
-
-    let subscribed = true
-
-    // need a selected currency to show price
-    if (selectedCurrency) {
-      const tokenParam = getTokenParam(token)
-      setIsFetchingPrice(true)
-      assetRatioService.getPrice(
-        [tokenParam],
-        [selectedCurrency.toLowerCase()],
-        1 as BraveWallet.AssetPriceTimeframe // one day
-      ).then(({ values, success }) => {
-        if (!subscribed) {
-          return
-        }
-        setIsFetchingPrice(false)
-        setPrice(values?.[0]?.price || '')
-      })
-    }
-
-    // cleanup
-    return () => {
-      subscribed = false
-    }
-  }, [selectedCurrency, assetRatioService])
-
-  // render
-  if (!token.visible) {
-    return null
+          {selectedCurrency && (
+            <PriceContainer>
+              {isFetchingPrice || isLoadingPrice ? (
+                <LoadIcon />
+              ) : (
+                <PriceText>{price.formatAsFiat(selectedCurrency)}</PriceText>
+              )}
+            </PriceContainer>
+          )}
+        </AssetButton>
+      </Row>
+    )
   }
-
-  return (
-    <BuyAssetOptionWrapper ref={forwardedRef} isSelected={isSelected} onClick={handleOnClick}>
-      <NameAndIcon>
-        <IconsWrapper marginRight='14px'>
-          <AssetIconWithPlaceholder asset={token} network={tokenNetwork} />
-          {
-            tokenNetwork &&
-            !isPanel && checkIfTokenNeedsNetworkIcon(tokenNetwork, token.contractAddress) &&
-            <NetworkIconWrapper>
-              <CreateNetworkIcon network={tokenNetwork} marginRight={0} />
-            </NetworkIconWrapper>
-          }
-        </IconsWrapper>
-        <NameColumn>
-          <AssetName>
-            {token.name} {
-              token.isErc721 && token.tokenId
-                ? '#' + new Amount(token.tokenId).toNumber()
-                : ''
-            }
-          </AssetName>
-          <NetworkDescriptionText>{networkDescription}</NetworkDescriptionText>
-        </NameColumn>
-      </NameAndIcon>
-
-      {selectedCurrency &&
-          <PriceContainer>
-            {isFetchingPrice
-              ? <LoadIcon />
-              : !!price && <PriceText>
-                  {new Amount(price).formatAsFiat(selectedCurrency)}
-                </PriceText>
-            }
-          </PriceContainer>
-        }
-    </BuyAssetOptionWrapper>
-  )
-}
 )
 
 export default BuyAssetOptionItem

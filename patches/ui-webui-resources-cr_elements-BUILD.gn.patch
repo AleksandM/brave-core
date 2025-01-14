@@ -1,12 +1,12 @@
 diff --git a/ui/webui/resources/cr_elements/BUILD.gn b/ui/webui/resources/cr_elements/BUILD.gn
-index 3718f080153dca6b3eb366c3d1330911c20565a8..639fff225208014ac49d9af890238ffa379a83e0 100644
+index 4668ff3914f59678e07c696b79b38111552d2340..5ce83927bb8ef82e19754ec9891325232d6f2213 100644
 --- a/ui/webui/resources/cr_elements/BUILD.gn
 +++ b/ui/webui/resources/cr_elements/BUILD.gn
-@@ -61,6 +61,7 @@ build_webui("build") {
-       web_component_files +=
-           [ "cr_searchable_drop_down/cr_searchable_drop_down.ts" ]
-     }
-+    else if (!is_android) { web_component_files += [ "cr_searchable_drop_down/cr_searchable_drop_down.ts" ] }
- 
-     icons_html_files = [
-       "cr_fingerprint/cr_fingerprint_icons.html",
+@@ -229,6 +229,7 @@ build_webui("build") {
+     "//third_party/lit/v3_0:build_ts",
+   ]
+   if (!is_android && !is_ios) {
++    ts_deps += ["//brave/ui/webui/resources:build_ts"]
+     ts_deps += [ "//third_party/polymer/v3_0:library" ]
+   }
+   ts_definitions = [

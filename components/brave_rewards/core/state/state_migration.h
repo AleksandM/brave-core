@@ -7,12 +7,13 @@
 #define BRAVE_COMPONENTS_BRAVE_REWARDS_CORE_STATE_STATE_MIGRATION_H_
 
 #include "base/memory/raw_ref.h"
-#include "brave/components/brave_rewards/core/ledger_callbacks.h"
+#include "brave/components/brave_rewards/core/rewards_callbacks.h"
 #include "brave/components/brave_rewards/core/state/state_migration_v1.h"
 #include "brave/components/brave_rewards/core/state/state_migration_v10.h"
 #include "brave/components/brave_rewards/core/state/state_migration_v11.h"
 #include "brave/components/brave_rewards/core/state/state_migration_v12.h"
 #include "brave/components/brave_rewards/core/state/state_migration_v13.h"
+#include "brave/components/brave_rewards/core/state/state_migration_v14.h"
 #include "brave/components/brave_rewards/core/state/state_migration_v2.h"
 #include "brave/components/brave_rewards/core/state/state_migration_v3.h"
 #include "brave/components/brave_rewards/core/state/state_migration_v4.h"
@@ -23,13 +24,13 @@
 #include "brave/components/brave_rewards/core/state/state_migration_v9.h"
 
 namespace brave_rewards::internal {
-class LedgerImpl;
+class RewardsEngine;
 
 namespace state {
 
 class StateMigration {
  public:
-  explicit StateMigration(LedgerImpl& ledger);
+  explicit StateMigration(RewardsEngine& engine);
   ~StateMigration();
 
   void Start(ResultCallback callback);
@@ -41,7 +42,7 @@ class StateMigration {
 
   void OnMigration(ResultCallback callback, int version, mojom::Result result);
 
-  const raw_ref<LedgerImpl> ledger_;
+  const raw_ref<RewardsEngine> engine_;
   StateMigrationV1 v1_;
   StateMigrationV2 v2_;
   StateMigrationV3 v3_;
@@ -55,6 +56,7 @@ class StateMigration {
   StateMigrationV11 v11_;
   StateMigrationV12 v12_;
   StateMigrationV13 v13_;
+  StateMigrationV14 v14_;
 };
 
 }  // namespace state

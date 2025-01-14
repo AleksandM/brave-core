@@ -5,8 +5,9 @@
 
 package org.chromium.chrome.browser.crypto_wallet;
 
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.brave_wallet.mojom.BlockchainRegistry;
 import org.chromium.chrome.browser.crypto_wallet.util.Utils;
 import org.chromium.chrome.browser.profiles.Profile;
@@ -54,6 +55,7 @@ public class BlockchainRegistryFactory {
     @NativeMethods
     interface Natives {
         long getInterfaceToBlockchainRegistry();
+
         String getTokensIconsLocation(Profile profile);
     }
 }

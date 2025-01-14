@@ -5,7 +5,6 @@
 
 static_library("browser") {
   sources = [
-    "pref_names.cc",
     "pref_names.h",
     "skus_context_impl.cc",
     "skus_context_impl.h",
@@ -17,10 +16,7 @@ static_library("browser") {
     "skus_utils.h",
   ]
 
-  public_deps = [
-    "rs/cxx",
-    "rs/cxx:shim",
-  ]
+  public_deps = [ "rs/cxx:rust_lib" ]
 
   deps = [
     "//base",

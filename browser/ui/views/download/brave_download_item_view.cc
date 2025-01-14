@@ -18,6 +18,7 @@
 #include "components/vector_icons/vector_icons.h"
 #include "content/public/common/origin_util.h"
 #include "third_party/skia/include/core/SkColor.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "ui/color/color_provider.h"
 #include "ui/gfx/canvas.h"
@@ -75,13 +76,10 @@ BraveDownloadItemView::~BraveDownloadItemView() = default;
 
 // View overrides.
 
-void BraveDownloadItemView::Layout() {
-  DownloadItemView::Layout();
-}
-
-gfx::Size BraveDownloadItemView::CalculatePreferredSize() const {
+gfx::Size BraveDownloadItemView::CalculatePreferredSize(
+    const views::SizeBounds& available_size) const {
   // Call base class to get the width.
-  gfx::Size size = DownloadItemView::CalculatePreferredSize();
+  gfx::Size size = DownloadItemView::CalculatePreferredSize(available_size);
   // Calculate the height accounting for the extra line.
   int child_height = file_name_label_->GetLineHeight() +
                      kBraveVerticalTextPadding +
@@ -145,6 +143,21 @@ void BraveDownloadItemView::OnDownloadUpdated() {
     tooltip_text_ = new_tip;
     TooltipTextChanged();
   }
+}
+
+std::u16string BraveDownloadItemView::CalculateAccessibleName() const {
+  auto accessible_name = DownloadItemView::CalculateAccessibleName();
+  if (!origin_url_text_.empty()) {
+    std::u16string extra;
+    if (!is_origin_url_secure_) {
+      extra += char16_t(' ') + brave_l10n::GetLocalizedResourceUTF16String(
+                                   IDS_NOT_SECURE_VERBOSE_STATE);
+    }
+    extra += char16_t(' ') + origin_url_text_;
+    accessible_name += extra;
+  }
+
+  return accessible_name;
 }
 
 // Positioning routines.
@@ -218,22 +231,6 @@ gfx::ImageSkia BraveDownloadItemView::GetLockIcon(int height) {
     kDownloadUnlockIconColor);
 }
 
-// Update accessible name with origin URL.
-void BraveDownloadItemView::SetMode(download::DownloadItemMode mode) {
-  DownloadItemView::SetMode(mode);
-  if (IsShowingWarningDialog())
-    return;
-
-  if (!origin_url_text_.empty()) {
-    std::u16string extra;
-    if (!is_origin_url_secure_)
-      extra += char16_t(' ') + brave_l10n::GetLocalizedResourceUTF16String(
-                                   IDS_NOT_SECURE_VERBOSE_STATE);
-    extra += char16_t(' ') + origin_url_text_;
-    accessible_name_ += extra;
-  }
-}
-
 void BraveDownloadItemView::UpdateLabels() {
   DownloadItemView::UpdateLabels();
   // Update visibility to avoid artifacts to be shown from upstream
@@ -262,3 +259,6 @@ void BraveDownloadItemView::OnViewFocused(View* observed_view) {
 void BraveDownloadItemView::OnViewBlurred(View* observed_view) {
   SetOriginUrlVisible(false);
 }
+
+BEGIN_METADATA(BraveDownloadItemView)
+END_METADATA

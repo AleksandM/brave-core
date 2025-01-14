@@ -5,17 +5,16 @@
 
 #include "brave/components/brave_rewards/browser/rewards_p3a.h"
 
-#include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
-#include "brave/components/brave_ads/common/pref_names.h"
+#include "brave/components/brave_ads/core/public/prefs/pref_names.h"
 #include "brave/components/brave_rewards/common/pref_names.h"
+#include "brave/components/ntp_background_images/common/pref_names.h"
 #include "brave/components/p3a_utils/bucket.h"
+#include "brave/components/time_period_storage/monthly_storage.h"
 #include "components/prefs/pref_service.h"
 
-namespace brave_rewards {
-namespace p3a {
+namespace brave_rewards::p3a {
 
-#if !BUILDFLAG(IS_ANDROID)
 namespace {
 
 // The maximum time difference allowed between the rewards panel opening action
@@ -24,19 +23,15 @@ namespace {
 // enabling.
 constexpr base::TimeDelta kMaxEnabledCauseTriggerTime = base::Minutes(1);
 
-}  // namespace
-#endif  // !BUILDFLAG(IS_ANDROID)
+constexpr base::TimeDelta kReportInterval = base::Days(1);
 
-const char kEnabledSourceHistogramName[] = "Brave.Rewards.EnabledSource";
-const char kInlineTipTriggerHistogramName[] = "Brave.Rewards.InlineTipTrigger";
-const char kToolbarButtonTriggerHistogramName[] =
-    "Brave.Rewards.ToolbarButtonTrigger";
-const char kTipsSentHistogramName[] = "Brave.Rewards.TipsSent";
-const char kAutoContributionsStateHistogramName[] =
-    "Brave.Rewards.AutoContributionsState.3";
-const char kAdsEnabledDurationHistogramName[] =
-    "Brave.Rewards.AdsEnabledDuration";
-const int kTipsSentBuckets[] = {1, 3};
+constexpr int kTipsSentBuckets[] = {0, 1, 3};
+
+constexpr int kPanelCountBuckets[] = {5, 10, 50};
+
+constexpr int kRewardsPageViewCountBuckets[] = {2, 5, 10, 50};
+
+}  // namespace
 
 void RecordAutoContributionsState(bool ac_enabled) {
   UMA_HISTOGRAM_EXACT_LINEAR(kAutoContributionsStateHistogramName, ac_enabled,
@@ -46,12 +41,12 @@ void RecordAutoContributionsState(bool ac_enabled) {
 void RecordTipsSent(size_t tip_count) {
   DCHECK_GE(tip_count, 0u);
 
-  if (tip_count == 0) {
-    return;
-  }
-
   p3a_utils::RecordToHistogramBucket(kTipsSentHistogramName, kTipsSentBuckets,
                                      tip_count);
+}
+
+void RecordRecurringTipConfigured(bool tip_configured) {
+  UMA_HISTOGRAM_BOOLEAN(kRecurringTipHistogramName, tip_configured);
 }
 
 void RecordNoWalletCreatedForAllMetrics() {
@@ -60,69 +55,79 @@ void RecordNoWalletCreatedForAllMetrics() {
                              2);
 }
 
-void RecordAdsEnabledDuration(PrefService* prefs, bool ads_enabled) {
-  base::Time enabled_timestamp = prefs->GetTime(prefs::kAdsEnabledTimestamp);
-  base::TimeDelta enabled_time_delta =
-      prefs->GetTimeDelta(prefs::kAdsEnabledTimeDelta);
-  AdsEnabledDuration enabled_duration;
-
-  if (enabled_timestamp.is_null()) {
-    // No previous timestamp, so record one of the non-duration states.
-    if (ads_enabled) {
-      // Ads have been enabled.
-      // Remember when so we can measure the duration on later changes.
-      prefs->SetTime(prefs::kAdsEnabledTimestamp, base::Time::Now());
-    }
-  } else {
-    // Previous timestamp available.
-    if (!ads_enabled) {
-      // Ads have been disabled. Record the duration they were on.
-      enabled_time_delta = base::Time::Now() - enabled_timestamp;
-      VLOG(1) << "Rewards disabled after " << enabled_time_delta;
-      // Null the timestamp so we're ready for a fresh measurement.
-      // Store the enabled time delta so we can keep reporting the duration.
-      prefs->SetTime(prefs::kAdsEnabledTimestamp, base::Time());
-      prefs->SetTimeDelta(prefs::kAdsEnabledTimeDelta, enabled_time_delta);
-    }
+void RecordRewardsPageViews(PrefService* prefs, bool new_view) {
+  if (!prefs->GetBoolean(prefs::kEnabled)) {
+    return;
   }
-  // Set the threshold at three units so each bin represents the
-  // nominal value as an order-of-magnitude: more than three days
-  // is a week, more than three weeks is a month, and so on.
-  constexpr int threshold = 3;
-  constexpr int days_per_week = 7;
-  constexpr double days_per_month = 30.44;  // average length
-  if (ads_enabled) {
-    enabled_duration = AdsEnabledDuration::kStillEnabled;
-  } else if (enabled_time_delta.is_zero()) {
-    enabled_duration = AdsEnabledDuration::kNever;
-  } else if (enabled_time_delta < base::Hours(threshold)) {
-    enabled_duration = AdsEnabledDuration::kHours;
-  } else if (enabled_time_delta < base::Days(threshold)) {
-    enabled_duration = AdsEnabledDuration::kDays;
-  } else if (enabled_time_delta < base::Days(threshold * days_per_week)) {
-    enabled_duration = AdsEnabledDuration::kWeeks;
-  } else if (enabled_time_delta < base::Days(threshold * days_per_month)) {
-    enabled_duration = AdsEnabledDuration::kMonths;
-  } else {
-    enabled_duration = AdsEnabledDuration::kQuarters;
+  MonthlyStorage storage(prefs, prefs::kRewardsPageViewCount);
+  if (new_view) {
+    storage.AddDelta(1);
   }
-
-  UMA_HISTOGRAM_ENUMERATION(kAdsEnabledDurationHistogramName, enabled_duration);
+  auto sum = storage.GetMonthlySum();
+  if (sum == 0) {
+    return;
+  }
+  p3a_utils::RecordToHistogramBucket(kPageViewCountHistogramName,
+                                     kRewardsPageViewCountBuckets, sum);
 }
 
-ConversionMonitor::ConversionMonitor() = default;
+void RecordAdTypesEnabled(PrefService* prefs) {
+  if (!prefs->GetBoolean(prefs::kEnabled)) {
+    UMA_HISTOGRAM_EXACT_LINEAR(kAdTypesEnabledHistogramName, INT_MAX - 1, 8);
+    return;
+  }
+  int ntp_enabled =
+      prefs->GetBoolean(ntp_background_images::prefs::
+                            kNewTabPageShowSponsoredImagesBackgroundImage);
+  int notification_enabled =
+      prefs->GetBoolean(brave_ads::prefs::kOptedInToNotificationAds);
+  int search_result_enabled =
+      prefs->GetBoolean(brave_ads::prefs::kOptedInToSearchResultAds);
+  int answer =
+      (search_result_enabled << 2) | (notification_enabled << 1) | ntp_enabled;
+  UMA_HISTOGRAM_EXACT_LINEAR(kAdTypesEnabledHistogramName, answer, 8);
+}
+
+void RecordSearchResultAdsOptinChange(PrefService* prefs) {
+  if (prefs->GetBoolean(brave_ads::prefs::kOptedInToSearchResultAds)) {
+    UMA_HISTOGRAM_BOOLEAN(kSearchResultAdsOptinHistogramName, true);
+  }
+}
+
+void RecordAdsHistoryView() {
+  UMA_HISTOGRAM_BOOLEAN(kAdsHistoryViewHistogramName, true);
+}
+
+ConversionMonitor::ConversionMonitor(PrefService* prefs)
+    : prefs_(prefs), panel_trigger_count_(prefs, prefs::kP3APanelTriggerCount) {
+  ReportPeriodicMetrics();
+}
+
 ConversionMonitor::~ConversionMonitor() = default;
 
 void ConversionMonitor::RecordPanelTrigger(PanelTrigger trigger) {
 #if !BUILDFLAG(IS_ANDROID)
-  if (trigger == PanelTrigger::kInlineTip) {
-    UMA_HISTOGRAM_EXACT_LINEAR(kInlineTipTriggerHistogramName, 1, 2);
-  } else if (trigger == PanelTrigger::kToolbarButton) {
-    UMA_HISTOGRAM_EXACT_LINEAR(kToolbarButtonTriggerHistogramName, 1, 2);
+  if (prefs_->GetBoolean(prefs::kEnabled)) {
+    panel_trigger_count_.AddDelta(1u);
+    ReportPanelTriggerCount();
+  } else {
+    if (trigger == PanelTrigger::kToolbarButton) {
+      UMA_HISTOGRAM_EXACT_LINEAR(kToolbarButtonTriggerHistogramName, 1, 2);
+    }
+    last_trigger_ = trigger;
+    last_trigger_time_ = base::Time::Now();
   }
-  last_trigger_ = trigger;
-  last_trigger_time_ = base::Time::Now();
-#endif  // !BUILDFLAG(IS_ANDROID)
+#else
+  if (prefs_->GetBoolean(prefs::kEnabled)) {
+    panel_trigger_count_.AddDelta(1u);
+    ReportPanelTriggerCount();
+  } else {
+    mobile_trigger_timer_.Start(
+        FROM_HERE, kMaxEnabledCauseTriggerTime,
+        base::BindOnce(&ConversionMonitor::OnMobileTriggerTimer,
+                       base::Unretained(this)));
+  }
+#endif
 }
 
 void ConversionMonitor::RecordRewardsEnable() {
@@ -131,7 +136,6 @@ void ConversionMonitor::RecordRewardsEnable() {
   // data from being sent once the "rewards enabled source" metric is recorded.
   UMA_HISTOGRAM_EXACT_LINEAR(kToolbarButtonTriggerHistogramName, INT_MAX - 1,
                              2);
-  UMA_HISTOGRAM_EXACT_LINEAR(kInlineTipTriggerHistogramName, INT_MAX - 1, 2);
 
   if (!last_trigger_.has_value() ||
       base::Time::Now() - last_trigger_time_ > kMaxEnabledCauseTriggerTime) {
@@ -142,8 +146,33 @@ void ConversionMonitor::RecordRewardsEnable() {
 
   last_trigger_.reset();
   last_trigger_time_ = base::Time();
-#endif  // !BUILDFLAG(IS_ANDROID)
+#else
+  mobile_trigger_timer_.Stop();
+  OnMobileTriggerTimer();
+#endif
 }
 
-}  // namespace p3a
-}  // namespace brave_rewards
+#if BUILDFLAG(IS_ANDROID)
+void ConversionMonitor::OnMobileTriggerTimer() {
+  UMA_HISTOGRAM_BOOLEAN(kMobileConversionHistogramName,
+                        prefs_->GetBoolean(prefs::kEnabled));
+}
+#endif
+
+void ConversionMonitor::ReportPeriodicMetrics() {
+  ReportPanelTriggerCount();
+  daily_timer_.Start(FROM_HERE, base::Time::Now() + kReportInterval,
+                     base::BindOnce(&ConversionMonitor::ReportPeriodicMetrics,
+                                    base::Unretained(this)));
+}
+
+void ConversionMonitor::ReportPanelTriggerCount() {
+  uint64_t total = panel_trigger_count_.GetWeeklySum();
+  if (total == 0) {
+    return;
+  }
+  p3a_utils::RecordToHistogramBucket(kPanelCountHistogramName,
+                                     kPanelCountBuckets, total);
+}
+
+}  // namespace brave_rewards::p3a

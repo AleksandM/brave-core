@@ -7,12 +7,11 @@
 
 namespace content {
 
-void SharedWorkerContentSettingsProxyImpl::GetBraveFarblingLevel(
-    GetBraveFarblingLevelCallback callback) {
-  if (!origin_.opaque()) {
-    owner_->GetBraveFarblingLevel(origin_.GetURL(), std::move(callback));
-  } else {
-    std::move(callback).Run(1 /* OFF */);
-  }
+void SharedWorkerContentSettingsProxyImpl::GetBraveShieldsSettings(
+    GetBraveShieldsSettingsCallback callback) {
+  // Shields should also work in opaque origins.
+  const GURL url = origin_.GetTupleOrPrecursorTupleIfOpaque().GetURL();
+  owner_->GetBraveShieldsSettings(url, std::move(callback));
 }
+
 }  // namespace content

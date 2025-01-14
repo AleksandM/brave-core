@@ -14,7 +14,7 @@
 #include "base/memory/raw_ptr.h"
 #include "components/renderer_context_menu/render_view_context_menu_proxy.h"
 #include "ui/base/models/image_model.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/menus/simple_menu_model.h"
 
 class BraveMockRenderViewContextMenu;
 class PrefService;
@@ -82,8 +82,7 @@ class BraveMockRenderViewContextMenu : public ui::SimpleMenuModel::Delegate,
   void RemoveSeparatorBeforeMenuItem(int command_id) override;
   void AddSpellCheckServiceItem(bool is_checked) override;
   void AddAccessibilityLabelsServiceItem(bool is_checked) override;
-  void AddPdfOcrMenuItem(bool is_checked) override;
-  content::RenderViewHost* GetRenderViewHost() const override;
+  content::RenderFrameHost* GetRenderFrameHost() const override;
   content::WebContents* GetWebContents() const override;
   content::BrowserContext* GetBrowserContext() const override;
 
@@ -107,7 +106,7 @@ class BraveMockRenderViewContextMenu : public ui::SimpleMenuModel::Delegate,
   // An observer used for initializing the status of menu items added in this
   // test. This is owned by our owner and the owner is responsible for its
   // lifetime.
-  raw_ptr<RenderViewContextMenuObserver> observer_ = nullptr;
+  raw_ptr<RenderViewContextMenuObserver, DanglingUntriaged> observer_ = nullptr;
 
   // Either a regular profile or an incognito profile.
   raw_ptr<Profile> profile_ = nullptr;

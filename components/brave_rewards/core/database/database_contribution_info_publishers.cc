@@ -9,22 +9,19 @@
 #include "base/strings/stringprintf.h"
 #include "brave/components/brave_rewards/core/database/database_contribution_info_publishers.h"
 #include "brave/components/brave_rewards/core/database/database_util.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 
-using std::placeholders::_1;
-
-namespace brave_rewards::internal {
-namespace database {
+namespace brave_rewards::internal::database {
 
 namespace {
 
-const char kTableName[] = "contribution_info_publishers";
+constexpr char kTableName[] = "contribution_info_publishers";
 
 }  // namespace
 
 DatabaseContributionInfoPublishers::DatabaseContributionInfoPublishers(
-    LedgerImpl& ledger)
-    : DatabaseTable(ledger) {}
+    RewardsEngine& engine)
+    : DatabaseTable(engine) {}
 
 DatabaseContributionInfoPublishers::~DatabaseContributionInfoPublishers() =
     default;
@@ -35,7 +32,7 @@ void DatabaseContributionInfoPublishers::InsertOrUpdate(
   DCHECK(transaction);
 
   if (!info) {
-    BLOG(1, "Info is null");
+    engine_->Log(FROM_HERE) << "Info is null";
     return;
   }
 
@@ -62,8 +59,8 @@ void DatabaseContributionInfoPublishers::GetRecordByContributionList(
     const std::vector<std::string>& contribution_ids,
     ContributionPublisherListCallback callback) {
   if (contribution_ids.empty()) {
-    BLOG(1, "Contribution ids is empty");
-    callback({});
+    engine_->Log(FROM_HERE) << "Contribution ids is empty";
+    std::move(callback).Run({});
     return;
   }
 
@@ -85,20 +82,20 @@ void DatabaseContributionInfoPublishers::GetRecordByContributionList(
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback = std::bind(
-      &DatabaseContributionInfoPublishers::OnGetRecordByContributionList, this,
-      _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(
+          &DatabaseContributionInfoPublishers::OnGetRecordByContributionList,
+          base::Unretained(this), std::move(callback)));
 }
 
 void DatabaseContributionInfoPublishers::OnGetRecordByContributionList(
-    mojom::DBCommandResponsePtr response,
-    ContributionPublisherListCallback callback) {
+    ContributionPublisherListCallback callback,
+    mojom::DBCommandResponsePtr response) {
   if (!response ||
       response->status != mojom::DBCommandResponse::Status::RESPONSE_OK) {
-    BLOG(0, "Response is not ok");
-    callback({});
+    engine_->LogError(FROM_HERE) << "Response is not ok";
+    std::move(callback).Run({});
     return;
   }
 
@@ -115,15 +112,15 @@ void DatabaseContributionInfoPublishers::OnGetRecordByContributionList(
     list.push_back(std::move(info));
   }
 
-  callback(std::move(list));
+  std::move(callback).Run(std::move(list));
 }
 
 void DatabaseContributionInfoPublishers::GetContributionPublisherPairList(
     const std::vector<std::string>& contribution_ids,
     ContributionPublisherPairListCallback callback) {
   if (contribution_ids.empty()) {
-    BLOG(1, "Contribution ids is empty");
-    callback({});
+    engine_->Log(FROM_HERE) << "Contribution ids is empty";
+    std::move(callback).Run({});
     return;
   }
 
@@ -155,20 +152,20 @@ void DatabaseContributionInfoPublishers::GetContributionPublisherPairList(
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback = std::bind(
-      &DatabaseContributionInfoPublishers::OnGetContributionPublisherInfoMap,
-      this, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&DatabaseContributionInfoPublishers::
+                         OnGetContributionPublisherInfoMap,
+                     base::Unretained(this), std::move(callback)));
 }
 
 void DatabaseContributionInfoPublishers::OnGetContributionPublisherInfoMap(
-    mojom::DBCommandResponsePtr response,
-    ContributionPublisherPairListCallback callback) {
+    ContributionPublisherPairListCallback callback,
+    mojom::DBCommandResponsePtr response) {
   if (!response ||
       response->status != mojom::DBCommandResponse::Status::RESPONSE_OK) {
-    BLOG(0, "Response is not ok");
-    callback({});
+    engine_->LogError(FROM_HERE) << "Response is not ok";
+    std::move(callback).Run({});
     return;
   }
 
@@ -183,7 +180,7 @@ void DatabaseContributionInfoPublishers::OnGetContributionPublisherInfoMap(
     publisher->url = GetStringColumn(record_pointer, 4);
     publisher->favicon_url = GetStringColumn(record_pointer, 5);
     publisher->status =
-        static_cast<mojom::PublisherStatus>(GetInt64Column(record_pointer, 6));
+        PublisherStatusFromInt(GetInt64Column(record_pointer, 6));
     publisher->status_updated_at = GetInt64Column(record_pointer, 7);
     publisher->provider = GetStringColumn(record_pointer, 8);
 
@@ -191,16 +188,17 @@ void DatabaseContributionInfoPublishers::OnGetContributionPublisherInfoMap(
                            std::move(publisher));
   }
 
-  callback(std::move(pair_list));
+  std::move(callback).Run(std::move(pair_list));
 }
 
 void DatabaseContributionInfoPublishers::UpdateContributedAmount(
     const std::string& contribution_id,
     const std::string& publisher_key,
-    LegacyResultCallback callback) {
+    ResultCallback callback) {
   if (contribution_id.empty() || publisher_key.empty()) {
-    BLOG(1, "Data is empty " << contribution_id << "/" << publisher_key);
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->Log(FROM_HERE)
+        << "Data is empty " << contribution_id << "/" << publisher_key;
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
@@ -223,10 +221,9 @@ void DatabaseContributionInfoPublishers::UpdateContributedAmount(
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback = std::bind(&OnResultCallback, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&OnResultCallback, std::move(callback)));
 }
 
-}  // namespace database
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::database

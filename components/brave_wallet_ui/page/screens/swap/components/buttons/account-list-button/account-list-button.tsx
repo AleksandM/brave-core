@@ -6,26 +6,18 @@
 import * as React from 'react'
 
 // Types
-import {
-  WalletAccountType
-} from '../../../../../../constants/types'
+import { BraveWallet } from '../../../../../../constants/types'
 
 // Utils
-import {
-  reduceAddress
-} from '../../../../../../utils/reduce-address'
+import { reduceAddress } from '../../../../../../utils/reduce-address'
 
 // Styled Components
 import { Button } from './account-list-button.style'
-import {
-  Text,
-  Row,
-  HorizontalSpacer
-} from '../../shared-swap.styles'
+import { Text, Row, HorizontalSpacer } from '../../shared-swap.styles'
 
 interface Props {
-  onClick: (account: WalletAccountType) => void
-  account: WalletAccountType
+  onClick: (account: BraveWallet.AccountInfo) => void
+  account: BraveWallet.AccountInfo
 }
 
 export const AccountListButton = (props: Props) => {
@@ -38,11 +30,19 @@ export const AccountListButton = (props: Props) => {
   return (
     <Button onClick={onSelectAccount}>
       <Row>
-        <Text isBold={true} textSize='14px' textColor='text01'>
+        <Text
+          isBold={true}
+          textSize='14px'
+          textColor='text01'
+        >
           {account.name}
         </Text>
         <HorizontalSpacer size={15} />
-        <Text isBold={false} textSize='12px' textColor='text03'>
+        <Text
+          isBold={false}
+          textSize='12px'
+          textColor='text03'
+        >
           {reduceAddress(account.address)}
         </Text>
       </Row>

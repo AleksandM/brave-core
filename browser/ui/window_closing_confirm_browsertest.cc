@@ -28,6 +28,7 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/download_manager.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/download_test_observer.h"
 #include "content/public/test/test_download_http_response.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
@@ -265,7 +266,18 @@ IN_PROC_BROWSER_TEST_F(WindowClosingConfirmBrowserTest,
   ui_test_utils::WaitForBrowserToClose(brave_browser);
 }
 
-IN_PROC_BROWSER_TEST_F(WindowClosingConfirmBrowserTest, TestWithDownload) {
+#if BUILDFLAG(IS_WIN) && defined(ADDRESS_SANITIZER)
+// Upstream issue.
+// Stack overflow on Win/ASan: http://crbug.com/367746304
+// TODO(simonhong): Enable when master has the fix.
+// https://github.com/brave/brave-browser/issues/41936
+#define MAYBE_TestWithDownload DISABLED_TestWithDownload
+#else
+#define MAYBE_TestWithDownload TestWithDownload
+#endif
+
+IN_PROC_BROWSER_TEST_F(WindowClosingConfirmBrowserTest,
+                       MAYBE_TestWithDownload) {
 // On macOS, download in-progress warning is not shown for normal profile window
 // closing as it can still continue after window is closed.
 // However, private profile window works like normal window of other platforms.
@@ -307,7 +319,7 @@ IN_PROC_BROWSER_TEST_F(WindowClosingConfirmBrowserTest, TestWithDownload) {
   // Start downloading a file, wait for it to be created.
   ui_test_utils::NavigateToURLWithDisposition(
       brave_browser, url, WindowOpenDisposition::CURRENT_TAB,
-      ui_test_utils::BROWSER_TEST_NONE);
+      ui_test_utils::BROWSER_TEST_NO_WAIT);
   progress_waiter->WaitForFinished();
 
   EXPECT_EQ(1u, progress_waiter->NumDownloadsSeenInState(

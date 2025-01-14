@@ -5,12 +5,7 @@
 
 import TransportWebHID from '@ledgerhq/hw-transport-webhid'
 import { LedgerMessagingTransport } from './ledger-messaging-transport'
-import { HardwareOperationResult } from '../../hardware/types'
-import {
-  LedgerResponsePayload,
-  UnlockCommand,
-  UnlockResponse
-} from './ledger-messages'
+import { UnlockCommand, UnlockResponse } from './ledger-messages'
 
 // LedgerUntrustedMessagingTransport is the messaging transport object
 // for chrome-untrusted://ledger-bridge. It primarily handles postMessages
@@ -20,8 +15,10 @@ import {
 // We isolate the Ledger library from the wallet
 // so that in the event it's compromised it will reduce the
 // impact to the wallet.
-export class LedgerUntrustedMessagingTransport extends LedgerMessagingTransport {
-  constructor (targetWindow: Window, targetUrl: string) {
+export class LedgerUntrustedMessagingTransport //
+  extends LedgerMessagingTransport
+{
+  constructor(targetWindow: Window, targetUrl: string) {
     super(targetWindow, targetUrl)
   }
 
@@ -32,20 +29,26 @@ export class LedgerUntrustedMessagingTransport extends LedgerMessagingTransport 
     }
   }
 
-  protected handleUnlock = async (command: UnlockCommand): Promise<UnlockResponse> => {
+  protected handleUnlock = async (
+    command: UnlockCommand
+  ): Promise<UnlockResponse> => {
     const isAuthNeeded = await this.authorizationNeeded()
-    const payload: LedgerResponsePayload | HardwareOperationResult =
-      isAuthNeeded
-        ? { success: false, error: 'unauthorized', code: 'unauthorized' }
-        : { success: true }
-
-    const responsePayload: UnlockResponse = {
-      id: command.id,
-      command: command.command,
-      payload: payload,
-      origin: command.origin
+    if (isAuthNeeded) {
+      return {
+        ...command,
+        payload: {
+          success: false,
+          error: 'unauthorized',
+          code: 'unauthorized'
+        }
+      }
     }
-    return responsePayload
+    return {
+      ...command,
+      payload: {
+        success: true
+      }
+    }
   }
 
   protected authorizationNeeded = async (): Promise<boolean> => {

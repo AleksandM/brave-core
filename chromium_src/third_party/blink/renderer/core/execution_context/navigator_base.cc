@@ -8,20 +8,18 @@
 #include "base/compiler_specific.h"
 #include "base/system/sys_info.h"
 #include "brave/third_party/blink/renderer/core/farbling/brave_session_cache.h"
-#include "third_party/abseil-cpp/absl/random/random.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/loader/frame_loader.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 
-namespace blink {
-namespace probe {
+namespace blink::probe {
 
 void ApplyBraveHardwareConcurrencyOverride(blink::ExecutionContext* context,
                                            unsigned int* hardware_concurrency) {
-  const unsigned kFakeMinProcessors = 2;
-  const unsigned kFakeMaxProcessors = 8;
+  static constexpr unsigned kFakeMinProcessors = 2;
+  static constexpr unsigned kFakeMaxProcessors = 8;
   unsigned true_value =
       static_cast<unsigned>(base::SysInfo::NumberOfProcessors());
   if (true_value <= 2) {
@@ -29,7 +27,9 @@ void ApplyBraveHardwareConcurrencyOverride(blink::ExecutionContext* context,
     return;
   }
   unsigned farbled_value = true_value;
-  switch (brave::GetBraveFarblingLevelFor(context, BraveFarblingLevel::OFF)) {
+  switch (brave::GetBraveFarblingLevelFor(
+      context, ContentSettingsType::BRAVE_WEBCOMPAT_HARDWARE_CONCURRENCY,
+      BraveFarblingLevel::OFF)) {
     case BraveFarblingLevel::OFF: {
       break;
     }
@@ -52,8 +52,7 @@ void ApplyBraveHardwareConcurrencyOverride(blink::ExecutionContext* context,
   *hardware_concurrency = farbled_value;
 }
 
-}  // namespace probe
-}  // namespace blink
+}  // namespace blink::probe
 
 #define userAgent userAgent_ChromiumImpl
 #define ApplyHardwareConcurrencyOverride                        \
@@ -69,7 +68,8 @@ namespace blink {
 
 String NavigatorBase::userAgent() const {
   if (ExecutionContext* context = GetExecutionContext()) {
-    if (!brave::AllowFingerprinting(context)) {
+    if (!brave::AllowFingerprinting(
+            context, ContentSettingsType::BRAVE_WEBCOMPAT_USER_AGENT)) {
       return brave::BraveSessionCache::From(*context).FarbledUserAgent(
           context->UserAgent());
     }

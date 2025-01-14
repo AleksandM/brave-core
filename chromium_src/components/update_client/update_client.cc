@@ -13,12 +13,16 @@
 
 namespace update_client {
 
+bool CrxInstaller::IsBraveComponent() const {
+  return false;
+}
+
 scoped_refptr<UpdateClient> UpdateClientFactory(
     scoped_refptr<Configurator> config) {
   VLOG(3) << "Brave UpdateClientFactory called";
   return base::MakeRefCounted<UpdateClientImpl>(
       config, base::MakeRefCounted<PingManager>(config),
-      &SequentialUpdateChecker::Create);
+      base::BindRepeating(&SequentialUpdateChecker::Create));
 }
 
 }  // namespace update_client

@@ -5,9 +5,15 @@
 
 import * as React from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+
+// types
 import { WalletState } from '../../constants/types'
+
+// actions
 import { WalletActions } from '../actions'
-import { useApiProxy } from './use-api-proxy'
+
+// utils
+import getAPIProxy from '../async/bridge'
 
 const MAX_ATTEMPTS = 3 // The amount of tries before locking the wallet
 
@@ -19,9 +25,6 @@ const MAX_ATTEMPTS = 3 // The amount of tries before locking the wallet
  * Uses redux to track attempts globally
  */
 export const usePasswordAttempts = () => {
-  // custom hooks
-  const { keyringService } = useApiProxy()
-
   // redux
   const dispatch = useDispatch()
   const attempts = useSelector(({ wallet }: { wallet: WalletState }) => {
@@ -29,34 +32,41 @@ export const usePasswordAttempts = () => {
   })
 
   // methods
-  const attemptPasswordEntry = React.useCallback(async (password: string): Promise<boolean> => {
-    if (!password) { // require password to view key
-      return false
-    }
-
-    // entered password must be correct
-    const {
-      result: isPasswordValid
-    } = await keyringService.validatePassword(password)
-
-    if (!isPasswordValid) {
-      const newAttempts = attempts + 1
-      if (newAttempts >= MAX_ATTEMPTS) {
-        // lock wallet
-        keyringService.lock()
-        dispatch(WalletActions.setPasswordAttempts(0)) // reset attempts now that the wallet is locked
+  const attemptPasswordEntry = React.useCallback(
+    async (password: string): Promise<boolean> => {
+      if (!password) {
+        // require password to view key
         return false
       }
 
-      // increase attempts count
-      dispatch(WalletActions.setPasswordAttempts(newAttempts))
-      return false
-    }
+      const { keyringService } = getAPIProxy()
 
-    // correct password entered, reset attempts
-    dispatch(WalletActions.setPasswordAttempts(0))
-    return isPasswordValid
-  }, [keyringService, attempts])
+      // entered password must be correct
+      const { result: isPasswordValid } = await keyringService.validatePassword(
+        password
+      )
+
+      if (!isPasswordValid) {
+        const newAttempts = attempts + 1
+        if (newAttempts >= MAX_ATTEMPTS) {
+          // lock wallet
+          keyringService.lock()
+          // reset attempts now that the wallet is locked
+          dispatch(WalletActions.setPasswordAttempts(0))
+          return false
+        }
+
+        // increase attempts count
+        dispatch(WalletActions.setPasswordAttempts(newAttempts))
+        return false
+      }
+
+      // correct password entered, reset attempts
+      dispatch(WalletActions.setPasswordAttempts(0))
+      return isPasswordValid
+    },
+    [dispatch, attempts]
+  )
 
   return {
     attemptPasswordEntry,

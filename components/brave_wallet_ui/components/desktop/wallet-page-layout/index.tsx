@@ -10,15 +10,15 @@ export interface Props {
   children?: React.ReactNode
 }
 
-export default class WalletPageLayout extends React.PureComponent<Props, {}> {
-  render () {
+export class WalletPageLayout extends React.PureComponent<Props, {}> {
+  render() {
     const { children, maintainWidth } = this.props
     return (
       <StyledWrapper maintainWidth={maintainWidth}>
-        <StyledContent maintainWidth={maintainWidth}>
-          {children}
-        </StyledContent>
+        <StyledContent maintainWidth={maintainWidth}>{children}</StyledContent>
       </StyledWrapper>
     )
   }
 }
+
+export default WalletPageLayout

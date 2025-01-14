@@ -5,6 +5,8 @@
 
 #include "brave/components/permissions/permission_lifetime_manager.h"
 
+#include <string_view>
+
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/stl_util.h"
@@ -40,7 +42,7 @@ namespace {
 
 using PermissionDecidedCallback = PermissionRequest::PermissionDecidedCallback;
 
-constexpr base::StringPiece kOneTypeOneExpirationPrefValue = R"({
+constexpr std::string_view kOneTypeOneExpirationPrefValue = R"({
   "$1": {
     "$2": [
       {"ro": "$3", "cs": 1}
@@ -48,7 +50,7 @@ constexpr base::StringPiece kOneTypeOneExpirationPrefValue = R"({
   }
 })";
 
-constexpr base::StringPiece kOneTypeOneExpirationWithCsPrefValue = R"({
+constexpr std::string_view kOneTypeOneExpirationWithCsPrefValue = R"({
   "$1": {
     "$2": [
       {"ro": "$3", "cs": $4}
@@ -56,7 +58,7 @@ constexpr base::StringPiece kOneTypeOneExpirationWithCsPrefValue = R"({
   }
 })";
 
-constexpr base::StringPiece kOneTypeSameTimeExpirationsPrefValue = R"({
+constexpr std::string_view kOneTypeSameTimeExpirationsPrefValue = R"({
   "$1": {
     "$2": [
       {"ro": "$3", "cs": 1},
@@ -65,7 +67,7 @@ constexpr base::StringPiece kOneTypeSameTimeExpirationsPrefValue = R"({
   }
 })";
 
-constexpr base::StringPiece kOneTypeTwoExpirationsPrefValue = R"({
+constexpr std::string_view kOneTypeTwoExpirationsPrefValue = R"({
   "$1": {
     "$2": [
       {"ro": "$3", "cs": 1}
@@ -76,7 +78,7 @@ constexpr base::StringPiece kOneTypeTwoExpirationsPrefValue = R"({
   }
 })";
 
-constexpr base::StringPiece kTwoTypesOneExpirationPrefValue = R"({
+constexpr std::string_view kTwoTypesOneExpirationPrefValue = R"({
   "$1": {
     "$2": [
       {"ro": "$3", "cs": 1}
@@ -132,8 +134,6 @@ class PermissionLifetimeManagerTest : public testing::Test {
   void SetUp() override {
     host_content_settings_map_ =
         HostContentSettingsMapFactory::GetForProfile(&profile_);
-    PermissionLifetimeManager::RegisterProfilePrefs(
-        profile_.GetTestingPrefService()->registry());
   }
 
   void TearDown() override { manager_.reset(); }
@@ -154,7 +154,7 @@ class PermissionLifetimeManagerTest : public testing::Test {
     return manager_.get();
   }
 
-  void ResetManager() {
+  virtual void ResetManager() {
     ASSERT_TRUE(manager_);
     manager_->Shutdown();
     manager_.reset();
@@ -216,7 +216,7 @@ class PermissionLifetimeManagerTest : public testing::Test {
   }
 
   void CheckExpirationsPref(const base::Location& location,
-                            base::StringPiece pref_value_template,
+                            std::string_view pref_value_template,
                             const std::vector<std::string>& subst = {}) {
     SCOPED_TRACE(testing::Message() << location.ToString());
     const auto& expirations =
@@ -581,6 +581,16 @@ class PermissionLifetimeManagerWithOriginMonitorTest
     EXPECT_CALL(*origin_lifetime_monitor_,
                 SetOnPermissionOriginDestroyedCallback(_));
     return monitor;
+  }
+
+  void TearDown() override {
+    origin_lifetime_monitor_ = nullptr;
+    PermissionLifetimeManagerTest::TearDown();
+  }
+
+  void ResetManager() override {
+    origin_lifetime_monitor_ = nullptr;
+    PermissionLifetimeManagerTest::ResetManager();
   }
 
  protected:

@@ -1,5 +1,7 @@
 include_rules = [
   "+content/public/browser",
   "+content/public/common",
+  "+content/public/test",
   "+extensions/common",
+  "+ui/base",
 ]

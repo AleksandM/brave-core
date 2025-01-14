@@ -12,6 +12,7 @@
 #include "base/command_line.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/memory/raw_ptr.h"
+#include "base/values.h"
 #include "brave/components/constants/pref_names.h"
 #include "chrome/browser/extensions/extension_service.h"
 #include "chrome/browser/extensions/load_error_reporter.h"
@@ -109,6 +110,7 @@ class BraveWebTorrentNavigationThrottleUnitTest
   }
 
   void TearDown() override {
+    extension_service_ = nullptr;
     content::SetBrowserClientForTesting(original_client_);
     content::RenderViewHostTestHarness::TearDown();
   }
@@ -131,12 +133,11 @@ class BraveWebTorrentNavigationThrottleUnitTest
   }
 
   void AddExtension() {
-    DictionaryBuilder manifest;
-    manifest.Set("name", "ext")
-        .Set("version", "0.1")
-        .Set("manifest_version", 2);
     extension_ = ExtensionBuilder()
-                     .SetManifest(manifest.Build())
+                     .SetManifest(base::Value::Dict()
+                                      .Set("name", "ext")
+                                      .Set("version", "0.1")
+                                      .Set("manifest_version", 2))
                      .SetID(brave_webtorrent_extension_id)
                      .Build();
     ASSERT_TRUE(extension_);
@@ -146,10 +147,11 @@ class BraveWebTorrentNavigationThrottleUnitTest
  private:
   scoped_refptr<const Extension> extension_;
   MockBrowserClient client_;
-  raw_ptr<content::ContentBrowserClient> original_client_ = nullptr;
   ScopedTestingLocalState local_state_;
   base::ScopedTempDir temp_dir_;
   sync_preferences::TestingPrefServiceSyncable prefs_;
+  raw_ptr<content::ContentBrowserClient> original_client_ = nullptr;
+
   // The ExtensionService associated with the primary profile.
   raw_ptr<extensions::ExtensionService> extension_service_ = nullptr;
 };

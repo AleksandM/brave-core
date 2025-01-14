@@ -5,51 +5,42 @@
 
 #include "brave/components/brave_wallet/browser/nft_metadata_fetcher.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "base/base64.h"
+#include "base/containers/span.h"
+#include "base/json/json_writer.h"
+#include "base/numerics/byte_conversions.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
-#include "brave/components/brave_wallet/browser/eth_data_builder.h"
 #include "brave/components/brave_wallet/browser/eth_response_parser.h"
 #include "brave/components/brave_wallet/browser/json_rpc_service.h"
-#include "brave/components/brave_wallet/common/hex_utils.h"
-#include "brave/components/ipfs/buildflags/buildflags.h"
+#include "brave/components/brave_wallet/browser/network_manager.h"
+#include "brave/components/brave_wallet/browser/solana_keyring.h"
+#include "brave/components/ipfs/ipfs_utils.h"
 #include "build/build_config.h"
+#include "components/grit/brave_components_strings.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "ui/base/l10n/l10n_util.h"
 
-#if BUILDFLAG(ENABLE_IPFS)
-#include "brave/components/ipfs/ipfs_constants.h"
-#include "brave/components/ipfs/ipfs_utils.h"
-#endif
-
 namespace {
 
-absl::optional<uint32_t> DecodeUint32(const std::vector<uint8_t>& input,
-                                      size_t& offset) {
-  if (offset >= input.size() || input.size() - offset < sizeof(uint32_t)) {
-    return absl::nullopt;
+std::optional<uint32_t> DecodeUint32(base::span<const uint8_t> input,
+                                     size_t& offset) {
+  if (offset >= input.size() || input.size() - offset < 4u) {
+    return std::nullopt;
   }
 
-  // Read bytes in little endian order.
-  base::span<const uint8_t> s =
-      base::make_span(input.begin() + offset, sizeof(uint32_t));
-  uint32_t uint32_le = *reinterpret_cast<const uint32_t*>(s.data());
-
-  offset += sizeof(uint32_t);
-
-#if defined(ARCH_CPU_LITTLE_ENDIAN)
-  return uint32_le;
-#else
-  return base::ByteSwap(uint32_le);
-#endif
+  auto value = input.subspan(offset).first<4u>();
+  offset += 4u;
+  return base::U32FromLittleEndian(value);
 }
 
 net::NetworkTrafficAnnotationTag GetNetworkTrafficAnnotationTag() {
   return net::DefineNetworkTrafficAnnotation("nft_metadata_fetcher", R"(
       semantics {
-        sender: "NFT Metata Fetcher"
+        sender: "NFT Metadata Fetcher"
         description:
           "This service is used to fetch NFT metadata "
           "on behalf of the user interacting with the native Brave wallet."
@@ -91,7 +82,8 @@ void NftMetadataFetcher::GetEthTokenMetadata(
     const std::string& chain_id,
     const std::string& interface_id,
     GetEthTokenMetadataCallback callback) {
-  auto network_url = GetNetworkURL(prefs_, chain_id, mojom::CoinType::ETH);
+  auto network_url = json_rpc_service_->network_manager()->GetNetworkURL(
+      chain_id, mojom::CoinType::ETH);
   if (!network_url.is_valid()) {
     std::move(callback).Run(
         "", "", mojom::ProviderError::kInvalidParams,
@@ -174,12 +166,8 @@ void NftMetadataFetcher::FetchMetadata(
   // IPFS and HTTPS URIs require an additional request to fetch the metadata.
   std::string metadata_json;
   std::string scheme = url.scheme();
-#if BUILDFLAG(ENABLE_IPFS)
   if (scheme != url::kDataScheme && scheme != url::kHttpsScheme &&
       scheme != ipfs::kIPFSScheme) {
-#else
-  if (scheme != url::kDataScheme && scheme != url::kHttpsScheme) {
-#endif
     std::move(callback).Run(
         "", static_cast<int>(mojom::JsonRpcError::kInternalError),
         l10n_util::GetStringUTF8(IDS_WALLET_INTERNAL_ERROR));
@@ -195,23 +183,19 @@ void NftMetadataFetcher::FetchMetadata(
     }
 
     // Sanitize JSON
-    data_decoder::JsonSanitizer::Sanitize(
+    api_request_helper::ParseJsonNonBlocking(
         std::move(metadata_json),
         base::BindOnce(&NftMetadataFetcher::OnSanitizeTokenMetadata,
                        weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
     return;
   }
-
-#if BUILDFLAG(ENABLE_IPFS)
   if (scheme == ipfs::kIPFSScheme &&
-      !ipfs::TranslateIPFSURI(url, &url, ipfs::GetDefaultNFTIPFSGateway(prefs_),
-                              false)) {
+      !ipfs::TranslateIPFSURI(url, &url, false)) {
     std::move(callback).Run(
         "", static_cast<int>(mojom::JsonRpcError::kParsingError),
         l10n_util::GetStringUTF8(IDS_WALLET_PARSING_ERROR));
     return;
   }
-#endif
 
   auto internal_callback =
       base::BindOnce(&NftMetadataFetcher::OnGetTokenMetadataPayload,
@@ -223,7 +207,7 @@ void NftMetadataFetcher::FetchMetadata(
 
 void NftMetadataFetcher::OnSanitizeTokenMetadata(
     GetTokenMetadataIntermediateCallback callback,
-    data_decoder::JsonSanitizer::Result result) {
+    api_request_helper::ValueOrError result) {
   if (!result.has_value()) {
     VLOG(1) << "Data URI JSON validation error:" << result.error();
     std::move(callback).Run(
@@ -232,7 +216,10 @@ void NftMetadataFetcher::OnSanitizeTokenMetadata(
     return;
   }
 
-  std::move(callback).Run(*result, 0, "");  // 0 is kSuccess
+  // TODO(apaymyshev): parse metadata in wallet's backend
+  std::string json;
+  base::JSONWriter::Write(std::move(result).value(), &json);
+  std::move(callback).Run(std::move(json), 0, "");  // 0 is kSuccess
 }
 
 void NftMetadataFetcher::OnGetTokenMetadataPayload(
@@ -247,14 +234,16 @@ void NftMetadataFetcher::OnGetTokenMetadataPayload(
   }
 
   // Invalid JSON becomes an empty string after sanitization
-  if (api_request_result.body().empty()) {
+  if (api_request_result.value_body().is_none()) {
     std::move(callback).Run(
         "", static_cast<int>(mojom::JsonRpcError::kParsingError),
         l10n_util::GetStringUTF8(IDS_WALLET_PARSING_ERROR));
     return;
   }
 
-  std::move(callback).Run(api_request_result.body(), 0, "");  // 0 is kSuccess
+  // TODO(supermassive): Refactor and remove SerializeBodyToString().
+  std::move(callback).Run(api_request_result.SerializeBodyToString(), 0,
+                          "");  // 0 is kSuccess
 }
 
 void NftMetadataFetcher::CompleteGetEthTokenMetadata(
@@ -275,7 +264,7 @@ void NftMetadataFetcher::GetSolTokenMetadata(
     const std::string& token_mint_address,
     GetSolTokenMetadataCallback callback) {
   // Derive metadata PDA for the NFT accounts
-  absl::optional<std::string> associated_metadata_account =
+  std::optional<std::string> associated_metadata_account =
       SolanaKeyring::GetAssociatedMetadataAccount(token_mint_address);
   if (!associated_metadata_account) {
     std::move(callback).Run(
@@ -293,7 +282,7 @@ void NftMetadataFetcher::GetSolTokenMetadata(
 
 void NftMetadataFetcher::OnGetSolanaAccountInfoTokenMetadata(
     GetSolTokenMetadataCallback callback,
-    absl::optional<SolanaAccountInfo> account_info,
+    std::optional<SolanaAccountInfo> account_info,
     mojom::SolanaProviderError error,
     const std::string& error_message) {
   if (error != mojom::SolanaProviderError::kSuccess || !account_info) {
@@ -301,7 +290,7 @@ void NftMetadataFetcher::OnGetSolanaAccountInfoTokenMetadata(
     return;
   }
 
-  absl::optional<std::vector<uint8_t>> metadata =
+  std::optional<std::vector<uint8_t>> metadata =
       base::Base64Decode(account_info->data);
 
   if (!metadata) {
@@ -310,7 +299,7 @@ void NftMetadataFetcher::OnGetSolanaAccountInfoTokenMetadata(
     return;
   }
 
-  absl::optional<GURL> url = DecodeMetadataUri(*metadata);
+  std::optional<GURL> url = DecodeMetadataUri(*metadata);
   if (!url || !url.value().is_valid()) {
     std::move(callback).Run("", "", mojom::SolanaProviderError::kParsingError,
                             l10n_util::GetStringUTF8(IDS_WALLET_PARSING_ERROR));
@@ -343,38 +332,38 @@ void NftMetadataFetcher::CompleteGetSolTokenMetadata(
 // and returns the URI string in of the nested Data struct (see
 // https://docs.rs/spl-token-metadata/latest/spl_token_metadata/state/struct.Data.html)
 // as a GURL.
-absl::optional<GURL> NftMetadataFetcher::DecodeMetadataUri(
-    const std::vector<uint8_t>& data) {
+std::optional<GURL> NftMetadataFetcher::DecodeMetadataUri(
+    base::span<const uint8_t> data) {
   size_t offset = 0;
   offset = offset + /* Skip first byte for metadata.key */ 1 +
            /* Skip next 32 bytes for `metadata.update_authority` */ 32 +
            /* Skip next 32 bytes for `metadata.mint` */ 32;
 
-  // Skip next field, metdata.data.name, a string
+  // Skip next field, metadata.data.name, a string
   // whose length is represented by a leading 32 bit integer
   auto length = DecodeUint32(data, offset);
   if (!length) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   offset += static_cast<size_t>(*length);
 
-  // Skip next field, `metdata.data.symbol`, a string
+  // Skip next field, `metadata.data.symbol`, a string
   // whose length is represented by a leading 32 bit integer
   length = DecodeUint32(data, offset);
   if (!length) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   offset += static_cast<size_t>(*length);
 
   // Parse next field, metadata.data.uri, a string
   length = DecodeUint32(data, offset);
   if (!length) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  // Prevent out of bounds access in case length value incorrent
+  // Prevent out of bounds access in case length value is incorrect
   if (data.size() <= offset + *length) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   std::string uri =
       std::string(data.begin() + offset, data.begin() + offset + *length);

@@ -1,6 +1,13 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
+/* Copyright (c) 2018 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(https://github.com/brave/brave-browser/issues/41661): Remove this and
+// convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
 
 #include <objbase.h>
 
@@ -18,65 +25,63 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 using ::testing::ElementsAre;
+using ::testing::Eq;
+using ::testing::Optional;
 using ::testing::StrCaseEq;
 using version_info::Channel;
 
 namespace install_static {
 
-// Tests the install_static::GetSwitchValueFromCommandLine function.
-TEST(InstallStaticTest, GetSwitchValueFromCommandLineTest) {
+TEST(InstallStaticTest, GetCommandLineSwitchTestTest) {
   // Simple case with one switch.
-  std::wstring value =
-      GetSwitchValueFromCommandLine(L"c:\\temp\\bleh.exe --type=bar", L"type");
-  EXPECT_EQ(L"bar", value);
+  std::optional<std::wstring> opt =
+      GetCommandLineSwitch(L"c:\\temp\\bleh.exe --type=bar", L"type");
+  EXPECT_THAT(opt, Optional(std::wstring(L"bar")));
 
   // Multiple switches with trailing spaces between them.
-  value = GetSwitchValueFromCommandLine(
-      L"c:\\temp\\bleh.exe --type=bar  --abc=def bleh", L"abc");
-  EXPECT_EQ(L"def", value);
+  opt = GetCommandLineSwitch(L"c:\\temp\\bleh.exe --type=bar  --abc=def bleh",
+                             L"abc");
+  EXPECT_THAT(opt, Optional(std::wstring(L"def")));
 
   // Multiple switches with trailing spaces and tabs between them.
-  value = GetSwitchValueFromCommandLine(
+  opt = GetCommandLineSwitch(
       L"c:\\temp\\bleh.exe --type=bar \t\t\t --abc=def bleh", L"abc");
-  EXPECT_EQ(L"def", value);
+  EXPECT_THAT(opt, Optional(std::wstring(L"def")));
 
   // Non existent switch.
-  value = GetSwitchValueFromCommandLine(
-      L"c:\\temp\\bleh.exe --foo=bar  --abc=def bleh", L"type");
-  EXPECT_EQ(L"", value);
+  opt = GetCommandLineSwitch(L"c:\\temp\\bleh.exe --foo=bar  --abc=def bleh",
+                             L"type");
+  EXPECT_THAT(opt, std::nullopt);
 
   // Non existent switch.
-  value = GetSwitchValueFromCommandLine(L"c:\\temp\\bleh.exe", L"type");
-  EXPECT_EQ(L"", value);
+  opt = GetCommandLineSwitch(L"c:\\temp\\bleh.exe", L"type");
+  EXPECT_THAT(opt, std::nullopt);
 
   // Non existent switch.
-  value =
-      GetSwitchValueFromCommandLine(L"c:\\temp\\bleh.exe type=bar", L"type");
-  EXPECT_EQ(L"", value);
+  opt = GetCommandLineSwitch(L"c:\\temp\\bleh.exe type=bar", L"type");
+  EXPECT_THAT(opt, std::nullopt);
 
   // Trailing spaces after the switch.
-  value = GetSwitchValueFromCommandLine(
-      L"c:\\temp\\bleh.exe --type=bar      \t\t", L"type");
-  EXPECT_EQ(L"bar", value);
+  opt =
+      GetCommandLineSwitch(L"c:\\temp\\bleh.exe --type=bar      \t\t", L"type");
+  EXPECT_THAT(opt, Optional(std::wstring(L"bar")));
 
   // Multiple switches with trailing spaces and tabs between them.
-  value = GetSwitchValueFromCommandLine(
+  opt = GetCommandLineSwitch(
       L"c:\\temp\\bleh.exe --type=bar      \t\t --foo=bleh", L"foo");
-  EXPECT_EQ(L"bleh", value);
+  EXPECT_THAT(opt, Optional(std::wstring(L"bleh")));
 
   // Nothing after a switch.
-  value = GetSwitchValueFromCommandLine(L"c:\\temp\\bleh.exe --type=", L"type");
-  EXPECT_TRUE(value.empty());
+  opt = GetCommandLineSwitch(L"c:\\temp\\bleh.exe --type=", L"type");
+  EXPECT_THAT(opt, Optional(std::wstring()));
 
   // Whitespace after a switch.
-  value =
-      GetSwitchValueFromCommandLine(L"c:\\temp\\bleh.exe --type= ", L"type");
-  EXPECT_TRUE(value.empty());
+  opt = GetCommandLineSwitch(L"c:\\temp\\bleh.exe --type= ", L"type");
+  EXPECT_THAT(opt, Optional(std::wstring()));
 
   // Just tabs after a switch.
-  value = GetSwitchValueFromCommandLine(L"c:\\temp\\bleh.exe --type=\t\t\t",
-                                        L"type");
-  EXPECT_TRUE(value.empty());
+  opt = GetCommandLineSwitch(L"c:\\temp\\bleh.exe --type=\t\t\t", L"type");
+  EXPECT_THAT(opt, Optional(std::wstring()));
 }
 
 TEST(InstallStaticTest, SpacesAndQuotesInCommandLineArguments) {
@@ -498,7 +503,7 @@ TEST_P(InstallStaticUtilTest, GetToastActivatorClsid) {
   EXPECT_EQ(GetToastActivatorClsid(),
             kToastActivatorClsids[std::get<0>(GetParam())]);
 
-  const int kCLSIDSize = 39;
+  constexpr int kCLSIDSize = 39;
   wchar_t clsid_str[kCLSIDSize];
   ASSERT_EQ(::StringFromGUID2(GetToastActivatorClsid(), clsid_str, kCLSIDSize),
             kCLSIDSize);

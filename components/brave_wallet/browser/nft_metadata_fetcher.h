@@ -7,14 +7,15 @@
 #define BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_NFT_METADATA_FETCHER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
-#include <vector>
 
+#include "base/containers/span.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "brave/components/api_request_helper/api_request_helper.h"
 #include "brave/components/brave_wallet/browser/json_rpc_service.h"
-#include "services/data_decoder/public/cpp/json_sanitizer.h"
 
 class PrefService;
 
@@ -53,6 +54,11 @@ class NftMetadataFetcher {
   void GetSolTokenMetadata(const std::string& chain_id,
                            const std::string& token_mint_address,
                            GetSolTokenMetadataCallback callback);
+  using GetTokenMetadataIntermediateCallback =
+      base::OnceCallback<void(const std::string& response,
+                              int error,
+                              const std::string& error_message)>;
+  void FetchMetadata(GURL url, GetTokenMetadataIntermediateCallback callback);
 
  private:
   void OnGetSupportsInterface(const std::string& contract_address,
@@ -69,20 +75,13 @@ class NftMetadataFetcher {
                         const GURL& uri,
                         mojom::ProviderError error,
                         const std::string& error_message);
-  // GetTokenMetadataIntermediateCallbacks convert the int error to a
-  // mojom::ProviderError or mojom::SolanaProviderError
-  using GetTokenMetadataIntermediateCallback =
-      base::OnceCallback<void(const std::string& response,
-                              int error,
-                              const std::string& error_message)>;
-  void FetchMetadata(GURL url, GetTokenMetadataIntermediateCallback callback);
   void OnSanitizeTokenMetadata(GetTokenMetadataIntermediateCallback callback,
-                               data_decoder::JsonSanitizer::Result result);
+                               api_request_helper::ValueOrError result);
   void OnGetTokenMetadataPayload(GetTokenMetadataIntermediateCallback callback,
                                  APIRequestResult api_request_result);
   void OnGetSolanaAccountInfoTokenMetadata(
       GetSolTokenMetadataCallback callback,
-      absl::optional<SolanaAccountInfo> account_info,
+      std::optional<SolanaAccountInfo> account_info,
       mojom::SolanaProviderError error,
       const std::string& error_message);
   void CompleteGetEthTokenMetadata(GetEthTokenMetadataCallback callback,
@@ -99,13 +98,12 @@ class NftMetadataFetcher {
   friend class NftMetadataFetcherUnitTest;
   FRIEND_TEST_ALL_PREFIXES(NftMetadataFetcherUnitTest, DecodeMetadataUri);
 
-  static absl::optional<GURL> DecodeMetadataUri(
-      const std::vector<uint8_t>& data);
+  static std::optional<GURL> DecodeMetadataUri(base::span<const uint8_t> data);
 
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   std::unique_ptr<APIRequestHelper> api_request_helper_;
   raw_ptr<JsonRpcService> json_rpc_service_ = nullptr;
-  raw_ptr<PrefService> prefs_ = nullptr;
+  raw_ptr<PrefService, DanglingUntriaged> prefs_ = nullptr;
   base::WeakPtrFactory<NftMetadataFetcher> weak_ptr_factory_;
 };
 

@@ -5,7 +5,7 @@
 
 import './brave_extensions_manifest_v2_subpage.js';
 
-import {PrefsMixin, PrefsMixinInterface} from 'chrome://resources/cr_components/settings_prefs/prefs_mixin.js';
+import {PrefsMixin, PrefsMixinInterface} from '/shared/settings/prefs/prefs_mixin.js';
 import {WebUiListenerMixin, WebUiListenerMixinInterface} from 'chrome://resources/cr_elements/web_ui_listener_mixin.js'
 import {PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js'
 
@@ -24,8 +24,7 @@ const SettingBraveDefaultExtensionsPageElementBase =
 export interface SettingBraveDefaultExtensionsPageElement {
   $: {
     widevineEnabled: SettingsCheckboxElement,
-    webTorrentEnabled: SettingsCheckboxElement,
-    hangoutsEnabled: SettingsCheckboxElement
+    webTorrentEnabled: SettingsCheckboxElement
   }
 }
 
@@ -97,10 +96,6 @@ export class SettingBraveDefaultExtensionsPageElement extends SettingBraveDefaul
 
   onWebTorrentEnabledChange_() {
     this.browserProxy_.setWebTorrentEnabled(this.$.webTorrentEnabled.checked)
-  }
-
-  onHangoutsEnabledChange_() {
-    this.browserProxy_.setHangoutsEnabled(this.$.hangoutsEnabled.checked)
   }
 
   restartBrowser_(e: Event) {

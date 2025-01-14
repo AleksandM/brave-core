@@ -15,6 +15,10 @@
 
 namespace net {
 
+namespace {
+constexpr char kOnionDomain[] = "onion";
+}  // namespace
+
 std::string URLToEphemeralStorageDomain(const GURL& url) {
   std::string domain = registry_controlled_domains::GetDomainAndRegistry(
       url, registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES);
@@ -27,20 +31,8 @@ std::string URLToEphemeralStorageDomain(const GURL& url) {
   return domain;
 }
 
-bool EphemeralStorageOriginUtils::CanUseNonceForEphemeralStorageKeying(
-    const url::Origin& origin) {
-  return origin.opaque() && !origin.nonce_->raw_token().is_empty();
-}
-
-const base::UnguessableToken&
-EphemeralStorageOriginUtils::GetNonceForEphemeralStorageKeying(
-    const url::Origin& origin) {
-  CHECK(CanUseNonceForEphemeralStorageKeying(origin));
-  return origin.nonce_->raw_token();
-}
-
 bool IsOnion(const GURL& url) {
-  return IsSubdomainOf(url.host(), "onion");
+  return url.DomainIs(kOnionDomain);
 }
 
 bool IsLocalhostOrOnion(const GURL& url) {

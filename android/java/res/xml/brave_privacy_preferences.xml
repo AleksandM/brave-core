@@ -23,11 +23,6 @@
             app:dialog_default_index="1"
             />
         <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
-            android:key="httpse"
-            android:title="@string/brave_shields_https_everywhere_switch"
-            android:summary="@string/brave_shields_https_everywhere_switch_summary"
-            android:defaultValue="true" />
-        <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
             android:key="scripts_block"
             android:title="@string/brave_shields_blocks_scripts_switch"
             android:summary="@string/brave_shields_blocks_scripts_summary"
@@ -39,6 +34,11 @@
             app:dialog_subtitle="@string/block_cookies_text"
             app:dialog_entries="@array/blockCookiesTexts"
             app:dialog_default_index="1" />
+        <!-- A description with hyperlink to explain more about block cross site cookies settings. -->
+        <org.chromium.components.browser_ui.settings.TextMessagePreference
+            app:icon="@drawable/ic_warning"
+            android:key="block_all_cross_site_cookies_learn_more"
+            app:iconTint="@color/wallet_error_text_color"/>
         <org.chromium.chrome.browser.settings.BraveDialogPreference
             android:key="fingerprinting_protection"
             android:title="@string/block_fingerprinting"
@@ -46,6 +46,11 @@
             app:dialog_subtitle="@string/block_fingerprinting_text"
             app:dialog_entries="@array/blockFingerprintingTexts"
             app:dialog_default_index="1" />
+        <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
+            android:key="fingerprinting_protection2"
+            android:title="@string/block_fingerprinting"
+            android:summary="@string/fingerprinting_protection_summary"
+            android:defaultValue="true" />
         <org.chromium.chrome.browser.settings.BraveDialogPreference
             android:key="https_upgrade"
             android:title="@string/https_upgrade_title"
@@ -58,6 +63,16 @@
             android:title="@string/fingerprint_language_switch"
             android:summary="@string/fingerprint_language_switch_summary"
             android:defaultValue="false" />
+        <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
+            android:key="brave_shields_save_contact_info"
+            android:title="@string/brave_shields_save_contact_info_switch"
+            android:summary="@string/brave_shields_save_contact_info_switch_summary"
+            android:defaultValue="true" />
+        <org.chromium.components.browser_ui.settings.ChromeBasePreference
+            android:fragment="org.chromium.chrome.browser.shields.ContentFilteringFragment"
+            android:key="content_filtering"
+            android:title="@string/content_filtering_title"
+            android:summary="@string/content_filtering_summary" />
         <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
             android:key="forget_first_party_storage"
             android:title="@string/brave_forget_first_party_storage_switch"
@@ -103,22 +118,6 @@
             android:defaultValue="false" />
 
     </PreferenceCategory>
-    <PreferenceCategory
-        android:key="youtube_section"
-        android:title="@string/youtube">
-            <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
-            android:key="hide_youtube_recommended_content"
-            android:title="@string/block_youtube_recommended_content"
-            android:order="25"
-            android:summary="@string/block_youtube_recommended_content_description"
-            android:defaultValue="true" />
-        <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
-            android:key="hide_youtube_distracting_elements"
-            android:title="@string/block_youtube_distracting_elements"
-            android:order="25"
-            android:summary="@string/block_youtube_distracting_elements_description"
-            android:defaultValue="true" />
-    </PreferenceCategory>
         <PreferenceCategory
         android:key="other_privacy_settings_section"
         android:title="@string/prefs_section_other_privacy_settings"/>
@@ -126,7 +125,7 @@
             android:key="app_links"
             android:order="25"
             android:title="@string/settings_app_links_label"
-            android:defaultValue="false"/>
+            android:defaultValue="true"/>
         <org.chromium.components.browser_ui.settings.ChromeBasePreference
             android:fragment="org.chromium.chrome.browser.settings.BraveWebrtcPolicyPreferencesFragment"
             android:key="webrtc_policy"
@@ -139,12 +138,13 @@
             defaultValue="false"
             android:title="@string/close_tabs_on_exit_title"
             android:summary="@string/close_tabs_on_exit_summary" />
-        <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
-            android:key="ipfs_gateway"
-            android:order="25"
-            android:title="@string/ipfs_gateway_title"
-            android:summary="@string/ipfs_gateway_summary"
-            android:defaultValue="true" />
+        <org.chromium.chrome.browser.settings.BraveDialogPreference
+            android:key="request_otr"
+            android:title="@string/request_otr"
+            android:summary="@string/request_otr_summary"
+            app:dialog_subtitle="@string/request_otr_text"
+            app:dialog_entries="@array/requestOTRTexts"
+            app:dialog_default_index="1" />
         <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
             android:key="block_cookie_consent_notices"
             android:order="25"
@@ -171,24 +171,6 @@
             android:key="sns"
             android:order="25"
             android:title="@string/sns_title" />
-
-        <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
-            android:key="show_autocomplete_in_address_bar"
-            android:title="@string/show_autocomplete_in_address_bar"
-            android:summary="@string/show_autocomplete_in_address_bar_summary"
-            android:order="25"
-            android:persistent="false"/>
-        <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
-            android:key="search_suggestions"
-            android:title="@string/improve_search_suggestions_title"
-            android:summary="@string/improve_search_suggestions_summary"
-            android:persistent="false"
-            android:order="25"/>
-        <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
-            android:key="autocomplete_top_sites"
-            android:order="25"
-            android:title="@string/autocomplete_top_sites_title"
-            android:persistent="false"/>
         <org.chromium.components.browser_ui.settings.ChromeSwitchPreference
             android:key="send_p3a_analytics"
             android:order="25"

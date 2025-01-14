@@ -4,17 +4,18 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "base/scoped_observation.h"
-#include "brave/browser/brave_ads/ads_service_factory.h"
-#include "brave/browser/brave_news/brave_news_controller_factory.h"
 #include "brave/browser/brave_rewards/rewards_service_factory.h"
 #include "brave/browser/perf/brave_perf_switches.h"
-#include "brave/components/brave_ads/browser/ads_service.h"
-#include "brave/components/brave_news/browser/brave_news_controller.h"
+#include "brave/components/ai_chat/core/browser/utils.h"
+#include "brave/components/brave_ads/core/public/prefs/pref_names.h"
+#include "brave/components/brave_news/common/pref_names.h"
 #include "brave/components/brave_rewards/browser/rewards_service.h"
 #include "brave/components/brave_rewards/browser/rewards_service_observer.h"
 #include "brave/components/speedreader/common/buildflags/buildflags.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/in_process_browser_test.h"
+#include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 
@@ -59,20 +60,19 @@ class BraveSpeedFeatureProcessorBrowserTest : public InProcessBrowserTest {
 #if BUILDFLAG(ENABLE_SPEEDREADER)
   bool SpeedreaderIsEnabled() {
     auto* speedreader_service =
-        speedreader::SpeedreaderServiceFactory::GetForProfile(
+        speedreader::SpeedreaderServiceFactory::GetForBrowserContext(
             browser()->profile());
-    return speedreader_service->IsEnabled();
+    return speedreader_service->IsEnabledForAllSites();
   }
 #endif  // BUILDFLAG(ENABLE_SPEEDREADER)
 
   bool BraveNewsAreEnabled() {
-    return brave_news::GetIsEnabled(browser()->profile()->GetPrefs());
+    return brave_news::IsEnabled(browser()->profile()->GetPrefs());
   }
 
-  bool AdsServiceIsEnabled() {
-    auto* ads_service =
-        brave_ads::AdsServiceFactory::GetForProfile(browser()->profile());
-    return ads_service->IsEnabled();
+  bool HasOptedInToNotificationAds() {
+    return browser()->profile()->GetPrefs()->GetBoolean(
+        brave_ads::prefs::kOptedInToNotificationAds);
   }
 
   void WaitForRewardsServiceInitialized() {
@@ -91,7 +91,11 @@ IN_PROC_BROWSER_TEST_F(BraveSpeedFeatureProcessorBrowserTest, Default) {
 #if BUILDFLAG(ENABLE_SPEEDREADER)
   EXPECT_TRUE(SpeedreaderIsEnabled());
 #endif
-  EXPECT_TRUE(AdsServiceIsEnabled());
+  EXPECT_TRUE(HasOptedInToNotificationAds());
   EXPECT_TRUE(BraveNewsAreEnabled());
   WaitForRewardsServiceInitialized();
+
+  auto* prefs = browser()->profile()->GetPrefs();
+  EXPECT_TRUE(ai_chat::IsAIChatEnabled(prefs));
+  EXPECT_TRUE(ai_chat::HasUserOptedIn(prefs));
 }

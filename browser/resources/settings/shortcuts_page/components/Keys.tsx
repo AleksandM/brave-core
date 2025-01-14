@@ -5,7 +5,7 @@
 
 import * as React from 'react'
 import styled, { css } from 'styled-components'
-import { color, font, radius, spacing } from '@brave/leo/tokens/css'
+import { color, font, radius, spacing } from '@brave/leo/tokens/css/variables'
 
 const Kbd = styled.div<{ large?: boolean; square?: boolean }>`
   display: inline-block;
@@ -15,7 +15,7 @@ const Kbd = styled.div<{ large?: boolean; square?: boolean }>`
   line-height: 18px;
 
   border: 1px solid ${color.divider.subtle};
-  border-radius: ${radius[12]};
+  border-radius: ${radius.m};
   padding: 4px 10px;
   background: linear-gradient(180deg, #F6F7F9 0%, #FFFFFF 100%);
   box-shadow: 0px 1px 0px rgba(0, 0, 0, 0.05), inset 0px 1px 0px #FFFFFF;
@@ -37,9 +37,9 @@ const Kbd = styled.div<{ large?: boolean; square?: boolean }>`
     props.large &&
     css`
       min-width: 32px;
-      border-radius: ${radius[12]};
-      padding: ${spacing[16]};
-      font: var(--leo-font-heading-h3);
+      border-radius: ${radius.l};
+      padding: ${spacing.xl};
+      font: ${font.heading.h3};
       box-shadow: 0px 2px 0px rgba(0, 0, 0, 0.05), inset 0px 1px 0px #ffffff;
       background: linear-gradient(180deg, #f4f6f8 0%, #ffffff 100%);
     `}
@@ -60,7 +60,8 @@ const keySymbols = {
   'Meta': <Padded>⌘</Padded>,
   'Alt': <Padded>⌥</Padded>,
   'AltGr': <Padded>⌥</Padded>,
-  'Control': <Padded>⌃</Padded>
+  'Control': <Padded>⌃</Padded>,
+  ' ': 'Space'
 }
 
 export default function Keys({
@@ -73,7 +74,7 @@ export default function Keys({
   return (
     <>
       {keys.map((k, i) => (
-        <Kbd key={i} large={large} square={k.length <= 2}>
+        <Kbd key={i} large={large} square={k.length <= 2 && k !== ' '}>
           {keySymbols[k]}
           {k}
         </Kbd>

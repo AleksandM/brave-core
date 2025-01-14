@@ -5,75 +5,95 @@
 
 import * as React from 'react'
 
+// types
+import { BraveWallet } from '../../../constants/types'
+
 // mocks
 import {
+  mockSolanaAccount,
   mockSolDappSignAllTransactionsRequest,
-  mockSolDappSignAndSendTransactionRequest,
-  mockSolDappSignTransactionRequest
+  mockSolDappSignAndSendTransactionRequest
 } from '../../../common/constants/mocks'
+import {
+  mockSolanaMainnetNetwork //
+} from '../../../stories/mock-data/mock-networks'
+import {
+  mockSignMessageRequest //
+} from '../../../stories/mock-data/mock-eth-requests'
 
-// components
-import { WalletPanelStory } from '../../../stories/wrappers/wallet-panel-story-wrapper'
-import { SignTransactionPanel } from './sign-transaction-panel'
+// utils
+import { SignInWithEthereumError } from './sign_in_with_ethereum_error'
 import {
   deserializeTransaction //
 } from '../../../utils/model-serialization-utils'
-import { BraveWallet } from '../../../constants/types'
 
-export const _SignAllSolanaTxPanel = () => {
-  return (
-    <WalletPanelStory
-      panelStateOverride={{
-        selectedPanel: 'signTransaction',
-        signTransactionRequests: [mockSolDappSignTransactionRequest],
-        signAllTransactionsRequests: [mockSolDappSignAllTransactionsRequest]
-      }}
-      uiStateOverride={{
-        selectedPendingTransactionId:
-          mockSolDappSignAndSendTransactionRequest.id
-      }}
-      walletApiDataOverrides={{
-        transactionInfos: [
-          deserializeTransaction({
-            ...mockSolDappSignAndSendTransactionRequest,
-            txStatus: BraveWallet.TransactionStatus.Unapproved
-          })
-        ]
-      }}
-    >
-      <SignTransactionPanel signMode={'signAllTxs'} />
-    </WalletPanelStory>
-  )
+// components
+import {
+  WalletPanelStory //
+} from '../../../stories/wrappers/wallet-panel-story-wrapper'
+import { SignTransactionPanel } from './sign-transaction-panel'
+import { SignInWithEthereum } from './sign_in_with_ethereum'
+
+export const _SignAllSolanaTxPanel = {
+  render: () => {
+    return (
+      <WalletPanelStory
+        uiStateOverride={{
+          selectedPendingTransactionId:
+            mockSolDappSignAndSendTransactionRequest.id
+        }}
+        walletApiDataOverrides={{
+          signSolTransactionsRequests: [mockSolDappSignAllTransactionsRequest],
+          transactionInfos: [
+            deserializeTransaction({
+              ...mockSolDappSignAndSendTransactionRequest,
+              txStatus: BraveWallet.TransactionStatus.Unapproved
+            })
+          ]
+        }}
+      >
+        <SignTransactionPanel
+          isSigningDisabled={false}
+          network={mockSolanaMainnetNetwork}
+          queueNextSignTransaction={function (): void {
+            throw new Error('Function not implemented.')
+          }}
+          selectedRequest={mockSolDappSignAllTransactionsRequest}
+          signingAccount={mockSolanaAccount}
+          queueLength={1}
+          queueNumber={0}
+        />
+      </WalletPanelStory>
+    )
+  }
 }
 
-_SignAllSolanaTxPanel.story = {
-  name: 'Sign Solana All Transactions Panel'
+export const _SignInWithEthereumErrorPanel = {
+  render: () => {
+    return (
+      <WalletPanelStory>
+        <SignInWithEthereumError />
+      </WalletPanelStory>
+    )
+  }
 }
 
-export const _SignSolanaTxPanel = () => {
-  return (
-    <WalletPanelStory
-      panelStateOverride={{
-        selectedPanel: 'signTransaction',
-        signTransactionRequests: [mockSolDappSignTransactionRequest],
-        signAllTransactionsRequests: [mockSolDappSignAllTransactionsRequest]
-      }}
-      walletApiDataOverrides={{
-        transactionInfos: [
-          deserializeTransaction(mockSolDappSignAndSendTransactionRequest)
-        ]
-      }}
-    >
-      <SignTransactionPanel signMode="signTx" />
-    </WalletPanelStory>
-  )
-}
-
-_SignSolanaTxPanel.story = {
-  name: 'Sign Solana Transaction Panel'
+export const _SignInWithEthereumPanel = {
+  render: () => {
+    return (
+      <WalletPanelStory>
+        <SignInWithEthereum
+          data={mockSignMessageRequest}
+          onCancel={() => {}}
+          onSignIn={() => {}}
+        />
+      </WalletPanelStory>
+    )
+  }
 }
 
 export default {
+  title: 'Sign Transaction Panel',
   parameters: {
     layout: 'centered'
   }

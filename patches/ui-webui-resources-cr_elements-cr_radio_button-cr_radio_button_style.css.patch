@@ -1,13 +1,13 @@
 diff --git a/ui/webui/resources/cr_elements/cr_radio_button/cr_radio_button_style.css b/ui/webui/resources/cr_elements/cr_radio_button/cr_radio_button_style.css
-index 3bf953f5b7526422123c4e751183f15423939ef7..b1c3e0c02f93198a38e739a1c3fe8fe55014ef50 100644
+index 09d8d3aa5c34684370deeff9e63c20d97c56d571..29803457e85eb2d5e4566ef48da244eb2d39699f 100644
 --- a/ui/webui/resources/cr_elements/cr_radio_button/cr_radio_button_style.css
 +++ b/ui/webui/resources/cr_elements/cr_radio_button/cr_radio_button_style.css
-@@ -6,6 +6,8 @@
-  * #type=style
+@@ -7,6 +7,8 @@
+  * #scheme=relative
   * #import=../cr_shared_vars.css.js
   * #import=../cr_shared_vars.css.js
 + * #import=//resources/brave/br_elements/br_shared_style.css.js
 + * #include=br-shared-style
   * #css_wrapper_metadata_end */
  
- 
+ /* Purposefully empty since this style is generated at build time from the

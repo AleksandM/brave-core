@@ -12,21 +12,28 @@ import { BraveWallet } from '../../../constants/types'
 import { useGetVisibleNetworksQuery } from '../../../common/slices/api.slice'
 
 // components
-import SelectNetworkItem from '../select-network-item'
+import { SelectNetworkItem } from '../select-network-item/index'
 
 interface Props {
-  onSelectCustomNetwork?: (network: BraveWallet.NetworkInfo) => void
-  selectedNetwork: BraveWallet.NetworkInfo | undefined
+  onSelectCustomNetwork: (network: BraveWallet.NetworkInfo) => void
+  selectedNetwork: BraveWallet.NetworkInfo | undefined | null
   customNetwork?: BraveWallet.NetworkInfo
+  networkListSubset?: BraveWallet.NetworkInfo[]
 }
 
-export function SelectNetwork ({
+export function SelectNetwork({
   onSelectCustomNetwork,
   selectedNetwork,
-  customNetwork
+  customNetwork,
+  networkListSubset
 }: Props) {
   // queries
-  const { data: networks = [] } = useGetVisibleNetworksQuery()
+  const { data: visibleNetworks = [] } = useGetVisibleNetworksQuery(undefined, {
+    skip: !!networkListSubset
+  })
+
+  // Computed
+  const networks = networkListSubset ?? visibleNetworks
 
   // memos
   const networksList = React.useMemo(() => {
@@ -39,14 +46,14 @@ export function SelectNetwork ({
   // render
   return (
     <>
-      {networksList.map((network) =>
+      {networksList.map((network) => (
         <SelectNetworkItem
           selectedNetwork={selectedNetwork}
           key={`${network.chainId}-${network.coin}`}
           network={network}
           onSelectCustomNetwork={onSelectCustomNetwork}
         />
-      )}
+      ))}
     </>
   )
 }

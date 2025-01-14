@@ -6,12 +6,11 @@
 #include "brave/components/brave_ads/core/internal/catalog/catalog_util.h"
 
 #include "base/time/time.h"
-#include "brave/components/brave_ads/common/pref_names.h"
 #include "brave/components/brave_ads/core/internal/account/deposits/deposits_database_util.h"
-#include "brave/components/brave_ads/core/internal/ads_client_helper.h"
+#include "brave/components/brave_ads/core/internal/catalog/catalog_feature.h"
 #include "brave/components/brave_ads/core/internal/catalog/catalog_info.h"
-#include "brave/components/brave_ads/core/internal/conversions/conversions_database_util.h"
 #include "brave/components/brave_ads/core/internal/creatives/campaigns_database_util.h"
+#include "brave/components/brave_ads/core/internal/creatives/conversions/creative_set_conversion_database_table_util.h"
 #include "brave/components/brave_ads/core/internal/creatives/creative_ads_database_util.h"
 #include "brave/components/brave_ads/core/internal/creatives/creatives_builder.h"
 #include "brave/components/brave_ads/core/internal/creatives/creatives_info.h"
@@ -22,12 +21,12 @@
 #include "brave/components/brave_ads/core/internal/creatives/notification_ads/creative_notification_ads_database_util.h"
 #include "brave/components/brave_ads/core/internal/creatives/promoted_content_ads/creative_promoted_content_ads_database_util.h"
 #include "brave/components/brave_ads/core/internal/creatives/segments_database_util.h"
+#include "brave/components/brave_ads/core/internal/prefs/pref_util.h"
+#include "brave/components/brave_ads/core/public/prefs/pref_names.h"
 
 namespace brave_ads {
 
 namespace {
-
-constexpr base::TimeDelta kCatalogLifespan = base::Days(1);
 
 void Delete() {
   database::DeleteCampaigns();
@@ -43,7 +42,7 @@ void Delete() {
 }
 
 void PurgeExpired() {
-  database::PurgeExpiredConversions();
+  database::PurgeExpiredCreativeSetConversions();
   database::PurgeExpiredDeposits();
 }
 
@@ -63,53 +62,48 @@ void SaveCatalog(const CatalogInfo& catalog) {
   database::SaveCreativeInlineContentAds(creatives.inline_content_ads);
   database::SaveCreativeNewTabPageAds(creatives.new_tab_page_ads);
   database::SaveCreativePromotedContentAds(creatives.promoted_content_ads);
-  database::SaveConversions(creatives.conversions);
+  database::SaveCreativeSetConversions(creatives.conversions);
 }
 
 void ResetCatalog() {
-  AdsClientHelper::GetInstance()->ClearPref(prefs::kCatalogId);
-  AdsClientHelper::GetInstance()->ClearPref(prefs::kCatalogVersion);
-  AdsClientHelper::GetInstance()->ClearPref(prefs::kCatalogPing);
-  AdsClientHelper::GetInstance()->ClearPref(prefs::kCatalogLastUpdated);
+  ClearProfilePref(prefs::kCatalogId);
+  ClearProfilePref(prefs::kCatalogVersion);
+  ClearProfilePref(prefs::kCatalogPing);
+  ClearProfilePref(prefs::kCatalogLastUpdated);
 
   Delete();
 }
 
 std::string GetCatalogId() {
-  return AdsClientHelper::GetInstance()->GetStringPref(prefs::kCatalogId);
+  return GetProfileStringPref(prefs::kCatalogId);
 }
 
 void SetCatalogId(const std::string& id) {
-  AdsClientHelper::GetInstance()->SetStringPref(prefs::kCatalogId, id);
+  SetProfileStringPref(prefs::kCatalogId, id);
 }
 
 int GetCatalogVersion() {
-  return AdsClientHelper::GetInstance()->GetIntegerPref(prefs::kCatalogVersion);
+  return GetProfileIntegerPref(prefs::kCatalogVersion);
 }
 
-void SetCatalogVersion(const int version) {
-  AdsClientHelper::GetInstance()->SetIntegerPref(prefs::kCatalogVersion,
-                                                 version);
+void SetCatalogVersion(int version) {
+  SetProfileIntegerPref(prefs::kCatalogVersion, version);
 }
 
 base::TimeDelta GetCatalogPing() {
-  return base::Milliseconds(
-      AdsClientHelper::GetInstance()->GetInt64Pref(prefs::kCatalogPing));
+  return base::Milliseconds(GetProfileInt64Pref(prefs::kCatalogPing));
 }
 
-void SetCatalogPing(const base::TimeDelta ping) {
-  AdsClientHelper::GetInstance()->SetInt64Pref(prefs::kCatalogPing,
-                                               ping.InMilliseconds());
+void SetCatalogPing(base::TimeDelta ping) {
+  SetProfileInt64Pref(prefs::kCatalogPing, ping.InMilliseconds());
 }
 
 base::Time GetCatalogLastUpdated() {
-  return AdsClientHelper::GetInstance()->GetTimePref(
-      prefs::kCatalogLastUpdated);
+  return GetProfileTimePref(prefs::kCatalogLastUpdated);
 }
 
-void SetCatalogLastUpdated(const base::Time last_updated_at) {
-  AdsClientHelper::GetInstance()->SetTimePref(prefs::kCatalogLastUpdated,
-                                              last_updated_at);
+void SetCatalogLastUpdated(base::Time last_updated_at) {
+  SetProfileTimePref(prefs::kCatalogLastUpdated, last_updated_at);
 }
 
 bool DoesCatalogExist() {
@@ -121,7 +115,7 @@ bool HasCatalogChanged(const std::string& catalog_id) {
 }
 
 bool HasCatalogExpired() {
-  return base::Time::Now() >= GetCatalogLastUpdated() + kCatalogLifespan;
+  return base::Time::Now() >= GetCatalogLastUpdated() + kCatalogLifespan.Get();
 }
 
 }  // namespace brave_ads

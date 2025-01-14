@@ -5,10 +5,9 @@
 
 #include "brave/components/commander/common/constants.h"
 
-#include "base/strings/string_piece.h"
+#include <string_view>
 
 namespace commander {
 
-const base::StringPiece16 kCommandPrefix(u":>");
-
+const std::u16string_view kCommandPrefix(u":>");
 }

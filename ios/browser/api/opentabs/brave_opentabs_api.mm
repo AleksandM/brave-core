@@ -4,17 +4,18 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "brave/ios/browser/api/opentabs/brave_opentabs_api.h"
-#include "brave/ios/browser/api/opentabs/brave_opentabs_observer.h"
-#include "brave/ios/browser/api/opentabs/opentabs_session_listener_ios.h"
 
+#include "base/memory/raw_ptr.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "components/sync/driver/sync_service.h"
+#include "brave/ios/browser/api/opentabs/brave_opentabs_observer.h"
+#include "brave/ios/browser/api/opentabs/opentabs_session_listener_ios.h"
+#include "components/sync/service/sync_service.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/sync_sessions/open_tabs_ui_delegate.h"
 #include "components/sync_sessions/session_sync_service.h"
-#include "ios/chrome/browser/synced_sessions/synced_sessions.h"
-#include "net/base/mac/url_conversions.h"
+#include "ios/chrome/browser/synced_sessions/model/synced_sessions.h"
+#include "net/base/apple/url_conversions.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
@@ -150,11 +151,11 @@ SyncDeviceFormFactor const SyncDeviceFormFactorTablet =
 
 @interface BraveOpenTabsAPI () {
   // SyncService is needed in order to observe sync changes
-  syncer::SyncService* sync_service_;
+  raw_ptr<syncer::SyncService> sync_service_;
 
   // Session Sync Service is needed in order to receive session details from
   // different instances
-  sync_sessions::SessionSyncService* session_sync_service_;
+  raw_ptr<sync_sessions::SessionSyncService> session_sync_service_;
 }
 @end
 
@@ -200,10 +201,11 @@ SyncDeviceFormFactor const SyncDeviceFormFactorTablet =
   if (open_tabs_delegate) {
     // Iterating through all remote sessions, then retrieving the tabs to
     // display to the user.
-    std::vector<const sync_sessions::SyncedSession*> sessions;
+    std::vector<raw_ptr<const sync_sessions::SyncedSession, VectorExperimental>>
+        sessions;
     open_tabs_delegate->GetAllForeignSessions(&sessions);
 
-    for (const auto* session : sessions) {
+    for (const sync_sessions::SyncedSession* session : sessions) {
       // Create a distant session
       IOSOpenDistantSession* distant_session = [[IOSOpenDistantSession alloc]
               initWithName:base::SysUTF8ToNSString(session->GetSessionName())

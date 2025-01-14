@@ -6,26 +6,18 @@
 #include "src/net/base/features.cc"
 
 #include "base/feature_override.h"
+#include "brave/net/dns/secure_dns_endpoints.h"
 
-namespace net {
-namespace features {
+namespace net::features {
 
 OVERRIDE_FEATURE_DEFAULT_STATES({{
-    {kNoncedPartitionedCookies, base::FEATURE_DISABLED_BY_DEFAULT},
+    {kEnableWebTransportDraft07, base::FEATURE_DISABLED_BY_DEFAULT},
     // Enable NIK-partitioning by default.
     {kPartitionConnectionsByNetworkIsolationKey,
      base::FEATURE_ENABLED_BY_DEFAULT},
-    {kPartitionedCookies, base::FEATURE_DISABLED_BY_DEFAULT},
-    {kPartitionHttpServerPropertiesByNetworkIsolationKey,
-     base::FEATURE_ENABLED_BY_DEFAULT},
-    {kPartitionSSLSessionsByNetworkIsolationKey,
-     base::FEATURE_ENABLED_BY_DEFAULT},
-    {kSamePartyAttributeEnabled, base::FEATURE_DISABLED_BY_DEFAULT},
-    {kSplitHostCacheByNetworkIsolationKey, base::FEATURE_ENABLED_BY_DEFAULT},
-    // It is necessary yet to make chromium storage partitioning compatible with
-    // Brave ephemeral storage. For reference:
-    // https://github.com/brave/brave-browser/issues/26165
-    {kSupportPartitionedBlobUrl, base::FEATURE_DISABLED_BY_DEFAULT},
+    {kTopLevelTpcdOriginTrial, base::FEATURE_DISABLED_BY_DEFAULT},
+    {kTpcdMetadataGrants, base::FEATURE_DISABLED_BY_DEFAULT},
+    {kWaitForFirstPartySetsInit, base::FEATURE_DISABLED_BY_DEFAULT},
 }});
 
 BASE_FEATURE(kBraveEphemeralStorage,
@@ -43,11 +35,6 @@ BASE_FEATURE(kBraveFirstPartyEphemeralStorage,
              "BraveFirstPartyEphemeralStorage",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-// Partition Blob storage in ephemeral context.
-BASE_FEATURE(kBravePartitionBlobStorage,
-             "BravePartitionBlobStorage",
-             base::FEATURE_ENABLED_BY_DEFAULT);
-
 // Partition HSTS state storage by top frame site.
 BASE_FEATURE(kBravePartitionHSTS,
              "BravePartitionHSTS",
@@ -61,13 +48,31 @@ BASE_FEATURE(kBraveTorWindowsHttpsOnly,
 // Enabled HTTPS by Default.
 BASE_FEATURE(kBraveHttpsByDefault,
              "HttpsByDefault",
+             base::FEATURE_ENABLED_BY_DEFAULT);
+
+// When enabled, use a fallback DNS over HTTPS (DoH)
+// provider when the current DNS provider does not offer Secure DNS.
+BASE_FEATURE(kBraveFallbackDoHProvider,
+             "BraveFallbackDoHProvider",
              base::FEATURE_DISABLED_BY_DEFAULT);
+
+constexpr base::FeatureParam<DohFallbackEndpointType>::Option
+    kBraveFallbackDoHProviderEndpointOptions[] = {
+        {DohFallbackEndpointType::kNone, "none"},
+        {DohFallbackEndpointType::kQuad9, "quad9"},
+        {DohFallbackEndpointType::kWikimedia, "wikimedia"},
+        {DohFallbackEndpointType::kCloudflare, "cloudflare"}};
+constexpr base::FeatureParam<DohFallbackEndpointType>
+    kBraveFallbackDoHProviderEndpoint{
+        &kBraveFallbackDoHProvider, "BraveFallbackDoHProviderEndpoint",
+        DohFallbackEndpointType::kNone,
+        &kBraveFallbackDoHProviderEndpointOptions};
 
 // Add "Forget by default" cookie blocking mode which cleanups storage after a
 // website is closed.
 BASE_FEATURE(kBraveForgetFirstPartyStorage,
              "BraveForgetFirstPartyStorage",
-             base::FEATURE_DISABLED_BY_DEFAULT);
+             base::FEATURE_ENABLED_BY_DEFAULT);
 
 const base::FeatureParam<int>
     kBraveForgetFirstPartyStorageStartupCleanupDelayInSeconds = {
@@ -78,5 +83,4 @@ const base::FeatureParam<bool> kBraveForgetFirstPartyStorageByDefault = {
     &kBraveForgetFirstPartyStorage, "BraveForgetFirstPartyStorageByDefault",
     false};
 
-}  // namespace features
-}  // namespace net
+}  // namespace net::features

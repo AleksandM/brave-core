@@ -23,6 +23,7 @@ class EdgeRequestResponse : public EdgeRequest {
                       NodeResource* out_node,
                       GraphNode* in_node,
                       const InspectorId request_id,
+                      const FrameId& frame_id,
                       const RequestStatus request_status,
                       const ResponseMetadata& metadata);
 
@@ -34,14 +35,13 @@ class EdgeRequestResponse : public EdgeRequest {
   NodeResource* GetResourceNode() const override;
   GraphNode* GetRequestingNode() const override;
 
-  ItemName GetItemName() const override;
-
   void AddGraphMLAttributes(xmlDocPtr doc,
                             xmlNodePtr parent_node) const override;
 
   bool IsEdgeRequestResponse() const override;
 
   virtual bool IsEdgeRequestComplete() const;
+  virtual bool IsEdgeRequestRedirect() const;
   virtual bool IsEdgeRequestError() const;
 
  private:

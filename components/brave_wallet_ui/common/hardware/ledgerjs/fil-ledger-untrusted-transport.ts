@@ -4,48 +4,68 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import { CoinType } from '@glif/filecoin-address'
+import { TransportStatusError } from '@ledgerhq/errors'
 import { LotusMessage, SignedLotusMessage } from '@glif/filecoin-message'
-import { LedgerProvider, TransportWrapper } from '@glif/filecoin-wallet-provider'
-import { BraveWallet } from '../../../constants/types'
+import {
+  LedgerProvider,
+  TransportWrapper
+} from '@glif/filecoin-wallet-provider'
 import {
   FilGetAccountCommand,
-  FilGetAccountResponse, FilSignTransactionCommand, FilSignTransactionResponse
-} from './fil-ledger-messages'
-import {
+  FilGetAccountResponse,
+  FilSignTransactionCommand,
+  FilSignTransactionResponse,
   LedgerBridgeErrorCodes,
-  LedgerCommand, UnlockResponse
+  LedgerCommand,
+  UnlockResponse
 } from './ledger-messages'
 import { LedgerUntrustedMessagingTransport } from './ledger-untrusted-transport'
 
-// FilecoinLedgerUntrustedMessagingTransport makes calls to the Filecoin app on a Ledger device
-export class FilecoinLedgerUntrustedMessagingTransport extends LedgerUntrustedMessagingTransport {
+/** makes calls to the Filecoin app on a Ledger device */
+export class FilecoinLedgerUntrustedMessagingTransport //
+  extends LedgerUntrustedMessagingTransport
+{
   transportWrapper?: TransportWrapper
   provider?: LedgerProvider
-  deviceId: string
 
-  constructor (targetWindow: Window, targetUrl: string) {
+  constructor(targetWindow: Window, targetUrl: string) {
     super(targetWindow, targetUrl)
-    this.addCommandHandler<UnlockResponse>(LedgerCommand.Unlock, this.handleUnlock)
-    this.addCommandHandler<FilGetAccountResponse>(LedgerCommand.GetAccount, this.handleGetAccount)
-    this.addCommandHandler<FilSignTransactionResponse>(LedgerCommand.SignTransaction, this.handleSignTransaction)
+    this.addCommandHandler<UnlockResponse>(
+      LedgerCommand.Unlock,
+      this.handleUnlock
+    )
+    this.addCommandHandler<FilGetAccountResponse>(
+      LedgerCommand.GetAccount,
+      this.handleGetAccount
+    )
+    this.addCommandHandler<FilSignTransactionResponse>(
+      LedgerCommand.SignTransaction,
+      this.handleSignTransaction
+    )
   }
 
-  private handleGetAccount = async (command: FilGetAccountCommand): Promise<FilGetAccountResponse> => {
+  private handleGetAccount = async (
+    command: FilGetAccountCommand
+  ): Promise<FilGetAccountResponse> => {
     try {
-      if (!this.provider && !await this.makeProvider()) {
+      if (!this.provider && !(await this.makeProvider())) {
         return {
           command: LedgerCommand.GetAccount,
           id: LedgerCommand.GetAccount,
           origin: command.origin,
           payload: {
             success: false,
-            statusCode: LedgerBridgeErrorCodes.BridgeNotReady
+            error: '',
+            code: LedgerBridgeErrorCodes.BridgeNotReady
           }
         }
       }
 
-      const coinType = command.network === BraveWallet.FILECOIN_TESTNET ? CoinType.TEST : CoinType.MAIN
-      const accounts = await this.provider!.getAccounts(command.from, command.to, coinType)
+      const accounts = await this.provider!.getAccounts(
+        command.from,
+        command.from + command.count,
+        command.isTestnet ? CoinType.TEST : CoinType.MAIN
+      )
 
       return {
         command: LedgerCommand.GetAccount,
@@ -53,30 +73,37 @@ export class FilecoinLedgerUntrustedMessagingTransport extends LedgerUntrustedMe
         origin: command.origin,
         payload: {
           success: true,
-          accounts: accounts,
-          deviceId: this.deviceId
+          accounts: accounts
         }
       }
-    } catch (e) {
+    } catch (error) {
       return {
         command: LedgerCommand.GetAccount,
         id: LedgerCommand.GetAccount,
         origin: command.origin,
-        payload: e
+        payload: {
+          success: false,
+          error: (error as Error).message,
+          code:
+            error instanceof TransportStatusError ? error.statusCode : undefined
+        }
       }
     }
   }
 
-  private handleSignTransaction = async (command: FilSignTransactionCommand): Promise<FilSignTransactionResponse> => {
+  private handleSignTransaction = async (
+    command: FilSignTransactionCommand
+  ): Promise<FilSignTransactionResponse> => {
     try {
-      if (!this.provider && !await this.makeProvider()) {
+      if (!this.provider && !(await this.makeProvider())) {
         return {
           command: LedgerCommand.SignTransaction,
           id: LedgerCommand.SignTransaction,
           origin: command.origin,
           payload: {
             success: false,
-            statusCode: LedgerBridgeErrorCodes.BridgeNotReady
+            error: '',
+            code: LedgerBridgeErrorCodes.BridgeNotReady
           }
         }
       }
@@ -94,22 +121,30 @@ export class FilecoinLedgerUntrustedMessagingTransport extends LedgerUntrustedMe
         Method: parsed.Method,
         Params: parsed.Params
       }
-      const signed: SignedLotusMessage = await this.provider!.sign(parsed.From, lotusMessage)
+      const signed: SignedLotusMessage = await this.provider!.sign(
+        parsed.From,
+        lotusMessage
+      )
       return {
         command: LedgerCommand.SignTransaction,
         id: LedgerCommand.SignTransaction,
         origin: command.origin,
         payload: {
           success: true,
-          lotusMessage: signed
+          untrustedSignedTxJson: JSON.stringify(signed)
         }
       }
-    } catch (e) {
+    } catch (error) {
       return {
         command: LedgerCommand.SignTransaction,
         id: LedgerCommand.SignTransaction,
         origin: command.origin,
-        payload: e
+        payload: {
+          success: false,
+          error: (error as Error).message,
+          code:
+            error instanceof TransportStatusError ? error.statusCode : undefined
+        }
       }
     }
   }
@@ -133,12 +168,9 @@ export class FilecoinLedgerUntrustedMessagingTransport extends LedgerUntrustedMe
         }
       })
 
-      if (!await provider.ready()) {
+      if (!(await provider.ready())) {
         return false
       }
-
-      let accounts = await provider.getAccounts(0, 1, CoinType.TEST)
-      this.deviceId = accounts[0]
 
       this.provider = provider
 

@@ -6,7 +6,7 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_USER_ATTENTION_USER_IDLE_DETECTION_USER_IDLE_DETECTION_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_USER_ATTENTION_USER_IDLE_DETECTION_USER_IDLE_DETECTION_H_
 
-#include "brave/components/brave_ads/core/ads_client_notifier_observer.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client_notifier_observer.h"
 
 namespace base {
 class TimeDelta;
@@ -20,9 +20,6 @@ class UserIdleDetection : public AdsClientNotifierObserver {
 
   UserIdleDetection(const UserIdleDetection&) = delete;
   UserIdleDetection& operator=(const UserIdleDetection&) = delete;
-
-  UserIdleDetection(UserIdleDetection&&) noexcept = delete;
-  UserIdleDetection& operator=(UserIdleDetection&&) noexcept = delete;
 
   ~UserIdleDetection() override;
 

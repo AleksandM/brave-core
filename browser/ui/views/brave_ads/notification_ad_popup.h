@@ -10,16 +10,22 @@
 #include <memory>
 
 #include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/scoped_observation.h"
 #include "brave/browser/ui/brave_ads/notification_ad.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/display/display_observer.h"
 #include "ui/gfx/animation/animation_delegate.h"
+#include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/views/widget/widget_delegate.h"
 #include "ui/views/widget/widget_observer.h"
 
 class Profile;
+
+namespace display {
+class Screen;
+}  // namespace display
 
 namespace gfx {
 class LinearAnimation;
@@ -45,10 +51,9 @@ class NotificationAdPopup : public views::WidgetDelegateView,
                             public views::WidgetObserver,
                             public gfx::AnimationDelegate,
                             public display::DisplayObserver {
+  METADATA_HEADER(NotificationAdPopup, views::WidgetDelegateView)
  public:
-  METADATA_HEADER(NotificationAdPopup);
-
-  NotificationAdPopup(Profile* profile,
+  NotificationAdPopup(Profile& profile,
                       const NotificationAd& notification_ad,
                       gfx::NativeWindow browser_native_window,
                       gfx::NativeView browser_native_view);
@@ -56,20 +61,17 @@ class NotificationAdPopup : public views::WidgetDelegateView,
   NotificationAdPopup(const NotificationAdPopup&) = delete;
   NotificationAdPopup& operator=(const NotificationAdPopup&) = delete;
 
-  NotificationAdPopup(NotificationAdPopup&&) noexcept = delete;
-  NotificationAdPopup& operator=(NotificationAdPopup&&) noexcept = delete;
-
   ~NotificationAdPopup() override;
 
   // Disables fade in animation for snapshot tests.
   static void SetDisableFadeInAnimationForTesting(bool disable);
 
-  void AdjustBoundsAndSnapToFitWorkAreaForWidget(views::Widget* widget,
-                                                 const gfx::Rect& bounds);
+  gfx::Rect AdjustBoundsAndSnapToFitWorkAreaForWidget(views::Widget* widget,
+                                                      const gfx::Rect& bounds);
 
   // display::DisplayObserver:
   void OnDisplayAdded(const display::Display& new_display) override;
-  void OnDisplayRemoved(const display::Display& old_display) override;
+  void OnDisplaysRemoved(const display::Displays& displays) override;
   void OnDisplayMetricsChanged(const display::Display& display,
                                uint32_t changed_metrics) override;
 
@@ -109,48 +111,56 @@ class NotificationAdPopup : public views::WidgetDelegateView,
     kFadeOut
   };
 
-  raw_ptr<Profile> profile_ = nullptr;  // NOT OWNED
-
   void CreatePopup(gfx::NativeWindow browser_native_window,
                    gfx::NativeView browser_native_view);
 
-  NotificationAd notification_ad_;
-
-  gfx::Point GetDefaultOriginForSize(const gfx::Size& size);
-  gfx::Point GetOriginForSize(const gfx::Size& size);
-  void SaveOrigin(const gfx::Point& origin) const;
+  bool DidChangePopupPosition() const;
+  gfx::Rect GetInitialWidgetBounds(gfx::NativeView browser_native_view);
+  gfx::Rect GetWidgetBoundsForSize(const gfx::Size& size,
+                                   gfx::NativeView browser_native_view);
+  void SaveWidgetOrigin(const gfx::Point& origin, gfx::NativeView native_view);
 
   gfx::Size CalculateViewSize() const;
-  gfx::Rect CalculateBounds();
 
   void RecomputeAlignment();
 
   const gfx::ShadowDetails& GetShadowDetails() const;
   gfx::Insets GetShadowMargin() const;
+  gfx::Insets GetWidgetMargin() const;
 
   void CreateWidgetView(gfx::NativeWindow browser_native_window,
                         gfx::NativeView browser_native_view);
   void CloseWidgetView();
 
-  raw_ptr<NotificationAdView> notification_ad_view_ = nullptr;
-
   void FadeIn();
   void FadeOut();
 
-  const std::unique_ptr<gfx::LinearAnimation> animation_;
-  AnimationState animation_state_ = AnimationState::kIdle;
   void StartAnimation();
   void UpdateAnimation();
 
   bool IsWidgetValid() const;
+
+  const raw_ref<Profile> profile_;
+
+  NotificationAd notification_ad_;
+
+  raw_ptr<NotificationAdView> notification_ad_view_ = nullptr;
+
+  const std::unique_ptr<gfx::LinearAnimation> animation_;
+  AnimationState animation_state_ = AnimationState::kIdle;
 
   gfx::Point initial_mouse_pressed_location_;
   bool is_dragging_ = false;
 
   bool inside_adjust_bounds_ = false;
 
+  gfx::PointF last_normalized_coordinate_;
+
   base::ScopedObservation<views::Widget, views::WidgetObserver>
       widget_observation_{this};
+
+  base::ScopedObservation<display::Screen, display::DisplayObserver>
+      screen_observation_{this};
 };
 
 }  // namespace brave_ads

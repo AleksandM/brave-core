@@ -38,7 +38,7 @@ export const body = styled.div`
 `
 
 export const dataTable = styled.div`
-  padding: 0 16px 16px;
+  padding: 0 16px;
 
   table {
     width: 100%;
@@ -56,6 +56,7 @@ export const dataTable = styled.div`
     font-size: 14px;
     line-height: 18px;
     padding: 10px 0;
+    vertical-align: baseline;
   }
 
   td.amount {
@@ -75,15 +76,35 @@ export const dataTable = styled.div`
   }
 
   tr:nth-child(1) td.amount {
-    color: #b13c7a;
+    color: var(--brave-palette-black);
+
+    .brave-theme-dark & {
+      color: var(--brave-palette-neutral400);
+    }
   }
 
   tr:nth-child(2) td.amount {
-    color: #b13c7a;
+    color: var(--brave-palette-black);
+
+    .brave-theme-dark & {
+      color: var(--brave-palette-neutral400);
+    }
   }
 
   tr:nth-child(3) td.amount {
-    color: #8d58c4;
+    color: var(--brave-palette-black);
+
+    .brave-theme-dark & {
+      color: var(--brave-palette-neutral400);
+    }
+  }
+
+  tr:last-child {
+    border-bottom: none;
+
+    td:last-child {
+      padding-bottom: 16px;
+    }
   }
 
   td.exchange {

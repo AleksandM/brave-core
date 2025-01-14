@@ -13,7 +13,7 @@
 #include "base/scoped_observation.h"
 #include "brave/browser/ui/sidebar/sidebar_model.h"
 #include "brave/browser/ui/views/sidebar/sidebar_button_view.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/view.h"
 
@@ -36,8 +36,8 @@ class SidebarControlView : public views::View,
                            public views::ContextMenuController,
                            public ui::SimpleMenuModel::Delegate,
                            public sidebar::SidebarModel::Observer {
+  METADATA_HEADER(SidebarControlView, views::View)
  public:
-  METADATA_HEADER(SidebarControlView);
   class Delegate {
    public:
     virtual void MenuClosed() {}
@@ -52,14 +52,13 @@ class SidebarControlView : public views::View,
   SidebarControlView& operator=(const SidebarControlView&) = delete;
 
   // views::View overrides:
-  void Layout() override;
-  gfx::Size CalculatePreferredSize() const override;
   void OnThemeChanged() override;
 
   // views::ContextMenuController overrides:
-  void ShowContextMenuForViewImpl(views::View* source,
-                                  const gfx::Point& point,
-                                  ui::MenuSourceType source_type) override;
+  void ShowContextMenuForViewImpl(
+      views::View* source,
+      const gfx::Point& point,
+      ui::mojom::MenuSourceType source_type) override;
 
   // ui::SimpleMenuModel::Delegate overrides:
   void ExecuteCommand(int command_id, int event_flags) override;

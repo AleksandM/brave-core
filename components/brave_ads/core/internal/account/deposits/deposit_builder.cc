@@ -5,20 +5,22 @@
 
 #include "brave/components/brave_ads/core/internal/account/deposits/deposit_builder.h"
 
+#include "base/check.h"
 #include "base/time/time.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
 #include "brave/components/brave_ads/core/internal/account/deposits/deposit_info.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads {
 
-DepositInfo BuildDeposit(const mojom::SearchResultAdInfoPtr& ad_mojom) {
-  DepositInfo deposit;
+DepositInfo FromMojomBuildDeposit(
+    const mojom::CreativeSearchResultAdInfoPtr& mojom_creative_ad) {
+  CHECK(mojom_creative_ad);
 
-  deposit.creative_instance_id = ad_mojom->creative_instance_id;
-  deposit.value = ad_mojom->value;
-  deposit.expire_at = base::Time::Now() + base::Hours(1);
-
-  return deposit;
+  return DepositInfo{
+      .creative_instance_id = mojom_creative_ad->creative_instance_id,
+      .value = mojom_creative_ad->value,
+      .expire_at = base::Time::Now() + base::Hours(1),
+  };
 }
 
 }  // namespace brave_ads

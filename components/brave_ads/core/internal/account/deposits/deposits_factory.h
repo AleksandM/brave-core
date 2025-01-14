@@ -9,15 +9,14 @@
 #include <memory>
 
 #include "brave/components/brave_ads/core/internal/account/deposits/deposit_interface.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom-forward.h"
 
 namespace brave_ads {
-
-class ConfirmationType;
 
 class DepositsFactory final {
  public:
   static std::unique_ptr<DepositInterface> Build(
-      const ConfirmationType& confirmation_type);
+      mojom::ConfirmationType mojom_confirmation_type);
 };
 
 }  // namespace brave_ads

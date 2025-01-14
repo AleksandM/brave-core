@@ -5,6 +5,7 @@
 
 #include "brave/browser/extensions/updater/brave_update_client_config.h"
 
+#include <optional>
 #include <string>
 
 #include "base/functional/bind.h"
@@ -48,17 +49,12 @@ BraveUpdateClientConfig::GetNetworkFetcherFactory() {
   return network_fetcher_factory_;
 }
 
-// Disabling cup signing
-bool BraveUpdateClientConfig::EnabledCupSigning() const {
-  return false;
-}
-
 BraveUpdateClientConfig::~BraveUpdateClientConfig() = default;
 
 // static
 scoped_refptr<ChromeUpdateClientConfig> BraveUpdateClientConfig::Create(
     content::BrowserContext* context,
-    absl::optional<GURL> update_url_override) {
+    std::optional<GURL> update_url_override) {
   FactoryCallback& factory = GetFactoryCallback();
   return factory.is_null() ? base::MakeRefCounted<BraveUpdateClientConfig>(
                                  context, update_url_override)

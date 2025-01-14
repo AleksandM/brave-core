@@ -32,6 +32,14 @@ const actions = bindActionCreators(rewardsActions, store.dispatch.bind(store))
 setIconBasePath('chrome://resources/brave-icons')
 
 function initialize () {
+  // For `brave://rewards/reconnect`, automatically trigger reconnection on page
+  // load and send the user immediately to the external wallet login page. Do
+  // not show any additional UI while redirecting.
+  if (window.location.pathname === '/reconnect') {
+    chrome.send('brave_rewards.reconnectExternalWallet')
+    return
+  }
+
   initLocale(loadTimeData.data_)
 
   const platformInfo = {
@@ -57,23 +65,15 @@ function userType (userType: number) {
   actions.onUserType(userType)
 }
 
+function isTermsOfServiceUpdateRequired (updateRequired: boolean) {
+  actions.onIsTermsOfServiceUpdateRequired(updateRequired)
+}
+
 function rewardsParameters (properties: Rewards.RewardsParameters) {
   actions.onRewardsParameters(properties)
   // Get the current AC amount after rewards parameters have been
   // updated, as the default AC amount may have been changed.
   actions.getContributionAmount()
-}
-
-function promotions (properties: Rewards.PromotionResponse) {
-  actions.onPromotions(properties)
-}
-
-function promotionClaimStarted (promotionId: string) {
-  actions.onPromotionClaimStarted(promotionId)
-}
-
-function promotionFinish (properties: Rewards.PromotionFinish) {
-  actions.onPromotionFinish(properties)
 }
 
 function reconcileStamp (stamp: number) {
@@ -104,6 +104,10 @@ function currentTips (list: Rewards.Publisher[]) {
   actions.onCurrentTips(list)
 }
 
+function onIsAutoContributeSupported (isAcSupported: boolean) {
+  actions.onIsAutoContributeSupported(isAcSupported)
+}
+
 function autoContributeProperties (properties: any) {
   actions.onAutoContributeProperties(properties)
 }
@@ -116,28 +120,28 @@ function adsHistory (adsHistory: Rewards.AdsHistory[]) {
   actions.onAdsHistory(adsHistory)
 }
 
-function onToggleAdThumbUp (result: Rewards.ToggleLikeAction) {
-  actions.onToggleAdThumbUp(result)
+function onToggleAdThumbUp(success: boolean) {
+  actions.onToggleAdThumbUp(success)
 }
 
-function onToggleAdThumbDown (result: Rewards.ToggleLikeAction) {
-  actions.onToggleAdThumbDown(result)
+function onToggleAdThumbDown(success: boolean) {
+  actions.onToggleAdThumbDown(success)
 }
 
-function onToggleAdOptIn (result: Rewards.ToggleOptAction) {
-  actions.onToggleAdOptIn(result)
+function onToggleAdOptIn(success: boolean) {
+  actions.onToggleAdOptIn(success)
 }
 
-function onToggleAdOptOut (result: Rewards.ToggleOptAction) {
-  actions.onToggleAdOptOut(result)
+function onToggleAdOptOut(success: boolean) {
+  actions.onToggleAdOptOut(success)
 }
 
-function onToggleSavedAd (result: Rewards.ToggleSavedAd) {
-  actions.onToggleSavedAd(result)
+function onToggleSavedAd(success: boolean) {
+  actions.onToggleSavedAd(success)
 }
 
-function onToggleFlaggedAd (result: Rewards.ToggleFlaggedAd) {
-  actions.onToggleFlaggedAd(result)
+function onToggleFlaggedAd(success: boolean) {
+  actions.onToggleFlaggedAd(success)
 }
 
 function statement (data: any) {
@@ -165,8 +169,8 @@ function excludedSiteChanged () {
   actions.getContributeList()
 }
 
-function balance (result: mojom.FetchBalanceResult) {
-  actions.onBalance(result)
+function balance (balance?: mojom.Balance) {
+  actions.onBalance(balance)
 }
 
 function reconcileComplete (properties: { type: number, result: number }) {
@@ -184,8 +188,8 @@ function reconcileComplete (properties: { type: number, result: number }) {
   }
 }
 
-function onGetExternalWallet (result: mojom.GetExternalWalletResult) {
-  actions.onGetExternalWallet(result)
+function onGetExternalWallet (externalWallet?: mojom.ExternalWallet) {
+  actions.onGetExternalWallet(externalWallet)
 }
 
 function onConnectExternalWallet (result: mojom.ConnectExternalWalletResult) {
@@ -197,20 +201,12 @@ function onExternalWalletLoggedOut () {
   actions.getBalance()
 }
 
-function unblindedTokensReady () {
-  actions.getBalance()
-}
-
-function monthlyReport (properties: { result: number, month: number, year: number, report: Rewards.MonthlyReport }) {
-  actions.onMonthlyReport(properties)
+function onExternalWalletDisconnected () {
+  actions.getUserType()
 }
 
 function reconcileStampReset () {
   actions.onReconcileStampReset()
-}
-
-function monthlyReportIds (ids: string[]) {
-  actions.onMonthlyReportIds(ids)
 }
 
 function countryCode (countryCode: string) {
@@ -229,12 +225,12 @@ function onboardingStatus (result: { showOnboarding: boolean }) {
   actions.onOnboardingStatus(result.showOnboarding)
 }
 
-function enabledInlineTippingPlatforms (list: string[]) {
-  actions.onEnabledInlineTippingPlatforms(list)
-}
-
 function externalWalletLogin (url: string) {
-  window.open(url, '_self', 'noreferrer')
+  if (url) {
+    window.open(url, '_self', 'noreferrer')
+  } else {
+    actions.onExternalWalletLoginError()
+  }
 }
 
 function onPrefChanged (key: string) {
@@ -250,10 +246,8 @@ Object.defineProperty(window, 'brave_rewards', {
   configurable: true,
   value: {
     userType,
+    isTermsOfServiceUpdateRequired,
     rewardsParameters,
-    promotions,
-    promotionClaimStarted,
-    promotionFinish,
     reconcileStamp,
     contributeList,
     externalWalletProviderList,
@@ -262,6 +256,7 @@ Object.defineProperty(window, 'brave_rewards', {
     contributionAmount,
     recurringTips,
     currentTips,
+    onIsAutoContributeSupported,
     autoContributeProperties,
     adsData,
     adsHistory,
@@ -281,15 +276,12 @@ Object.defineProperty(window, 'brave_rewards', {
     onGetExternalWallet,
     onConnectExternalWallet,
     onExternalWalletLoggedOut,
-    unblindedTokensReady,
-    monthlyReport,
+    onExternalWalletDisconnected,
     reconcileStampReset,
-    monthlyReportIds,
     countryCode,
     initialized,
     completeReset,
     onboardingStatus,
-    enabledInlineTippingPlatforms,
     externalWalletLogin,
     onPrefChanged,
     onIsUnsupportedRegion

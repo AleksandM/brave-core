@@ -7,40 +7,30 @@ import * as React from 'react'
 
 // Options
 import {
-  SwapAndSendOptions
+  SwapAndSendOptions //
 } from '../../../../../../options/swap-and-send-options'
 
 // Types
-import {
-  WalletAccountType
-} from '../../../../../../constants/types'
+import { BraveWallet } from '../../../../../../constants/types'
 
 // Utils
-import {
-  getLocale
-} from '../../../../../../../common/locale'
+import { getLocale } from '../../../../../../../common/locale'
 
 // Components
 import {
-  StandardCheckbox
+  StandardCheckbox //
 } from '../../form-controls/standard-checkbox/standard-checkbox'
 import {
-  StandardRadio
+  StandardRadio //
 } from '../../form-controls/standard-radio/standard-radio'
 import {
-  StandardSwitch
+  StandardSwitch //
 } from '../../form-controls/standard-switch/standard-switch'
-import {
-  StandardInput
-} from '../../inputs/standard-input/standard-input'
-import {
-  AccountSelector
-} from '../account-selector/account-selector'
+import { StandardInput } from '../../inputs/standard-input/standard-input'
+import { AccountSelector } from '../account-selector/account-selector'
 
 // Styled Components
-import {
-  Flash
-} from './swap-and-send.style'
+import { Flash } from './swap-and-send.style'
 import {
   Column,
   Row,
@@ -50,20 +40,24 @@ import {
 } from '../../shared-swap.styles'
 
 interface Props {
+  selectedNetwork: BraveWallet.NetworkInfo | undefined
   selectedSwapAndSendOption: string
   toAnotherAddress: string
-  selectedSwapSendAccount: WalletAccountType | undefined
+  selectedSwapSendAccount: BraveWallet.AccountInfo | undefined
   userConfirmedAddress: boolean
   swapAndSendSelected: boolean
   onChangeSwapAndSendSelected: (value: boolean) => void
   onCheckUserConfirmedAddress: (id: string, checked: boolean) => void
   handleOnSetToAnotherAddress: (value: string) => void
   onSelectSwapAndSendOption: (value: string) => void
-  onSelectSwapSendAccount: (account: WalletAccountType | undefined) => void
+  onSelectSwapSendAccount: (
+    account: BraveWallet.AccountInfo | undefined
+  ) => void
 }
 
 export const SwapAndSend = (props: Props) => {
   const {
+    selectedNetwork,
     selectedSwapAndSendOption,
     toAnotherAddress,
     selectedSwapSendAccount,
@@ -93,13 +87,27 @@ export const SwapAndSend = (props: Props) => {
   )
 
   return (
-    <Column columnHeight='dynamic' columnWidth='full'>
+    <Column
+      columnHeight='dynamic'
+      columnWidth='full'
+    >
       <VerticalSpacer size={16} />
-      <Row rowWidth='full' marginBottom={16} horizontalPadding={16}>
+      <Row
+        rowWidth='full'
+        marginBottom={16}
+        horizontalPadding={16}
+      >
         <Row>
           <Text textSize='14px'>{getLocale('braveSwapSwapAndSend')}</Text>
-          <Flash name='flash' size={16} />
-          <Text isBold={false} textSize='14px' textColor='text03'>
+          <Flash
+            name='flash'
+            size={16}
+          />
+          <Text
+            isBold={false}
+            textSize='14px'
+            textColor='text03'
+          >
             {getLocale('braveSwapNoExtraFees')}
           </Text>
         </Row>
@@ -131,11 +139,15 @@ export const SwapAndSend = (props: Props) => {
               <VerticalSpacer size={10} />
               {option.name === 'to-account' && (
                 <>
-                  <Row rowWidth='full' horizontalAlign='flex-start'>
+                  <Row
+                    rowWidth='full'
+                    horizontalAlign='flex-start'
+                  >
                     <HorizontalSpacer size={32} />
                     <AccountSelector
                       onSelectAccount={onSelectSwapSendAccount}
                       selectedAccount={selectedSwapSendAccount}
+                      selectedNetwork={selectedNetwork}
                       disabled={selectedSwapAndSendOption === 'to-address'}
                       showAccountSelector={showAccountSelector}
                       setShowAccountSelector={setShowAccountSelector}
@@ -162,7 +174,10 @@ export const SwapAndSend = (props: Props) => {
                     toAnotherAddress !== '' && (
                       <>
                         <VerticalSpacer size={16} />
-                        <Row rowWidth='full' horizontalAlign='flex-start'>
+                        <Row
+                          rowWidth='full'
+                          horizontalAlign='flex-start'
+                        >
                           <HorizontalSpacer size={32} />
                           <StandardCheckbox
                             id='confirm-address'

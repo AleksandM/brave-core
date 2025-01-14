@@ -20,7 +20,7 @@ import com.google.android.material.slider.Slider;
 import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,7 +43,7 @@ public class BraveRewardsOnboardingPagerAdapter extends PagerAdapter {
         View view;
         Context context = ContextUtils.getApplicationContext();
         if (shouldShowMoreOptions && position == (getImages().size() - 2)) {
-            int adsPerHour = BraveRewardsNativeWorker.getInstance().GetAdsPerHour();
+            int adsPerHour = BraveRewardsNativeWorker.getInstance().getAdsPerHour();
             int adsValue = adsPerHourValues.indexOf(adsPerHour);
             view = LayoutInflater.from(ContextUtils.getApplicationContext())
                            .inflate(R.layout.brave_rewards_onboarding_ac_layout, null);
@@ -62,7 +62,7 @@ public class BraveRewardsOnboardingPagerAdapter extends PagerAdapter {
             view = LayoutInflater.from(ContextUtils.getApplicationContext()).inflate(R.layout.brave_rewards_onboarding_item_layout, null);
             TextView titleView = view.findViewById(R.id.title_view);
             titleView.setText(getTitles(context).get(position));
-            TextView textView = view.findViewById(R.id.text_view);
+            TextView textView = view.findViewById(R.id.onboarding_text_view);
             textView.setText(getTexts(context).get(position));
             AppCompatImageView imageView = view.findViewById(R.id.image_view);
             imageView.setImageResource(getImages().get(position));
@@ -125,29 +125,33 @@ public class BraveRewardsOnboardingPagerAdapter extends PagerAdapter {
         return images;
     }
 
-    private final Slider.OnSliderTouchListener touchListener = new Slider.OnSliderTouchListener() {
-        @Override
-        public void onStartTrackingTouch(Slider slider) {
-            // Not implemented
-        }
+    private final Slider.OnSliderTouchListener touchListener =
+            new Slider.OnSliderTouchListener() {
+                @Override
+                public void onStartTrackingTouch(Slider slider) {
+                    // Not implemented
+                }
 
-        @Override
-        public void onStopTrackingTouch(Slider slider) {
-            try {
-                if (adsPerHourText != null) {
-                    int adsValue = adsPerHourValues.get((int) slider.getValue());
-                    adsPerHourText.setText(String.format(
-                            ContextUtils.getApplicationContext().getResources().getString(
-                                    R.string.ads_per_hour),
-                            adsValue));
+                @Override
+                public void onStopTrackingTouch(Slider slider) {
+                    try {
+                        if (adsPerHourText != null) {
+                            int adsValue = adsPerHourValues.get((int) slider.getValue());
+                            adsPerHourText.setText(
+                                    String.format(
+                                            ContextUtils.getApplicationContext()
+                                                    .getResources()
+                                                    .getString(R.string.ads_per_hour),
+                                            adsValue));
+                        }
+                        if (BraveAdsNativeHelper.nativeIsOptedInToNotificationAds(
+                                ProfileManager.getLastUsedRegularProfile())) {
+                            BraveRewardsNativeWorker.getInstance()
+                                    .setAdsPerHour((int) slider.getValue());
+                        }
+                    } catch (Exception ex) {
+                        Log.e(TAG, ex.getMessage());
+                    }
                 }
-                if (BraveAdsNativeHelper.nativeIsBraveAdsEnabled(
-                            Profile.getLastUsedRegularProfile())) {
-                    BraveRewardsNativeWorker.getInstance().SetAdsPerHour((int) slider.getValue());
-                }
-            } catch (Exception ex) {
-                Log.e(TAG, ex.getMessage());
-            }
-        }
-    };
+            };
 }

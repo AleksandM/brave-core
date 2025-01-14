@@ -8,6 +8,7 @@
 #include "base/compiler_specific.h"
 #include "base/containers/adapters.h"
 #include "base/containers/stack.h"
+#include "base/memory/raw_ptr.h"
 #include "base/numerics/safe_conversions.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/task/sequenced_task_runner.h"
@@ -17,18 +18,19 @@
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
+#include "components/bookmarks/browser/bookmark_uuids.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/undo/bookmark_undo_service.h"
 #include "components/undo/undo_manager.h"
 #include "components/user_prefs/user_prefs.h"
-#include "ios/chrome/browser/application_context/application_context.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state_manager.h"
-#include "ios/chrome/browser/ui/bookmarks/bookmark_utils_ios.h"
+#include "ios/chrome/browser/bookmarks/ui_bundled/bookmark_utils_ios.h"
+#include "ios/chrome/browser/shared/model/application_context/application_context.h"
+#include "ios/chrome/browser/shared/model/profile/profile_ios.h"
+#include "ios/chrome/browser/shared/model/profile/profile_manager_ios.h"
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #include "url/gurl.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -48,8 +50,8 @@
 @end
 
 @interface IOSBookmarkNode () {
-  const bookmarks::BookmarkNode* node_;
-  bookmarks::BookmarkModel* model_;  // UNOWNED
+  raw_ptr<const bookmarks::BookmarkNode> node_;
+  raw_ptr<bookmarks::BookmarkModel> model_;
   bool owned_;
 }
 @end
@@ -91,13 +93,13 @@
     node->SetTitle(base::SysNSStringToUTF16(title));
 
     if (dateAdded) {
-      node->set_date_added(
-          base::Time::FromDoubleT([dateAdded timeIntervalSince1970]));
+      node->set_date_added(base::Time::FromSecondsSinceUnixEpoch(
+          [dateAdded timeIntervalSince1970]));
     }
 
     if (dateModified) {
-      node->set_date_folder_modified(
-          base::Time::FromDoubleT([dateModified timeIntervalSince1970]));
+      node->set_date_folder_modified(base::Time::FromSecondsSinceUnixEpoch(
+          [dateModified timeIntervalSince1970]));
     }
 
     for (IOSBookmarkNode* child : children) {
@@ -105,7 +107,7 @@
                               // Allocated from iOS/Swift.
       child->owned_ = false;
       child->node_ = node->Add(std::unique_ptr<bookmarks::BookmarkNode>(
-          const_cast<bookmarks::BookmarkNode*>(child->node_)));
+          const_cast<bookmarks::BookmarkNode*>(child->node_.get())));
     }
 
     node_ = node;
@@ -130,25 +132,23 @@
 }
 
 + (NSString*)rootNodeGuid {
-  return base::SysUTF8ToNSString(bookmarks::BookmarkNode::kRootNodeUuid);
+  return base::SysUTF8ToNSString(bookmarks::kRootNodeUuid);
 }
 
 + (NSString*)bookmarkBarNodeGuid {
-  return base::SysUTF8ToNSString(bookmarks::BookmarkNode::kBookmarkBarNodeUuid);
+  return base::SysUTF8ToNSString(bookmarks::kBookmarkBarNodeUuid);
 }
 
 + (NSString*)otherBookmarksNodeGuid {
-  return base::SysUTF8ToNSString(
-      bookmarks::BookmarkNode::kOtherBookmarksNodeUuid);
+  return base::SysUTF8ToNSString(bookmarks::kOtherBookmarksNodeUuid);
 }
 
 + (NSString*)mobileBookmarksNodeGuid {
-  return base::SysUTF8ToNSString(
-      bookmarks::BookmarkNode::kMobileBookmarksNodeUuid);
+  return base::SysUTF8ToNSString(bookmarks::kMobileBookmarksNodeUuid);
 }
 
 + (NSString*)managedNodeGuid {
-  return base::SysUTF8ToNSString(bookmarks::BookmarkNode::kManagedNodeUuid);
+  return base::SysUTF8ToNSString(bookmarks::kManagedNodeUuid);
 }
 
 - (bool)isPermanentNode {
@@ -217,27 +217,28 @@
 
 - (NSDate*)dateAdded {
   DCHECK(node_);
-  return [NSDate dateWithTimeIntervalSince1970:node_->date_added().ToDoubleT()];
+  return [NSDate dateWithTimeIntervalSince1970:node_->date_added()
+                                                   .InSecondsFSinceUnixEpoch()];
 }
 
 - (void)setDateAdded:(NSDate*)date {
   DCHECK(node_);
   DCHECK(model_);
-  model_->SetDateAdded(node_,
-                       base::Time::FromDoubleT([date timeIntervalSince1970]));
+  model_->SetDateAdded(node_, base::Time::FromSecondsSinceUnixEpoch(
+                                  [date timeIntervalSince1970]));
 }
 
 - (NSDate*)dateFolderModified {
   DCHECK(node_);
-  return [NSDate
-      dateWithTimeIntervalSince1970:node_->date_folder_modified().ToDoubleT()];
+  return [NSDate dateWithTimeIntervalSince1970:node_->date_folder_modified()
+                                                   .InSecondsFSinceUnixEpoch()];
 }
 
 - (void)setDateFolderModified:(NSDate*)date {
   DCHECK(node_);
   DCHECK(model_);
-  model_->SetDateFolderModified(
-      node_, base::Time::FromDoubleT([date timeIntervalSince1970]));
+  model_->SetDateFolderModified(node_, base::Time::FromSecondsSinceUnixEpoch(
+                                           [date timeIntervalSince1970]));
 }
 
 - (bool)isFolder {
@@ -327,6 +328,11 @@
 }
 
 - (NSUInteger)childCount {
+  DCHECK(node_);
+  return node_->children().size();
+}
+
+- (NSUInteger)totalCount {
   DCHECK(node_);
   return node_->GetTotalNodeCount() - 1;
 }
@@ -446,7 +452,8 @@
 - (void)remove {
   DCHECK(node_);
   DCHECK(model_);
-  model_->Remove(node_, bookmarks::metrics::BookmarkEditSource::kOther);
+  model_->Remove(node_, bookmarks::metrics::BookmarkEditSource::kOther,
+                 FROM_HERE);
   node_ = nil;
   model_ = nil;
 }
@@ -459,14 +466,14 @@
   DCHECK(owned_);
   owned_ = false;
   node_ = parent->Add(std::unique_ptr<bookmarks::BookmarkNode>(
-      const_cast<bookmarks::BookmarkNode*>(node_)));
+      const_cast<bookmarks::BookmarkNode*>(node_.get())));
 }
 
 @end
 
 @interface BraveBookmarksAPI () {
-  bookmarks::BookmarkModel* bookmark_model_;    // NOT OWNED
-  BookmarkUndoService* bookmark_undo_service_;  // NOT OWNED
+  raw_ptr<bookmarks::BookmarkModel> bookmark_model_;    // NOT OWNED
+  raw_ptr<BookmarkUndoService> bookmark_undo_service_;  // NOT OWNED
 }
 @end
 
@@ -538,12 +545,11 @@
 
 - (bool)editingEnabled {
   DCHECK_CURRENTLY_ON(web::WebThread::UI);
-  ios::ChromeBrowserStateManager* browserStateManager =
-      GetApplicationContext()->GetChromeBrowserStateManager();
-  ChromeBrowserState* browserState =
-      browserStateManager->GetLastUsedBrowserState();
+  std::vector<ProfileIOS*> profiles =
+      GetApplicationContext()->GetProfileManager()->GetLoadedProfiles();
+  ProfileIOS* last_used_profile = profiles.at(0);
 
-  PrefService* prefs = user_prefs::UserPrefs::Get(browserState);
+  PrefService* prefs = user_prefs::UserPrefs::Get(last_used_profile);
   return prefs->GetBoolean(bookmarks::prefs::kEditBookmarksEnabled);
 }
 
@@ -615,7 +621,7 @@
 
 - (void)removeAll {
   DCHECK_CURRENTLY_ON(web::WebThread::UI);
-  bookmark_model_->RemoveAllUserBookmarks();
+  bookmark_model_->RemoveAllUserBookmarks(FROM_HERE);
 }
 
 - (void)searchWithQuery:(NSString*)queryArg
@@ -637,9 +643,9 @@
         bookmarks::QueryFields queryFields;
         queryFields.word_phrase_query.reset(
             new std::u16string(base::SysNSStringToUTF16(query)));
-        std::vector<const bookmarks::BookmarkNode*> results;
-        GetBookmarksMatchingProperties(bookmarks_api->bookmark_model_,
-                                       queryFields, maxCount, &results);
+        std::vector<const bookmarks::BookmarkNode*> results =
+            GetBookmarksMatchingProperties(bookmarks_api->bookmark_model_,
+                                           queryFields, maxCount);
 
         NSMutableArray<IOSBookmarkNode*>* nodes = [[NSMutableArray alloc] init];
         for (const bookmarks::BookmarkNode* bookmark : results) {

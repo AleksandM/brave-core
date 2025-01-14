@@ -11,36 +11,42 @@ import { BraveWallet } from '../../../../constants/types'
 import { getLocale } from '../../../../../common/locale'
 
 // Components
-import { PopupModal } from '../..'
+import { PopupModal } from '../../popup-modals/index'
 import { AddNftForm } from '../../../shared/add-custom-token-form/add-nft-form'
 
 // Styles
 import { StyledWrapper } from './add-edit-nft-modal.style'
+
 interface Props {
   nftToken?: BraveWallet.BlockchainToken
   onClose: () => void
   onHideForm: () => void
-  onTokenFound?: (contractAddress: string) => void
 }
 
-export const AddOrEditNftModal = ({ nftToken, onClose, onHideForm, onTokenFound }: Props) => {
-  const [contractAddress, setContractAddress] = React.useState<string>(nftToken?.contractAddress || '')
+export const AddOrEditNftModal = ({ nftToken, onClose, onHideForm }: Props) => {
+  const [contractAddress, setContractAddress] = React.useState<string>(
+    nftToken?.contractAddress || ''
+  )
 
   return (
     <PopupModal
-      title={nftToken ? getLocale('braveWalletEditNftModalTitle') : getLocale('braveWalletImportNftModalTitle')}
+      title={
+        nftToken
+          ? getLocale('braveWalletEditNftModalTitle')
+          : getLocale('braveWalletAddNftModalTitle')
+      }
       onClose={onClose}
       width='584px'
-      showDivider={true}
+      showDivider={false}
+      headerPaddingHorizontal={'32px'}
     >
       <StyledWrapper>
         <AddNftForm
           selectedAsset={nftToken}
           contractAddress={contractAddress}
           onHideForm={onHideForm}
-          onTokenFound={onTokenFound}
           onChangeContractAddress={setContractAddress}
-          />
+        />
       </StyledWrapper>
     </PopupModal>
   )

@@ -7,11 +7,16 @@
 #define BRAVE_COMPONENTS_NTP_BACKGROUND_IMAGES_BROWSER_VIEW_COUNTER_SERVICE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "base/gtest_prod_util.h"
 #include "base/memory/raw_ptr.h"
+#include "base/scoped_observation.h"
+#include "base/timer/wall_clock_timer.h"
 #include "base/values.h"
+#include "brave/components/brave_ads/core/public/serving/targeting/condition_matcher/condition_matcher_util.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_service.h"
 #include "brave/components/ntp_background_images/browser/view_counter_model.h"
 #include "brave/components/ntp_background_images/buildflags/buildflags.h"
@@ -62,6 +67,9 @@ class ViewCounterService : public KeyedService,
 
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry);
   static void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry);
+  static void RegisterProfilePrefsForMigration(
+      user_prefs::PrefRegistrySyncable* registry);
+  static void MigrateObsoleteProfilePrefs(PrefService* prefs);
 
   // Lets the counter know that a New Tab Page view has occured.
   // This should always be called as it will evaluate whether the user has
@@ -72,11 +80,16 @@ class ViewCounterService : public KeyedService,
                                    const std::string& destination_url,
                                    const std::string& wallpaper_id);
 
-  absl::optional<base::Value::Dict> GetCurrentWallpaperForDisplay();
-  absl::optional<base::Value::Dict> GetCurrentWallpaper() const;
-  absl::optional<base::Value::Dict> GetCurrentBrandedWallpaper() const;
-  absl::optional<base::Value::Dict> GetCurrentBrandedWallpaperByAdInfo() const;
-  absl::optional<base::Value::Dict> GetCurrentBrandedWallpaperFromModel() const;
+  std::optional<base::Value::Dict> GetNextWallpaperForDisplay();
+  std::optional<base::Value::Dict> GetCurrentWallpaperForDisplay();
+  std::optional<base::Value::Dict> GetCurrentWallpaper() const;
+  std::optional<base::Value::Dict> GetCurrentBrandedWallpaper();
+  std::optional<brave_ads::ConditionMatcherMap> GetConditionMatchers(
+      const base::Value::Dict& dict);
+  std::optional<base::Value::Dict>
+  GetNextBrandedWallpaperWhichMatchesConditions();
+  std::optional<base::Value::Dict> GetCurrentBrandedWallpaperFromAdInfo() const;
+  std::optional<base::Value::Dict> GetCurrentBrandedWallpaperFromModel() const;
   std::vector<TopSite> GetTopSitesData() const;
 
   bool IsSuperReferral() const;
@@ -84,7 +97,8 @@ class ViewCounterService : public KeyedService,
   std::string GetSuperReferralCode() const;
 
   void BrandedWallpaperWillBeDisplayed(const std::string& wallpaper_id,
-                                       const std::string& creative_instance_id);
+                                       const std::string& creative_instance_id,
+                                       const std::string& campaign_id);
 
   NTPBackgroundImagesData* GetCurrentWallpaperData() const;
   // Gets the current data for branded wallpaper, if there
@@ -156,14 +170,16 @@ class ViewCounterService : public KeyedService,
 
   void MaybePrefetchNewTabPageAd();
 
-  void UpdateP3AValues() const;
+  void UpdateP3AValues();
 
   raw_ptr<NTPBackgroundImagesService> service_ = nullptr;
   raw_ptr<brave_ads::AdsService> ads_service_ = nullptr;
   raw_ptr<PrefService> prefs_ = nullptr;
+  raw_ptr<PrefService> local_state_prefs_ = nullptr;
   bool is_supported_locale_ = false;
   PrefChangeRegistrar pref_change_registrar_;
   ViewCounterModel model_;
+  base::WallClockTimer p3a_update_timer_;
 
   // Can be null if custom background is not supported.
   raw_ptr<BraveNTPCustomBackgroundService> custom_bi_service_ = nullptr;
@@ -174,6 +190,9 @@ class ViewCounterService : public KeyedService,
   std::unique_ptr<WeeklyStorage> branded_new_tab_count_state_;
 
   std::unique_ptr<NTPP3AHelper> ntp_p3a_helper_;
+  base::ScopedObservation<NTPBackgroundImagesService,
+                          NTPBackgroundImagesService::Observer>
+      ntp_background_images_service_observation_{this};
 };
 
 }  // namespace ntp_background_images

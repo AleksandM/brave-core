@@ -10,13 +10,15 @@
 #include <string>
 #include <vector>
 
-#include "brave/components/brave_rewards/core/ledger_callbacks.h"
+#include "brave/components/brave_rewards/common/mojom/rewards.mojom.h"
+#include "brave/components/brave_rewards/common/mojom/rewards_core.mojom.h"
+#include "brave/components/brave_rewards/core/rewards_callbacks.h"
 #include "sql/database.h"
 
 namespace brave_rewards::internal {
 namespace database {
 
-const size_t kBatchLimit = 999;
+inline constexpr size_t kBatchLimit = 999;
 
 void BindNull(mojom::DBCommand* command, const int index);
 
@@ -36,8 +38,8 @@ int32_t GetCurrentVersion();
 
 int32_t GetCompatibleVersion();
 
-void OnResultCallback(mojom::DBCommandResponsePtr response,
-                      LegacyResultCallback callback);
+void OnResultCallback(ResultCallback callback,
+                      mojom::DBCommandResponsePtr response);
 
 int GetIntColumn(mojom::DBRecord* record, const int index);
 
@@ -50,6 +52,28 @@ bool GetBoolColumn(mojom::DBRecord* record, const int index);
 std::string GetStringColumn(mojom::DBRecord* record, const int index);
 
 std::string GenerateStringInCase(const std::vector<std::string>& items);
+
+mojom::PublisherStatus PublisherStatusFromInt(int value);
+
+mojom::PublisherExclude PublisherExcludeFromInt(int value);
+
+mojom::RewardsType RewardsTypeFromInt(int value);
+
+mojom::ContributionStep ContributionStepFromInt(int value);
+
+mojom::ContributionProcessor ContributionProcessorFromInt(int value);
+
+mojom::CredsBatchType CredsBatchTypeFromInt(int value);
+
+mojom::CredsBatchStatus CredsBatchStatusFromInt(int value);
+
+mojom::SKUOrderStatus SKUOrderStatusFromInt(int value);
+
+mojom::SKUOrderItemType SKUOrderItemTypeFromInt(int value);
+
+mojom::SKUTransactionStatus SKUTransactionStatusFromInt(int value);
+
+mojom::SKUTransactionType SKUTransactionTypeFromInt(int value);
 
 }  // namespace database
 }  // namespace brave_rewards::internal

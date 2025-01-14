@@ -25,10 +25,9 @@ import androidx.annotation.Nullable;
 import androidx.core.content.res.ResourcesCompat;
 
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.BraveAdsNativeHelper;
 import org.chromium.chrome.browser.BraveDialogFragment;
+import org.chromium.chrome.browser.BraveRewardsHelper;
 import org.chromium.chrome.browser.onboarding.OnboardingPrefManager;
-import org.chromium.chrome.browser.profiles.Profile;
 
 /**
  * This dialog is used to show different messages when notification permission is off and
@@ -88,7 +87,7 @@ public class BraveNotificationWarningDialog extends BraveDialogFragment {
     }
 
     public static boolean shouldShowRewardWarningDialog(Context context) {
-        return isBraveRewardsEnabled()
+        return BraveRewardsHelper.isRewardsEnabled()
                 && BravePermissionUtils.isBraveAdsNotificationPermissionBlocked(context);
     }
 
@@ -136,10 +135,6 @@ public class BraveNotificationWarningDialog extends BraveDialogFragment {
         clickOnNotNow(view);
     }
 
-    public static boolean isBraveRewardsEnabled() {
-        return BraveAdsNativeHelper.nativeIsBraveAdsEnabled(Profile.getLastUsedRegularProfile());
-    }
-
     public static boolean isPrivacyReportsEnabled() {
         return OnboardingPrefManager.getInstance().isBraveStatsEnabled();
     }
@@ -148,9 +143,9 @@ public class BraveNotificationWarningDialog extends BraveDialogFragment {
         if (getArguments() != null) {
             mLaunchedFrom = getArguments().getInt(LAUNCHED_FROM);
             if (mLaunchedFrom == FROM_LAUNCHED_BRAVE_ACTIVITY) {
-                launchedFromBraveActivity(view);
+                launchedFromBraveActivity();
             } else if (mLaunchedFrom == FROM_LAUNCHED_BRAVE_SETTINGS) {
-                launchedFromBraveSettings(view);
+                launchedFromBraveSettings();
                 view.findViewById(R.id.btn_not_now).setVisibility(View.GONE);
             } else if (mLaunchedFrom == FROM_LAUNCHED_BRAVE_PANEL) {
                 launchedFromBravePanel(view);
@@ -171,7 +166,7 @@ public class BraveNotificationWarningDialog extends BraveDialogFragment {
                 view.getResources(), R.drawable.blue_48_rounded_bg, null));
     }
 
-    private void launchedFromBraveActivity(View view) {
+    private void launchedFromBraveActivity() {
         mPrimaryButton.setText(R.string.turn_on_brave_notifications);
 
         if (shouldShowBothWarningDialog(getContext())) {
@@ -187,7 +182,7 @@ public class BraveNotificationWarningDialog extends BraveDialogFragment {
         }
     }
 
-    private void launchedFromBraveSettings(View view) {
+    private void launchedFromBraveSettings() {
         mPrimaryButton.setText(R.string.got_it);
 
         if (shouldShowBothWarningDialog(getContext())) {

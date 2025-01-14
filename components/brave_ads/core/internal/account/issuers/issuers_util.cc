@@ -5,105 +5,64 @@
 
 #include "brave/components/brave_ads/core/internal/account/issuers/issuers_util.h"
 
+#include <string>
+
 #include "base/ranges/algorithm.h"
-#include "brave/components/brave_ads/common/pref_names.h"
-#include "brave/components/brave_ads/core/internal/account/issuers/confirmations_issuer_util.h"
-#include "brave/components/brave_ads/core/internal/account/issuers/issuer_info.h"
 #include "brave/components/brave_ads/core/internal/account/issuers/issuers_info.h"
-#include "brave/components/brave_ads/core/internal/account/issuers/issuers_value_util.h"
-#include "brave/components/brave_ads/core/internal/account/issuers/payments_issuer_util.h"
-#include "brave/components/brave_ads/core/internal/account/issuers/public_key_util.h"
-#include "brave/components/brave_ads/core/internal/ads_client_helper.h"
+#include "brave/components/brave_ads/core/internal/account/issuers/token_issuers/confirmation_token_issuer_util.h"
+#include "brave/components/brave_ads/core/internal/account/issuers/token_issuers/payment_token_issuer_util.h"
+#include "brave/components/brave_ads/core/internal/account/issuers/token_issuers/token_issuer_info.h"
+#include "brave/components/brave_ads/core/internal/account/issuers/token_issuers/token_issuer_util.h"
+#include "brave/components/brave_ads/core/internal/account/issuers/token_issuers/token_issuer_value_util.h"
+#include "brave/components/brave_ads/core/internal/prefs/pref_util.h"
+#include "brave/components/brave_ads/core/public/prefs/pref_names.h"
 
 namespace brave_ads {
 
 void SetIssuers(const IssuersInfo& issuers) {
-  AdsClientHelper::GetInstance()->SetIntegerPref(prefs::kIssuerPing,
-                                                 issuers.ping);
+  SetProfileIntegerPref(prefs::kIssuerPing, issuers.ping);
 
-  AdsClientHelper::GetInstance()->SetListPref(prefs::kIssuers,
-                                              IssuersToValue(issuers.issuers));
+  SetProfileListPref(prefs::kIssuers,
+                     TokenIssuersToValue(issuers.token_issuers));
 }
 
-absl::optional<IssuersInfo> GetIssuers() {
-  const absl::optional<base::Value::List> list =
-      AdsClientHelper::GetInstance()->GetListPref(prefs::kIssuers);
+std::optional<IssuersInfo> GetIssuers() {
+  const std::optional<base::Value::List> list =
+      GetProfileListPref(prefs::kIssuers);
   if (!list || list->empty()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  const absl::optional<IssuerList> issuer = ValueToIssuers(*list);
-  if (!issuer) {
-    return absl::nullopt;
+  const std::optional<TokenIssuerList> token_issuers =
+      TokenIssuersFromValue(*list);
+  if (!token_issuers) {
+    return std::nullopt;
   }
 
   IssuersInfo issuers;
-  issuers.ping =
-      AdsClientHelper::GetInstance()->GetIntegerPref(prefs::kIssuerPing);
-  issuers.issuers = *issuer;
+  issuers.ping = GetProfileIntegerPref(prefs::kIssuerPing);
+  issuers.token_issuers = *token_issuers;
 
   return issuers;
 }
 
-void ResetIssuers() {
-  AdsClientHelper::GetInstance()->ClearPref(prefs::kIssuerPing);
-  AdsClientHelper::GetInstance()->ClearPref(prefs::kIssuers);
-}
-
 bool IsIssuersValid(const IssuersInfo& issuers) {
-  return IsConfirmationsIssuerValid(issuers) && IsPaymentsIssuerValid(issuers);
+  return IsConfirmationTokenIssuerValid(issuers) &&
+         IsPaymentTokenIssuerValid(issuers);
 }
 
 bool HasIssuers() {
-  return IssuerExistsForType(IssuerType::kConfirmations) &&
-         IssuerExistsForType(IssuerType::kPayments);
+  return TokenIssuerExistsForType(TokenIssuerType::kConfirmations) &&
+         TokenIssuerExistsForType(TokenIssuerType::kPayments);
 }
 
 bool HasIssuersChanged(const IssuersInfo& other) {
-  const absl::optional<IssuersInfo> issuers = GetIssuers();
+  const std::optional<IssuersInfo> issuers = GetIssuers();
   if (!issuers) {
     return true;
   }
 
   return other != *issuers;
-}
-
-bool IssuerExistsForType(const IssuerType issuer_type) {
-  const absl::optional<IssuersInfo> issuers = GetIssuers();
-  if (!issuers) {
-    return false;
-  }
-
-  const absl::optional<IssuerInfo> issuer =
-      GetIssuerForType(*issuers, issuer_type);
-  return bool{issuer};
-}
-
-absl::optional<IssuerInfo> GetIssuerForType(const IssuersInfo& issuers,
-                                            const IssuerType issuer_type) {
-  const auto iter =
-      base::ranges::find(issuers.issuers, issuer_type, &IssuerInfo::type);
-  if (iter == issuers.issuers.cend()) {
-    return absl::nullopt;
-  }
-
-  return *iter;
-}
-
-bool PublicKeyExistsForIssuerType(const IssuerType issuer_type,
-                                  const std::string& public_key) {
-  const absl::optional<IssuersInfo> issuers = GetIssuers();
-  if (!issuers) {
-    return false;
-  }
-
-  const absl::optional<IssuerInfo> issuer =
-      GetIssuerForType(*issuers, issuer_type);
-  if (!issuer) {
-    return false;
-  }
-
-  return PublicKeyExists(*issuer, public_key);
 }
 
 }  // namespace brave_ads

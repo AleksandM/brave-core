@@ -18,6 +18,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
 import org.chromium.base.BravePreferenceKeys;
@@ -26,7 +28,7 @@ import org.chromium.base.task.TaskTraits;
 import org.chromium.brave_news.mojom.BraveNewsController;
 import org.chromium.brave_news.mojom.UserEnabled;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
 import org.chromium.chrome.browser.util.TabUtils;
 
 public class BraveNewsBottomSheetDialogFragment extends BottomSheetDialogFragment {
@@ -78,6 +80,9 @@ public class BraveNewsBottomSheetDialogFragment extends BottomSheetDialogFragmen
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        ((BottomSheetDialog) getDialog())
+                .getBehavior()
+                .setState(BottomSheetBehavior.STATE_EXPANDED);
         TextView title = view.findViewById(R.id.item_menu_title_text);
         Button newTab = view.findViewById(R.id.new_tab);
         Button privateTab = view.findViewById(R.id.new_private_tab);
@@ -106,28 +111,38 @@ public class BraveNewsBottomSheetDialogFragment extends BottomSheetDialogFragmen
             }
         });
 
-        disable.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                PostTask.postTask(TaskTraits.BEST_EFFORT, () -> {
-                    if (mBraveNewsController != null) {
-                        // Removes the news source from the fetch list by setting a
-                        // UserEnabled.DISABLED prop for the publisher in question
-                        SharedPreferencesManager.getInstance().writeBoolean(
-                                BravePreferenceKeys.BRAVE_NEWS_CHANGE_SOURCE, true);
-                        mBraveNewsController.setPublisherPref(mPublisherId, UserEnabled.DISABLED);
-                        BraveNewsUtils.disableFollowingPublisherList(mPublisherId);
-                        BraveNewsUtils.setFollowingPublisherList();
+        disable.setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        PostTask.postTask(
+                                TaskTraits.BEST_EFFORT,
+                                () -> {
+                                    if (mBraveNewsController != null) {
+                                        // Removes the news source from the fetch list by setting a
+                                        // UserEnabled.DISABLED prop for the publisher in question
+                                        ChromeSharedPreferences.getInstance()
+                                                .writeBoolean(
+                                                        BravePreferenceKeys
+                                                                .BRAVE_NEWS_CHANGE_SOURCE,
+                                                        true);
+                                        mBraveNewsController.setPublisherPref(
+                                                mPublisherId, UserEnabled.DISABLED);
+                                        BraveNewsUtils.disableFollowingPublisherList(mPublisherId);
+                                        BraveNewsUtils.setFollowingPublisherList();
+                                    }
+                                });
+                        dismiss();
+                        Toast.makeText(
+                                        mContext,
+                                        getResources()
+                                                .getString(
+                                                        R.string.brave_news_disabled_content,
+                                                        mPublisherName),
+                                        Toast.LENGTH_SHORT)
+                                .show();
                     }
                 });
-                dismiss();
-                Toast.makeText(mContext,
-                             getResources().getString(
-                                     R.string.brave_news_disabled_content, mPublisherName),
-                             Toast.LENGTH_SHORT)
-                        .show();
-            }
-        });
 
         share.setOnClickListener(new View.OnClickListener() {
             @Override

@@ -20,11 +20,12 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/gfx/font_list.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/controls/button/checkbox.h"
@@ -54,8 +55,8 @@ gfx::FontList GetFont(int font_size, gfx::Font::Weight weight) {
 
 // Subclass for custom font.
 class DontAskAgainCheckbox : public views::Checkbox {
+  METADATA_HEADER(DontAskAgainCheckbox, views::Checkbox)
  public:
-  METADATA_HEADER(DontAskAgainCheckbox);
 
   using views::Checkbox::Checkbox;
   ~DontAskAgainCheckbox() override = default;
@@ -67,7 +68,7 @@ class DontAskAgainCheckbox : public views::Checkbox {
   }
 };
 
-BEGIN_METADATA(DontAskAgainCheckbox, views::Checkbox)
+BEGIN_METADATA(DontAskAgainCheckbox)
 END_METADATA
 
 // static
@@ -106,10 +107,10 @@ WindowClosingConfirmDialogView::WindowClosingConfirmDialogView(
       response_callback_(std::move(response_callback)),
       prefs_(browser->profile()->GetOriginalProfile()->GetPrefs()) {
   set_should_ignore_snapping(true);
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  l10n_util::GetStringUTF16(
                      IDS_WINDOW_CLOSING_CONFIRM_DLG_OK_BUTTON_LABEL));
-  SetButtonLabel(ui::DIALOG_BUTTON_CANCEL,
+  SetButtonLabel(ui::mojom::DialogButton::kCancel,
                  l10n_util::GetStringUTF16(
                      IDS_WINDOW_CLOSING_CONFIRM_DLG_CANCEL_BUTTON_LABEL));
   RegisterWindowClosingCallback(base::BindOnce(
@@ -177,8 +178,8 @@ WindowClosingConfirmDialogView::WindowClosingConfirmDialogView(
 
 WindowClosingConfirmDialogView::~WindowClosingConfirmDialogView() = default;
 
-ui::ModalType WindowClosingConfirmDialogView::GetModalType() const {
-  return ui::MODAL_TYPE_WINDOW;
+ui::mojom::ModalType WindowClosingConfirmDialogView::GetModalType() const {
+  return ui::mojom::ModalType::kWindow;
 }
 
 bool WindowClosingConfirmDialogView::ShouldShowCloseButton() const {
@@ -207,5 +208,5 @@ void WindowClosingConfirmDialogView::OnClosing() {
   std::move(response_callback_).Run(close_window_);
 }
 
-BEGIN_METADATA(WindowClosingConfirmDialogView, views::DialogDelegateView)
+BEGIN_METADATA(WindowClosingConfirmDialogView)
 END_METADATA

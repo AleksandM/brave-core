@@ -64,7 +64,6 @@ void DecentralizedDnsInterstitialControllerClient::SetResolveMethodAndReload(
     pref_name = kSnsResolveMethod;
   } else {
     NOTREACHED();
-    return;
   }
 
   local_state_->SetInteger(pref_name, static_cast<int>(type));

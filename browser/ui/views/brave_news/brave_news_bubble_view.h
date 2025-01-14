@@ -16,13 +16,16 @@
 #include "ui/views/widget/widget.h"
 
 class BraveNewsFeedsContainerView;
+namespace brave_news {
+class BraveNewsBubbleController;
+}
 
 class BraveNewsBubbleView : public views::BubbleDialogDelegateView {
+  METADATA_HEADER(BraveNewsBubbleView, views::BubbleDialogDelegateView)
  public:
   static base::WeakPtr<views::Widget> Show(views::View* anchor,
                                            content::WebContents* contents);
 
-  METADATA_HEADER(BraveNewsBubbleView);
   explicit BraveNewsBubbleView(views::View* action_view,
                                content::WebContents* contents);
   BraveNewsBubbleView(const BraveNewsBubbleView&) = delete;
@@ -32,13 +35,16 @@ class BraveNewsBubbleView : public views::BubbleDialogDelegateView {
   void OpenManageFeeds();
 
   // views::BubbleDialogDelegateView:
+  void OnWidgetDestroyed(views::Widget*) override;
   void OnThemeChanged() override;
 
  private:
-  raw_ptr<content::WebContents> contents_;
+  raw_ptr<content::WebContents> contents_ = nullptr;
   raw_ptr<views::Label> title_label_ = nullptr;
   raw_ptr<views::Label> subtitle_label_ = nullptr;
   raw_ptr<BraveNewsFeedsContainerView> feeds_container_ = nullptr;
+
+  base::WeakPtr<brave_news::BraveNewsBubbleController> controller_;
 };
 
 #endif  // BRAVE_BROWSER_UI_VIEWS_BRAVE_NEWS_BRAVE_NEWS_BUBBLE_VIEW_H_

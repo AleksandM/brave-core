@@ -13,6 +13,7 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "extensions/browser/disable_reason.h"
 #include "extensions/browser/extension_system.h"
 #include "extensions/common/extension.h"
@@ -20,11 +21,19 @@
 
 namespace {
 
-constexpr const char kExtensionId[] = "doojmbjmlfjjnbmnoijecmcbfeoakpjm";
+constexpr char kExtensionId[] = "doojmbjmlfjjnbmnoijecmcbfeoakpjm";
 
 bool ClickExtensionToggle(content::WebContents* web_contents) {
   return EvalJs(web_contents,
                 "window.testing.extensionsV2Subpage.getElementById('"
+                "doojmbjmlfjjnbmnoijecmcbfeoakpjm').click()")
+      .value.is_none();
+}
+
+bool ClickExtensionRemove(content::WebContents* web_contents) {
+  return EvalJs(web_contents,
+                "window.testing.extensionsV2Subpage.getElementById('"
+                "doojmbjmlfjjnbmnoijecmcbfeoakpjm').querySelector('#"
                 "doojmbjmlfjjnbmnoijecmcbfeoakpjm').click()")
       .value.is_none();
 }
@@ -44,7 +53,7 @@ bool IsExtensionToggleEnabled(content::WebContents* web_contents) {
       .value.GetBool();
 }
 
-void NonBlockingDelay(const base::TimeDelta& delay) {
+void NonBlockingDelay(base::TimeDelta delay) {
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitWhenIdleClosure(), delay);
@@ -57,14 +66,10 @@ class BraveExtensionsManifestV2BrowserTest : public InProcessBrowserTest {
  public:
   BraveExtensionsManifestV2BrowserTest() {
     feature_list_.InitAndEnableFeature(kExtensionsManifestV2);
-
-    // Disabling CSP on webui pages so EvalJS could be run in main world.
-    BraveSettingsUI::ShouldDisableCSPForTesting() = true;
     BraveSettingsUI::ShouldExposeElementsForTesting() = true;
   }
 
   ~BraveExtensionsManifestV2BrowserTest() override {
-    BraveSettingsUI::ShouldDisableCSPForTesting() = false;
     BraveSettingsUI::ShouldExposeElementsForTesting() = false;
   }
 
@@ -87,6 +92,12 @@ class BraveExtensionsManifestV2BrowserTest : public InProcessBrowserTest {
           ->DisableExtension(kExtensionId,
                              extensions::disable_reason::DISABLE_USER_ACTION);
     }
+  }
+
+  bool IsExtensionEnabled() {
+    return extensions::ExtensionRegistry::Get(browser()->profile())
+        ->enabled_extensions()
+        .Contains(kExtensionId);
   }
 
   bool IsExtensionInstalled() {
@@ -150,9 +161,16 @@ IN_PROC_BROWSER_TEST_F(BraveExtensionsManifestV2BrowserTest,
   ClickExtensionToggle(web_contents);
   WaitExtensionToggled(true);
   EXPECT_TRUE(IsExtensionInstalled());
+  EXPECT_TRUE(IsExtensionEnabled());
 
-  // disabled from settings -> uninstalled.
+  // disabled from settings.
   ClickExtensionToggle(web_contents);
   WaitExtensionToggled(false);
+  EXPECT_TRUE(IsExtensionInstalled());
+  EXPECT_FALSE(IsExtensionEnabled());
+
+  // remove from settings.
+  ClickExtensionRemove(web_contents);
   EXPECT_FALSE(IsExtensionInstalled());
+  EXPECT_FALSE(IsExtensionEnabled());
 }

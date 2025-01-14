@@ -12,9 +12,8 @@
 #include "brave/browser/brave_ads/ads_service_factory.h"
 #include "brave/browser/brave_browser_process.h"
 #include "brave/browser/ntp_background/ntp_p3a_helper_impl.h"
-#include "brave/browser/profiles/profile_util.h"
-#include "brave/components/brave_ads/browser/ads_service.h"
-#include "brave/components/brave_ads/core/ads_util.h"
+#include "brave/components/brave_ads/core/browser/service/ads_service.h"
+#include "brave/components/brave_ads/core/public/ads_util.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_service.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_source.h"
@@ -60,11 +59,13 @@ ViewCounterServiceFactory::ViewCounterServiceFactory()
 
 ViewCounterServiceFactory::~ViewCounterServiceFactory() = default;
 
-KeyedService* ViewCounterServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+ViewCounterServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* browser_context) const {
   // Only NTP in normal profile uses sponsored services.
-  if (!brave::IsRegularProfile(browser_context))
+  if (!Profile::FromBrowserContext(browser_context)->IsRegularProfile()) {
     return nullptr;
+  }
 
   if (auto* service =
           g_brave_browser_process->ntp_background_images_service()) {
@@ -83,10 +84,12 @@ KeyedService* ViewCounterServiceFactory::BuildServiceInstanceFor(
     if (g_brave_browser_process->p3a_service() != nullptr) {
       ntp_p3a_helper = std::make_unique<NTPP3AHelperImpl>(
           g_browser_process->local_state(),
-          g_brave_browser_process->p3a_service(), ads_service);
+          g_brave_browser_process->p3a_service(),
+          g_brave_browser_process->ntp_background_images_service(),
+          profile->GetPrefs());
     }
 
-    return new ViewCounterService(
+    return std::make_unique<ViewCounterService>(
         service,
 #if BUILDFLAG(ENABLE_CUSTOM_BACKGROUND)
         BraveNTPCustomBackgroundServiceFactory::GetForContext(profile),

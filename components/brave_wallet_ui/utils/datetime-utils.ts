@@ -3,11 +3,33 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
-import { SerializableTimeDelta, TimeDelta } from '../constants/types'
+import type { SerializableTimeDelta, TimeDelta } from '../constants/types'
 
-const monthMap = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const monthMap = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec'
+]
 
-export function formatDateAsRelative (date: Date, now: Date = new Date()) {
+export function formatDateAsRelative(
+  date: Date,
+  now: Date = new Date(),
+  /**
+   * enabling `usePrecision` will return a precise relative time of
+   * (minutes:seconds) or (hours:minutes) instead of a
+   * single rounded value of seconds, minutes or hours.
+   */
+  usePrecision?: boolean
+) {
   // the difference in milliseconds
   const diff = now.getTime() - date.getTime()
 
@@ -19,14 +41,20 @@ export function formatDateAsRelative (date: Date, now: Date = new Date()) {
 
   // convert diff to minutes
   const min = Math.floor(diff / (1000 * 60))
+  const secRemaining = sec - min * 60
   if (min < 60) {
-    return `${min}m`
+    return usePrecision && secRemaining > 0
+      ? `${min}m: ${secRemaining}s`
+      : `${min}m`
   }
 
   // convert diff to hours
   const hour = Math.floor(diff / (1000 * 60 * 60))
+  const minRemaining = min - hour * 60
   if (hour < 24) {
-    return `${hour}h`
+    return usePrecision && minRemaining > 0
+      ? `${hour}h: ${minRemaining}m`
+      : `${hour}h`
   }
 
   // convert diff to days
@@ -48,32 +76,20 @@ export function formatDateAsRelative (date: Date, now: Date = new Date()) {
  * @param {SerializableTimeDelta} timeDelta
  * @return {!Date}
  */
-export function serializedTimeDeltaToJSDate (
+export function serializedTimeDeltaToJSDate(
   timeDelta: SerializableTimeDelta | TimeDelta
 ): Date {
   return new Date(Number(timeDelta.microseconds) / 1000)
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'numeric',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric'
+})
+
 export const formatTimelineDate = (date: Date) => {
-  const formatedDate =
-    new Date(date)
-      .toLocaleDateString(
-        'en-US',
-        {
-          month: 'numeric',
-          day: 'numeric',
-          year: 'numeric'
-        }
-      )
-  const formatedTime =
-    new Date(date)
-      .toLocaleTimeString(
-        'en-US',
-        {
-          hour: 'numeric',
-          minute: 'numeric',
-          hour12: true
-        }
-      )
-  return `${formatedDate} ${formatedTime}`
+  return dateTimeFormatter.format(new Date(date))
 }

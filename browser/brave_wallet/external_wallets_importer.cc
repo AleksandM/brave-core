@@ -5,6 +5,7 @@
 
 #include "brave/browser/brave_wallet/external_wallets_importer.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -16,6 +17,7 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/thread_pool.h"
 #include "base/types/cxx23_to_underlying.h"
+#include "base/types/fixed_array.h"
 #include "brave/browser/ethereum_remote_client/buildflags/buildflags.h"
 #include "brave/components/brave_wallet/browser/password_encryptor.h"
 #include "brave/third_party/argon2/src/include/argon2.h"
@@ -84,7 +86,7 @@ std::string GetLegacyCryptoWalletsPassword(const std::string& password,
     return std::string();
   }
 
-  // We need to count characters here because js implemenation forcibly utf8
+  // We need to count characters here because js implementation forcibly utf8
   // decode random bytes
   // (https://github.com/brave/KeyringController/blob/0769514cea07e85ae190f30765d0a301c631c56b/index.js#L91)
   // and causes 0xEFBFBD which is � (code point 0xFFFD) to be // NOLINT
@@ -102,7 +104,7 @@ std::string GetLegacyCryptoWalletsPassword(const std::string& password,
     }
   }
 
-  std::vector<uint8_t> master_key(*hash_len);
+  base::FixedArray<uint8_t> master_key(*hash_len);
   if (argon2id_hash_raw(*time, *mem, 1, password.data(), password.size(),
                         salt_str->data(), character_count, master_key.data(),
                         *hash_len) != ARGON2_OK) {
@@ -110,7 +112,7 @@ std::string GetLegacyCryptoWalletsPassword(const std::string& password,
     return std::string();
   }
   const std::string info = "metamask-encryptor";
-  std::vector<uint8_t> sub_key(*hash_len);
+  base::FixedArray<uint8_t> sub_key(*hash_len);
   if (!HKDF(sub_key.data(), sub_key.size(), EVP_sha512(), master_key.data(),
             master_key.size(), nullptr, 0, (uint8_t*)info.data(),
             info.size())) {
@@ -119,7 +121,7 @@ std::string GetLegacyCryptoWalletsPassword(const std::string& password,
   }
 
   // We need to go through whole buffer trying to see if there is an invalid
-  // unicdoe encoding and replace it with � (code point 0xFFFD) // NOLINT
+  // unicode encoding and replace it with � (code point 0xFFFD) // NOLINT
   // because js implementation forcibly utf8 decode sub_key
   // https://github.com/brave/KeyringController/blob/0769514cea07e85ae190f30765d0a301c631c56b/index.js#L547
   for (size_t i = 0; i < sub_key.size(); ++i) {
@@ -175,8 +177,6 @@ void ExternalWalletsImporter::Initialize(InitCallback callback) {
   } else {
     NOTREACHED() << "Unsupported ExternalWalletType type. value="
                  << base::to_underlying(type_);
-    std::move(callback).Run(false);
-    return;
   }
 
   GetLocalStorage(*extension, std::move(callback));
@@ -205,7 +205,7 @@ void ExternalWalletsImporter::OnCryptoWalletsLoaded(InitCallback callback) {
 
 bool ExternalWalletsImporter::IsCryptoWalletsInstalledInternal() const {
   if (!extensions::ExtensionPrefs::Get(context_)->HasPrefForExtension(
-          ethereum_remote_client_extension_id)) {
+          kEthereumRemoteClientExtensionId)) {
     return false;
   }
   return true;
@@ -243,13 +243,13 @@ void ExternalWalletsImporter::GetImportInfo(
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (!IsInitialized()) {
-    std::move(callback).Run(false, ImportInfo(), ImportError::kInternalError);
+    std::move(callback).Run(base::unexpected(ImportError::kInternalError));
     return;
   }
 
   if (password.empty()) {
     VLOG(1) << "password is empty";
-    std::move(callback).Run(false, ImportInfo(), ImportError::kPasswordError);
+    std::move(callback).Run(base::unexpected(ImportError::kPasswordError));
     return;
   }
 
@@ -271,7 +271,7 @@ const Extension* ExternalWalletsImporter::GetCryptoWallets() const {
   if (!registry) {
     return nullptr;
   }
-  return registry->GetInstalledExtension(ethereum_remote_client_extension_id);
+  return registry->GetInstalledExtension(kEthereumRemoteClientExtensionId);
 }
 
 const Extension* ExternalWalletsImporter::GetMetaMask() const {
@@ -279,7 +279,7 @@ const Extension* ExternalWalletsImporter::GetMetaMask() const {
   if (!registry) {
     return nullptr;
   }
-  return registry->GetInstalledExtension(metamask_extension_id);
+  return registry->GetInstalledExtension(kMetamaskExtensionId);
 }
 
 void ExternalWalletsImporter::GetLocalStorage(
@@ -326,7 +326,7 @@ void ExternalWalletsImporter::GetMnemonic(bool is_legacy_crypto_wallets,
 
   if (password.empty()) {
     VLOG(0) << "Failed to get password of legacy Crypto Wallets";
-    std::move(callback).Run(false, ImportInfo(), ImportError::kInternalError);
+    std::move(callback).Run(base::unexpected(ImportError::kInternalError));
     return;
   }
 
@@ -334,7 +334,7 @@ void ExternalWalletsImporter::GetMnemonic(bool is_legacy_crypto_wallets,
       storage_data_->FindStringByDottedPath("data.KeyringController.vault");
   if (!vault_str) {
     VLOG(0) << "cannot find data.KeyringController.vault";
-    std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+    std::move(callback).Run(base::unexpected(ImportError::kJsonError));
     return;
   }
   auto parsed_vault =
@@ -343,7 +343,7 @@ void ExternalWalletsImporter::GetMnemonic(bool is_legacy_crypto_wallets,
   auto* vault = parsed_vault ? parsed_vault->GetIfDict() : nullptr;
   if (!vault) {
     VLOG(1) << "not a valid JSON: " << *vault_str;
-    std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+    std::move(callback).Run(base::unexpected(ImportError::kJsonError));
     return;
   }
   auto* data_str = vault->FindString("data");
@@ -351,39 +351,50 @@ void ExternalWalletsImporter::GetMnemonic(bool is_legacy_crypto_wallets,
   auto* salt_str = vault->FindString("salt");
   if (!data_str || !iv_str || !salt_str) {
     VLOG(1) << "data or iv or salt is missing";
-    std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+    std::move(callback).Run(base::unexpected(ImportError::kJsonError));
     return;
   }
 
   auto salt_decoded = base::Base64Decode(*salt_str);
   if (!salt_decoded) {
     VLOG(1) << "base64 decode failed: " << *salt_str;
-    std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+    std::move(callback).Run(base::unexpected(ImportError::kJsonError));
     return;
   }
   auto iv_decoded = base::Base64Decode(*iv_str);
   if (!iv_decoded) {
     VLOG(1) << "base64 decode failed: " << *iv_str;
-    std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+    std::move(callback).Run(base::unexpected(ImportError::kJsonError));
     return;
   }
   auto data_decoded = base::Base64Decode(*data_str);
   if (!data_decoded) {
     VLOG(1) << "base64 decode failed: " << *data_str;
-    std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+    std::move(callback).Run(base::unexpected(ImportError::kJsonError));
     return;
   }
 
   std::unique_ptr<PasswordEncryptor> encryptor =
       PasswordEncryptor::DeriveKeyFromPasswordUsingPbkdf2(
-          password, *salt_decoded, 10000, 256);
+          password, *salt_decoded, 600000, 256);
   DCHECK(encryptor);
 
   auto decrypted_keyrings =
       encryptor->DecryptForImporter(*data_decoded, *iv_decoded);
   if (!decrypted_keyrings) {
+    // Also try with legacy 10K iterations.
+    std::unique_ptr<PasswordEncryptor> encryptor_10k =
+        PasswordEncryptor::DeriveKeyFromPasswordUsingPbkdf2(
+            password, *salt_decoded, 10000, 256);
+    DCHECK(encryptor_10k);
+
+    decrypted_keyrings =
+        encryptor_10k->DecryptForImporter(*data_decoded, *iv_decoded);
+  }
+
+  if (!decrypted_keyrings) {
     VLOG(0) << "Importer decryption failed";
-    std::move(callback).Run(false, ImportInfo(), ImportError::kPasswordError);
+    std::move(callback).Run(base::unexpected(ImportError::kPasswordError));
     return;
   }
 
@@ -394,19 +405,19 @@ void ExternalWalletsImporter::GetMnemonic(bool is_legacy_crypto_wallets,
       base::JSON_PARSE_CHROMIUM_EXTENSIONS | base::JSON_ALLOW_TRAILING_COMMAS);
   if (!keyrings) {
     VLOG(1) << "not a valid JSON: " << decrypted_keyrings_str;
-    std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+    std::move(callback).Run(base::unexpected(ImportError::kJsonError));
     return;
   }
 
-  absl::optional<std::string> mnemonic = absl::nullopt;
-  absl::optional<int> number_of_accounts = absl::nullopt;
+  std::optional<std::string> mnemonic = std::nullopt;
+  std::optional<int> number_of_accounts = std::nullopt;
   for (const auto& keyring_listed : keyrings->GetList()) {
     DCHECK(keyring_listed.is_dict());
     const auto& keyring = *keyring_listed.GetIfDict();
     const auto* type = keyring.FindString("type");
     if (!type) {
       VLOG(0) << "keyring.type is missing";
-      std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+      std::move(callback).Run(base::unexpected(ImportError::kJsonError));
       return;
     }
     if (*type != "HD Key Tree") {
@@ -427,9 +438,9 @@ void ExternalWalletsImporter::GetMnemonic(bool is_legacy_crypto_wallets,
         }
       }
       if (utf8_encoded_mnemonic.empty()) {
-        VLOG(0) << "keyring.data.menmonic is missing";
+        VLOG(0) << "keyring.data.mnemonic is missing";
 
-        std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+        std::move(callback).Run(base::unexpected(ImportError::kJsonError));
         return;
       }
       mnemonic = std::string(utf8_encoded_mnemonic.begin(),
@@ -443,16 +454,13 @@ void ExternalWalletsImporter::GetMnemonic(bool is_legacy_crypto_wallets,
 
   if (!mnemonic) {
     VLOG(0) << "Failed to find mnemonic in decrypted keyrings";
-    std::move(callback).Run(false, ImportInfo(), ImportError::kJsonError);
+    std::move(callback).Run(base::unexpected(ImportError::kJsonError));
     return;
   }
 
-  std::move(callback).Run(
-      true,
-      ImportInfo(
-          {*mnemonic, is_legacy_crypto_wallets,
-           number_of_accounts ? static_cast<size_t>(*number_of_accounts) : 1}),
-      ImportError::kNone);
+  std::move(callback).Run(base::ok(ImportInfo(
+      {*mnemonic, is_legacy_crypto_wallets,
+       number_of_accounts ? static_cast<size_t>(*number_of_accounts) : 1})));
 }
 
 void ExternalWalletsImporter::SetStorageDataForTesting(base::Value::Dict data) {

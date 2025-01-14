@@ -7,16 +7,17 @@
 
 #include <map>
 #include <memory>
+#include <optional>
+#include <string_view>
 #include <utility>
 
 #include "base/json/json_reader.h"
 #include "base/memory/raw_ptr.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
+#include "base/test/values_test_util.h"
 #include "base/time/time.h"
-#include "brave/browser/brave_wallet/json_rpc_service_factory.h"
-#include "brave/browser/brave_wallet/keyring_service_factory.h"
-#include "brave/browser/brave_wallet/tx_service_factory.h"
+#include "brave/components/brave_wallet/browser/bitcoin/bitcoin_test_utils.h"
 #include "brave/components/brave_wallet/browser/blockchain_registry.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_service_delegate.h"
@@ -25,6 +26,7 @@
 #include "brave/components/brave_wallet/browser/json_rpc_service.h"
 #include "brave/components/brave_wallet/browser/keyring_service.h"
 #include "brave/components/brave_wallet/browser/pref_names.h"
+#include "brave/components/brave_wallet/browser/test_utils.h"
 #include "brave/components/brave_wallet/browser/tx_service.h"
 #include "brave/components/brave_wallet/common/features.h"
 #include "brave/components/brave_wallet/common/hex_utils.h"
@@ -46,7 +48,7 @@ namespace brave_wallet {
 
 namespace {
 
-constexpr base::StringPiece eth_allowance_detected_response = R"({
+constexpr std::string_view eth_allowance_detected_response = R"({
     "jsonrpc": "2.0",
     "id": 1,
     "result": [
@@ -68,7 +70,7 @@ constexpr base::StringPiece eth_allowance_detected_response = R"({
     ]
 })";
 
-constexpr base::StringPiece eth_allowance_error_response = R"({
+constexpr std::string_view eth_allowance_error_response = R"({
                   "error": {
                     "code": -32000,
 "message": "requested too many blocks from 0
@@ -154,22 +156,12 @@ constexpr char get_block_response[] =
 constexpr char get_block_response_wrong[] =
     R"({"jsonrpc":"2.0","id":1,"result_wrong":""})";
 
-constexpr char kMnemonic1[] =
-    "divide cruise upon flag harsh carbon filter merit once advice bright "
-    "drive";
 constexpr char kPasswordBrave[] = "brave";
 
 using AllowancesMap = std::map<std::string, mojom::AllowanceInfoPtr>;
 using AllowancesMapCallback = base::OnceCallback<void(const AllowancesMap&)>;
 using OnDiscoverEthAllowancesCompletedValidation =
     base::RepeatingCallback<void(const std::vector<mojom::AllowanceInfoPtr>&)>;
-
-base::Value::Dict ParseTestJson(const base::StringPiece& json) {
-  absl::optional<base::Value> potential_response_dict_val =
-      base::JSONReader::Read(json, base::JSON_PARSE_CHROMIUM_EXTENSIONS |
-                                       base::JSONParserOptions::JSON_PARSE_RFC);
-  return std::move(potential_response_dict_val.value().GetDict());
-}
 
 void FillAllowanceLogItem(base::Value::Dict& current_item,
                           const std::string& contract_address,
@@ -230,23 +222,21 @@ class EthAllowanceManagerUnitTest : public testing::Test {
     profile_ = builder.Build();
     local_state_ = std::make_unique<ScopedTestingLocalState>(
         TestingBrowserProcess::GetGlobal());
-    keyring_service_ =
-        KeyringServiceFactory::GetServiceForContext(profile_.get());
-    json_rpc_service_ =
-        JsonRpcServiceFactory::GetServiceForContext(profile_.get());
-    json_rpc_service_->SetAPIRequestHelperForTesting(
-        shared_url_loader_factory_);
-    tx_service = TxServiceFactory::GetServiceForContext(profile_.get());
     wallet_service_ = std::make_unique<BraveWalletService>(
         shared_url_loader_factory_,
-        BraveWalletServiceDelegate::Create(profile_.get()), keyring_service_,
-        json_rpc_service_, tx_service, GetPrefs(), GetLocalState());
+        BraveWalletServiceDelegate::Create(profile_.get()), GetPrefs(),
+        GetLocalState());
+    json_rpc_service_ = wallet_service_->json_rpc_service();
+    keyring_service_ = wallet_service_->keyring_service();
+    bitcoin_test_rpc_server_ = std::make_unique<BitcoinTestRpcServer>();
+    wallet_service_->GetBitcoinWalletService()->SetUrlLoaderFactoryForTesting(
+        bitcoin_test_rpc_server_->GetURLLoaderFactory());
     eth_allowance_manager_ = std::make_unique<EthAllowanceManager>(
         json_rpc_service_, keyring_service_, GetPrefs());
   }
 
   void CreateCachedAllowancesPrefs(const std::string& json) {
-    absl::optional<base::Value> allowance_chache_json_value =
+    std::optional<base::Value> allowance_chache_json_value =
         base::JSONReader::Read(json,
                                base::JSON_PARSE_CHROMIUM_EXTENSIONS |
                                    base::JSONParserOptions::JSON_PARSE_RFC);
@@ -258,33 +248,14 @@ class EthAllowanceManagerUnitTest : public testing::Test {
     }
   }
 
-  absl::optional<std::string> GetSelectedAccount(mojom::CoinType coin) {
-    absl::optional<std::string> account;
-    base::RunLoop run_loop;
-    keyring_service_->GetSelectedAccount(
-        coin,
-        base::BindLambdaForTesting([&](const absl::optional<std::string>& v) {
-          account = v;
-          run_loop.Quit();
-        }));
-    run_loop.Run();
-    return account;
-  }
-
   void AddEthAccount(const std::string& account_name) {
     keyring_service_->AddAccountSync(mojom::CoinType::ETH,
                                      mojom::kDefaultKeyringId, account_name);
   }
 
   void CreateWallet() {
-    base::RunLoop run_loop;
-    keyring_service_->CreateWallet(
-        "brave",
-        base::BindLambdaForTesting([&run_loop](const std::string& mnemonic) {
-          EXPECT_FALSE(mnemonic.empty());
-          run_loop.Quit();
-        }));
-    run_loop.Run();
+    AccountUtils(keyring_service_)
+        .CreateWallet(kMnemonicDivideCruise, kPasswordBrave);
   }
 
   void TestAllowancesLoading(
@@ -310,23 +281,22 @@ class EthAllowanceManagerUnitTest : public testing::Test {
         contract_addresses.push_back(tkn->contract_address);
       }
     }
-    keyring_service_->RestoreWallet(kMnemonic1, kPasswordBrave, false,
-                                    base::DoNothing());
+    ASSERT_TRUE(keyring_service_->RestoreWalletSync(kMnemonicDivideCruise,
+                                                    kPasswordBrave, false));
     for (int i = 0; i < (eth_account_count - 1); i++) {
       AddEthAccount("additonal eth account");
     }
 
-    const auto keyring_info = keyring_service_->GetKeyringInfoSync(
-        brave_wallet::mojom::kDefaultKeyringId);
     std::vector<std::string> account_addresses;
-    for (const auto& account_info : keyring_info->account_infos) {
-      std::string hex_account_address;
-      if (!PadHexEncodedParameter(account_info->address,
-                                  &hex_account_address)) {
-        ASSERT_TRUE(false);
+    for (const auto& account_info : keyring_service_->GetAllAccountInfos()) {
+      if (account_info->account_id->coin == mojom::CoinType::ETH) {
+        std::string hex_account_address;
+        ASSERT_TRUE(PadHexEncodedParameter(account_info->address,
+                                           &hex_account_address));
+        account_addresses.push_back(hex_account_address);
       }
-      account_addresses.push_back(hex_account_address);
     }
+
     auto responses =
         std::move(get_responses).Run(account_addresses, token_list_map);
     blockchain_registry->UpdateTokenList(std::move(token_list_map));
@@ -337,17 +307,16 @@ class EthAllowanceManagerUnitTest : public testing::Test {
             if (request.url.spec().find("nfts") != std::string::npos) {
               continue;
             }
-            std::string header_value;
-            EXPECT_TRUE(
-                request.headers.GetHeader("X-Eth-Method", &header_value));
+            auto header_value = request.headers.GetHeader("X-Eth-Method");
+            ASSERT_TRUE(header_value);
             if (request.url.spec() == url.spec() &&
-                header_value == "eth_blockNumber") {
+                *header_value == "eth_blockNumber") {
               url_loader_factory_.ClearResponses();
               url_loader_factory_.AddResponse(request.url.spec(),
                                               get_block_response_str);
             } else if (request.url.spec() == url.spec() &&
-                       header_value == "eth_getLogs") {
-              absl::optional<base::Value> request_dict_val =
+                       *header_value == "eth_getLogs") {
+              std::optional<base::Value> request_dict_val =
                   base::JSONReader::Read(
                       request.request_body->elements()
                           ->at(0)
@@ -377,7 +346,7 @@ class EthAllowanceManagerUnitTest : public testing::Test {
                 const auto request_approver_address =
                     (*topics_ptr)[1].GetString();
 
-                absl::optional<base::Value> potential_response_dict_val =
+                std::optional<base::Value> potential_response_dict_val =
                     base::JSONReader::Read(
                         potential_response,
                         base::JSON_PARSE_CHROMIUM_EXTENSIONS |
@@ -497,7 +466,7 @@ class EthAllowanceManagerUnitTest : public testing::Test {
   }
 
   std::map<GURL, std::map<std::string, std::string>> PrepareResponses(
-      const base::StringPiece& response_json,
+      std::string_view response_json,
       const std::vector<std::string>& eth_account_address,
       const TokenListMap& token_list_map,
       base::RepeatingCallback<void(base::Value::Dict,
@@ -512,7 +481,7 @@ class EthAllowanceManagerUnitTest : public testing::Test {
       std::map<std::string, std::string> resp_jsns_map;
       for (auto const& tkn : token_info) {
         chain_id = tkn->chain_id;
-        auto dict = ParseTestJson(response_json);
+        auto dict = base::test::ParseJsonDict(response_json);
         if (!dict.FindList("error")) {
           auto* pr_result_ptr = dict.FindList("result");
           DCHECK(pr_result_ptr);
@@ -537,7 +506,7 @@ class EthAllowanceManagerUnitTest : public testing::Test {
   PrefService* GetPrefs() { return profile_->GetPrefs(); }
   TestingPrefServiceSimple* GetLocalState() { return local_state_->Get(); }
   GURL GetNetwork(const std::string& chain_id, mojom::CoinType coin) {
-    return brave_wallet::GetNetworkURL(GetPrefs(), chain_id, coin);
+    return wallet_service_->network_manager()->GetNetworkURL(chain_id, coin);
   }
 
   network::TestURLLoaderFactory url_loader_factory_;
@@ -549,7 +518,7 @@ class EthAllowanceManagerUnitTest : public testing::Test {
   std::unique_ptr<EthAllowanceManager> eth_allowance_manager_;
   raw_ptr<KeyringService> keyring_service_ = nullptr;
   raw_ptr<JsonRpcService> json_rpc_service_;
-  raw_ptr<TxService> tx_service;
+  std::unique_ptr<BitcoinTestRpcServer> bitcoin_test_rpc_server_;
   base::test::ScopedFeatureList scoped_feature_list_;
   data_decoder::test::InProcessDataDecoder in_process_data_decoder_;
 };

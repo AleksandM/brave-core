@@ -3,11 +3,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 import styled from 'styled-components'
-import * as leo from '@brave/leo/tokens/css'
+import * as leo from '@brave/leo/tokens/css/variables'
 import Icon from '@brave/leo/react/icon'
-import { layoutSmallWidth } from '../../../components/desktop/wallet-page-wrapper/wallet-page-wrapper.style'
+import {
+  layoutPanelWidth,
+  layoutSmallWidth
+} from '../../../components/desktop/wallet-page-wrapper/wallet-page-wrapper.style'
 import { WalletButton } from '../../../components/shared/style'
-import { BraveWallet } from '../../../constants/types'
 
 export const StyledWrapper = styled.div`
   display: flex;
@@ -27,6 +29,10 @@ export const TopWrapper = styled.div`
   width: 360px;
   text-align: left;
   margin-bottom: 8px;
+
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    min-width: 100%;
+  }
 `
 
 export const NftName = styled.h2`
@@ -43,7 +49,7 @@ export const NftName = styled.h2`
   text-overflow: ellipsis;
   margin: 0;
   padding: 16px 0 0 0;
-  `
+`
 
 export const CollectionName = styled.p`
   font-family: 'Poppins';
@@ -59,7 +65,7 @@ export const CollectionName = styled.p`
   text-overflow: ellipsis;
   margin: 0;
   padding: 0;
-  `
+`
 
 export const PurchaseDate = styled.p`
   font-family: 'Poppins';
@@ -75,7 +81,7 @@ export const PurchaseDate = styled.p`
   text-overflow: ellipsis;
   margin: 0;
   padding: 0;
-  `
+`
 
 export const SectionTitle = styled.h3`
   display: flex;
@@ -125,7 +131,7 @@ export const InfoTitle = styled.p`
   margin: 0;
   padding: 0;
   width: 100%;
-  white-space: nowrap; 
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `
@@ -311,20 +317,6 @@ export const InfoIcon = styled(Icon)`
   color: ${leo.color.systemfeedback.errorIcon};
 `
 
-export const PinningStatus = styled.span<{
-  pinningStatus: BraveWallet.TokenPinStatusCode
-}>`
-  color: ${(p) =>
-    (p.pinningStatus === BraveWallet.TokenPinStatusCode.STATUS_PINNING_IN_PROGRESS) ||
-    (p.pinningStatus === BraveWallet.TokenPinStatusCode.STATUS_PINNING_PENDING) ||
-    (p.pinningStatus === BraveWallet.TokenPinStatusCode.STATUS_NOT_PINNED)
-      ? `${leo.color.systemfeedback.warningIcon}`
-      : p.pinningStatus === BraveWallet.TokenPinStatusCode.STATUS_PINNED
-      ? `${leo.color.systemfeedback.successIcon}`
-      : `${leo.color.systemfeedback.errorIcon}`};
-  margin-right: 6px;
-`
-
 export const ErrorWrapper = styled.div`
   position: relative;
 `
@@ -372,10 +364,9 @@ export const NetworkIconWrapper = styled.div`
   padding: 2px;
 `
 
-
 export const NftMultimedia = styled.iframe<{ visible?: boolean }>`
   width: 100%;
-  height: ${p => p.visible ? '360px' : '0px'};
+  height: ${(p) => (p.visible ? '360px' : '0px')};
   border: none;
-  visibility: ${p => p.visible ? 'visible' : 'hidden'};
+  visibility: ${(p) => (p.visible ? 'visible' : 'hidden')};
 `

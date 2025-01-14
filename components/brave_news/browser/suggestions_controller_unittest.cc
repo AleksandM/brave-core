@@ -5,24 +5,22 @@
 
 #include "brave/components/brave_news/browser/suggestions_controller.h"
 
+#include <memory>
 #include <utility>
 #include <vector>
 
 #include "base/containers/contains.h"
 #include "base/functional/bind.h"
-#include "base/run_loop.h"
+#include "base/functional/callback_helpers.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/test/bind.h"
 #include "brave/components/api_request_helper/api_request_helper.h"
-#include "brave/components/brave_news/browser/direct_feed_controller.h"
+#include "brave/components/brave_news/browser/background_history_querier.h"
 #include "brave/components/brave_news/browser/publishers_controller.h"
-#include "brave/components/brave_news/browser/unsupported_publisher_migrator.h"
-#include "brave/components/brave_news/common/brave_news.mojom-shared.h"
 #include "brave/components/brave_news/common/brave_news.mojom.h"
 #include "brave/components/brave_news/common/pref_names.h"
-#include "chrome/test/base/testing_profile.h"
 #include "components/history/core/browser/history_types.h"
 #include "components/history/core/browser/url_row.h"
+#include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/test/browser_task_environment.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "services/data_decoder/public/cpp/test_support/in_process_data_decoder.h"
@@ -59,59 +57,56 @@ history::QueryResults MakeQueryResults(const std::vector<std::string>& urls) {
 }
 }  // namespace
 
-class SuggestionsControllerTest : public testing::Test {
+class BraveNewsSuggestionsControllerTest : public testing::Test {
  public:
-  SuggestionsControllerTest()
+  BraveNewsSuggestionsControllerTest()
       : api_request_helper_(TRAFFIC_ANNOTATION_FOR_TESTS,
-                            test_url_loader_factory_.GetSafeWeakWrapper()),
-        direct_feed_controller_(profile_.GetPrefs(), nullptr),
-        unsupported_publisher_migrator_(profile_.GetPrefs(),
-                                        &direct_feed_controller_,
-                                        &api_request_helper_),
-        publishers_controller_(profile_.GetPrefs(),
-                               &direct_feed_controller_,
-                               &unsupported_publisher_migrator_,
-                               &api_request_helper_),
-        suggestions_controller_(profile_.GetPrefs(),
-                                &publishers_controller_,
-                                &api_request_helper_,
-                                nullptr) {
-    profile_.GetPrefs()->SetBoolean(brave_news::prefs::kBraveNewsOptedIn, true);
-    profile_.GetPrefs()->SetBoolean(brave_news::prefs::kNewTabPageShowToday,
-                                    true);
+                            test_url_loader_factory_.GetSafeWeakWrapper()) {
+    prefs::RegisterProfilePrefs(pref_service_.registry());
+
+    pref_manager_ = std::make_unique<BraveNewsPrefManager>(pref_service_);
+    // Ensure Brave News is enabled.
+    pref_manager_->SetConfig(mojom::Configuration::New(true, true, true));
+
+    publishers_controller_ =
+        std::make_unique<PublishersController>(&api_request_helper_);
+
+    suggestions_controller_ = std::make_unique<SuggestionsController>(
+        publishers_controller_.get(), &api_request_helper_, querier_);
+
     SetLocale("en_US");
   }
-  ~SuggestionsControllerTest() override = default;
+  ~BraveNewsSuggestionsControllerTest() override = default;
 
  protected:
   std::vector<std::string> GetSuggestedPublisherIds(
       const Publishers& publishers,
       const history::QueryResults& history) {
-    return suggestions_controller_.GetSuggestedPublisherIdsWithHistory(
+    return suggestions_controller_->GetSuggestedPublisherIdsWithHistory(
         publishers, history);
   }
 
   void SetSimilarityMatrix(
       SuggestionsController::PublisherSimilarities similarities) {
-    suggestions_controller_.similarities_ = std::move(similarities);
+    suggestions_controller_->similarities_ = std::move(similarities);
   }
 
   void SetLocale(const std::string& locale) {
-    suggestions_controller_.locale_ = locale;
+    suggestions_controller_->locale_ = locale;
   }
 
   content::BrowserTaskEnvironment browser_task_environment_;
-  TestingProfile profile_;
   network::TestURLLoaderFactory test_url_loader_factory_;
   api_request_helper::APIRequestHelper api_request_helper_;
 
-  DirectFeedController direct_feed_controller_;
-  UnsupportedPublisherMigrator unsupported_publisher_migrator_;
-  PublishersController publishers_controller_;
-  SuggestionsController suggestions_controller_;
+  BackgroundHistoryQuerier querier_ = base::DoNothing();
+  sync_preferences::TestingPrefServiceSyncable pref_service_;
+  std::unique_ptr<BraveNewsPrefManager> pref_manager_;
+  std::unique_ptr<PublishersController> publishers_controller_;
+  std::unique_ptr<SuggestionsController> suggestions_controller_;
 };
 
-TEST_F(SuggestionsControllerTest, VisitedSourcesAreSuggested) {
+TEST_F(BraveNewsSuggestionsControllerTest, VisitedSourcesAreSuggested) {
   const auto& publishers = MakePublishers({
       "https://example.com",
       "https://bar.com",
@@ -128,7 +123,8 @@ TEST_F(SuggestionsControllerTest, VisitedSourcesAreSuggested) {
   EXPECT_EQ("3", suggestions[1]);
 }
 
-TEST_F(SuggestionsControllerTest, SubscribedVisitedSourcesAreNotSuggested) {
+TEST_F(BraveNewsSuggestionsControllerTest,
+       SubscribedVisitedSourcesAreNotSuggested) {
   const auto& publishers = MakePublishers({
       "https://example.com",
       "https://bar.com",
@@ -145,7 +141,8 @@ TEST_F(SuggestionsControllerTest, SubscribedVisitedSourcesAreNotSuggested) {
   EXPECT_EQ("3", suggestions[0]);
 }
 
-TEST_F(SuggestionsControllerTest, DisabledVisitedSourcesAreNotSuggested) {
+TEST_F(BraveNewsSuggestionsControllerTest,
+       DisabledVisitedSourcesAreNotSuggested) {
   const auto& publishers = MakePublishers({
       "https://example.com",
       "https://bar.com",
@@ -162,7 +159,7 @@ TEST_F(SuggestionsControllerTest, DisabledVisitedSourcesAreNotSuggested) {
   EXPECT_EQ("3", suggestions[0]);
 }
 
-TEST_F(SuggestionsControllerTest, SimilarSourcesAreSuggested) {
+TEST_F(BraveNewsSuggestionsControllerTest, SimilarSourcesAreSuggested) {
   const auto& publishers = MakePublishers({
       "https://example.com",
       "https://bar.com",
@@ -184,7 +181,8 @@ TEST_F(SuggestionsControllerTest, SimilarSourcesAreSuggested) {
   EXPECT_EQ("2", suggestions[1]);
 }
 
-TEST_F(SuggestionsControllerTest, SimilarToVisitedSourcesAreSuggested) {
+TEST_F(BraveNewsSuggestionsControllerTest,
+       SimilarToVisitedSourcesAreSuggested) {
   const auto& publishers = MakePublishers({
       "https://example.com",
       "https://bar.com",
@@ -208,7 +206,8 @@ TEST_F(SuggestionsControllerTest, SimilarToVisitedSourcesAreSuggested) {
   EXPECT_EQ("2", suggestions[2]);
 }
 
-TEST_F(SuggestionsControllerTest, VisitWeightingAltersSimilarToVisitWeighting) {
+TEST_F(BraveNewsSuggestionsControllerTest,
+       VisitWeightingAltersSimilarToVisitWeighting) {
   const auto& publishers = MakePublishers({
       "https://example.com",
       "https://bar.com",
@@ -233,7 +232,7 @@ TEST_F(SuggestionsControllerTest, VisitWeightingAltersSimilarToVisitWeighting) {
   EXPECT_EQ("4", suggestions[3]);  // Similar to P2 (which was visited once)
 }
 
-TEST_F(SuggestionsControllerTest,
+TEST_F(BraveNewsSuggestionsControllerTest,
        SuggestionsCanComeFromVistSimilarOrSimilarToVisit) {
   const auto& publishers = MakePublishers({
       "https://visited.com",
@@ -260,7 +259,8 @@ TEST_F(SuggestionsControllerTest,
       base::Contains(suggestions, "4"));  // Similar to P1 (which was visited)
 }
 
-TEST_F(SuggestionsControllerTest, SourcesFromDifferentLocalesAreNotSuggested) {
+TEST_F(BraveNewsSuggestionsControllerTest,
+       SourcesFromDifferentLocalesAreNotSuggested) {
   const auto& publishers = MakePublishers({
       "https://visited.com",
       "https://similar-to-visited.com",

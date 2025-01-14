@@ -6,13 +6,20 @@
 #include "brave/browser/ui/webui/webcompat_reporter/webcompat_reporter_dialog.h"
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/json/json_writer.h"
 #include "base/values.h"
+#include "brave/browser/brave_shields/brave_shields_tab_helper.h"
+#include "brave/browser/webcompat_reporter/webcompat_reporter_service_factory.h"
+#include "brave/components/brave_shields/core/common/brave_shields_panel.mojom-shared.h"
 #include "brave/components/constants/webui_url_constants.h"
+#include "brave/components/webcompat_reporter/browser/fields.h"
+#include "brave/components/webcompat_reporter/browser/webcompat_reporter_service.h"
 #include "chrome/browser/ui/webui/constrained_web_dialog_ui.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -24,9 +31,15 @@
 using content::WebContents;
 using content::WebUIMessageHandler;
 
+namespace webcompat_reporter {
+
+namespace {
+
 constexpr int kDialogMinHeight = 100;
 constexpr int kDialogMaxHeight = 700;
 constexpr int kDialogWidth = 375;
+
+}  // namespace
 
 // A ui::WebDialogDelegate that specifies the webcompat reporter's appearance.
 class WebcompatReporterDialogDelegate : public ui::WebDialogDelegate {
@@ -38,11 +51,11 @@ class WebcompatReporterDialogDelegate : public ui::WebDialogDelegate {
       const WebcompatReporterDialogDelegate&) = delete;
   ~WebcompatReporterDialogDelegate() override;
 
-  ui::ModalType GetDialogModalType() const override;
+  ui::mojom::ModalType GetDialogModalType() const override;
   std::u16string GetDialogTitle() const override;
   GURL GetDialogContentURL() const override;
   void GetWebUIMessageHandlers(
-      std::vector<WebUIMessageHandler*>* handlers) const override;
+      std::vector<WebUIMessageHandler*>* handlers) override;
   void GetDialogSize(gfx::Size* size) const override;
   std::string GetDialogArgs() const override;
   void OnDialogClosed(const std::string& json_retval) override;
@@ -59,10 +72,10 @@ WebcompatReporterDialogDelegate::WebcompatReporterDialogDelegate(
 
 WebcompatReporterDialogDelegate::~WebcompatReporterDialogDelegate() = default;
 
-ui::ModalType WebcompatReporterDialogDelegate::GetDialogModalType() const {
+ui::mojom::ModalType WebcompatReporterDialogDelegate::GetDialogModalType()
+    const {
   // Not used, returning dummy value.
   NOTREACHED();
-  return ui::MODAL_TYPE_WINDOW;
 }
 
 std::u16string WebcompatReporterDialogDelegate::GetDialogTitle() const {
@@ -75,7 +88,7 @@ GURL WebcompatReporterDialogDelegate::GetDialogContentURL() const {
 }
 
 void WebcompatReporterDialogDelegate::GetWebUIMessageHandlers(
-    std::vector<WebUIMessageHandler*>* /* handlers */) const {
+    std::vector<WebUIMessageHandler*>* /* handlers */) {
   // WebcompatReporterWebUI should add its own message handlers.
 }
 
@@ -102,9 +115,23 @@ bool WebcompatReporterDialogDelegate::ShouldShowDialogTitle() const {
   return false;
 }
 
-void OpenWebcompatReporterDialog(content::WebContents* initiator) {
+void PrepareParamsAndShowDialog(
+    content::WebContents* initiator,
+    const std::string report_url,
+    bool shields_enabled,
+    const std::string_view adblock_mode,
+    const std::string_view fingerprint_mode,
+    const int source,
+    const bool is_error_page,
+    const std::optional<std::string>& contact_info) {
   base::Value::Dict params_dict;
-  params_dict.Set("siteUrl", initiator->GetLastCommittedURL().spec());
+  params_dict.Set(kSiteURLField, report_url);
+  params_dict.Set(kShieldsEnabledField, shields_enabled);
+  params_dict.Set(kAdBlockSettingField, adblock_mode);
+  params_dict.Set(kFPBlockSettingField, fingerprint_mode);
+  params_dict.Set(kContactField, contact_info.value_or(""));
+  params_dict.Set(kUISourceField, source);
+  params_dict.Set(kIsErrorPage, static_cast<int>(is_error_page));
 
   gfx::Size min_size(kDialogWidth, kDialogMinHeight);
   gfx::Size max_size(kDialogWidth, kDialogMaxHeight);
@@ -113,3 +140,51 @@ void OpenWebcompatReporterDialog(content::WebContents* initiator) {
       std::make_unique<WebcompatReporterDialogDelegate>(std::move(params_dict)),
       initiator, min_size, max_size);
 }
+
+void OpenReporterDialog(content::WebContents* initiator, UISource source) {
+  bool shields_enabled = false;
+  brave_shields::mojom::FingerprintMode fp_block_mode =
+      brave_shields::mojom::FingerprintMode::STANDARD_MODE;
+  brave_shields::mojom::AdBlockMode ad_block_mode =
+      brave_shields::mojom::AdBlockMode::STANDARD;
+  brave_shields::BraveShieldsTabHelper* shields_data_controller =
+      brave_shields::BraveShieldsTabHelper::FromWebContents(initiator);
+  if (shields_data_controller != nullptr) {
+    shields_enabled = shields_data_controller->GetBraveShieldsEnabled();
+    fp_block_mode = shields_data_controller->GetFingerprintMode();
+    ad_block_mode = shields_data_controller->GetAdBlockMode();
+  }
+
+  bool is_error_page = false;
+  auto* visible_navigation_entry = initiator->GetController().GetVisibleEntry();
+  if (visible_navigation_entry) {
+    is_error_page = visible_navigation_entry->GetPageType() ==
+                    content::PageType::PAGE_TYPE_ERROR;
+  }
+
+  // Remove query and fragments from reported URL.
+  GURL::Replacements replacements;
+  replacements.ClearQuery();
+  replacements.ClearRef();
+  GURL report_url =
+      initiator->GetLastCommittedURL().ReplaceComponents(replacements);
+
+  if (auto* webcompat_reporter_service =
+          WebcompatReporterServiceFactory::GetServiceForContext(
+              initiator->GetBrowserContext())) {
+    webcompat_reporter_service->GetContactInfo(base::BindOnce(
+        &PrepareParamsAndShowDialog, initiator, report_url.spec(),
+        shields_enabled, GetAdBlockModeString(ad_block_mode),
+        GetFingerprintModeString(fp_block_mode), static_cast<int>(source),
+        is_error_page));
+    return;
+  }
+
+  PrepareParamsAndShowDialog(initiator, report_url.spec(), shields_enabled,
+                             GetAdBlockModeString(ad_block_mode),
+                             GetFingerprintModeString(fp_block_mode),
+                             static_cast<int>(source), is_error_page,
+                             std::nullopt);
+}
+
+}  // namespace webcompat_reporter

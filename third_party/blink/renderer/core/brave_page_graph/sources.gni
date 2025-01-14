@@ -13,11 +13,13 @@ if (enable_brave_page_graph) {
   brave_page_graph_core_public_deps +=
       [ "//brave/components/brave_page_graph/common" ]
 
-  brave_page_graph_core_deps += [ "//brave/components/brave_shields/common" ]
+  brave_page_graph_core_deps +=
+      [ "//brave/components/brave_shields/core/common" ]
 
   brave_page_graph_core_sources += [
     "//brave/third_party/blink/renderer/core/brave_page_graph/blink_converters.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/blink_converters.h",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/blink_probe_types.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/blink_probe_types.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/attribute/edge_attribute.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/attribute/edge_attribute.h",
@@ -31,6 +33,8 @@ if (enable_brave_page_graph) {
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/binding/edge_binding_event.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/edge_cross_dom.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/edge_cross_dom.h",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/edge_document.cc",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/edge_document.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/edge_filter.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/edge_filter.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/edge_resource_block.cc",
@@ -77,6 +81,8 @@ if (enable_brave_page_graph) {
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/request/edge_request_complete.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/request/edge_request_error.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/request/edge_request_error.h",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/request/edge_request_redirect.cc",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/request/edge_request_redirect.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/request/edge_request_response.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/request/edge_request_response.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/edge/request/edge_request_start.cc",
@@ -104,6 +110,12 @@ if (enable_brave_page_graph) {
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_parser.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_script.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_script.h",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_script_local.cc",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_script_local.h",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_script_remote.cc",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_script_remote.h",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_unknown.cc",
+    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/actor/node_unknown.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/binding/node_binding.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/binding/node_binding.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/binding/node_binding_event.cc",
@@ -136,8 +148,6 @@ if (enable_brave_page_graph) {
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/js/node_js_webapi.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/node_extensions.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/node_extensions.h",
-    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/node_remote_frame.cc",
-    "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/node_remote_frame.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/node_resource.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/node_resource.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/shield/node_shield.cc",
@@ -167,12 +177,9 @@ if (enable_brave_page_graph) {
     "//brave/third_party/blink/renderer/core/brave_page_graph/requests/tracked_request.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/scripts/script_tracker.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/scripts/script_tracker.h",
-    "//brave/third_party/blink/renderer/core/brave_page_graph/type_name_to_string.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/types.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/types.h",
     "//brave/third_party/blink/renderer/core/brave_page_graph/utilities/response_metadata.cc",
     "//brave/third_party/blink/renderer/core/brave_page_graph/utilities/response_metadata.h",
-    "//brave/third_party/blink/renderer/core/brave_page_graph/utilities/urls.cc",
-    "//brave/third_party/blink/renderer/core/brave_page_graph/utilities/urls.h",
   ]
 }

@@ -21,10 +21,7 @@ import {
   PopupButtonText,
   ButtonIcon
 } from './wellet-menus.style'
-import {
-  VerticalDivider,
-  VerticalSpace
-} from '../../shared/style'
+import { VerticalDivider, VerticalSpace } from '../../shared/style'
 
 export interface Props {
   options: AccountButtonOptionsObjectType[]
@@ -32,37 +29,43 @@ export interface Props {
 }
 
 export const AccountActionsMenu = (props: Props) => {
-  const {
-    options,
-    onClick,
-  } = props
+  const { options, onClick } = props
+
+  // Computed
+  const minButtonWidth = options.some((option) => option.id === 'shield')
+    ? 260
+    : undefined
 
   return (
     <StyledWrapper yPosition={26}>
-      {options.slice(0, 2).map((option) =>
+      {options.slice(0, 2).map((option) => (
         <PopupButton
           key={option.id}
           onClick={() => onClick(option.id)}
+          minWidth={minButtonWidth}
         >
-          <ButtonIcon name={option.icon} />
-          <PopupButtonText>
-            {getLocale(option.name)}
-          </PopupButtonText>
+          <ButtonIcon
+            name={option.icon}
+            id={option.id}
+          />
+          <PopupButtonText>{getLocale(option.name)}</PopupButtonText>
         </PopupButton>
-      )}
+      ))}
       <VerticalDivider />
       <VerticalSpace space='8px' />
-      {options.slice(2).map((option) =>
+      {options.slice(2).map((option) => (
         <PopupButton
           key={option.id}
           onClick={() => onClick(option.id)}
+          minWidth={minButtonWidth}
         >
-          <ButtonIcon name={option.icon} />
-          <PopupButtonText>
-            {getLocale(option.name)}
-          </PopupButtonText>
+          <ButtonIcon
+            name={option.icon}
+            id={option.id}
+          />
+          <PopupButtonText>{getLocale(option.name)}</PopupButtonText>
         </PopupButton>
-      )}
+      ))}
     </StyledWrapper>
   )
 }

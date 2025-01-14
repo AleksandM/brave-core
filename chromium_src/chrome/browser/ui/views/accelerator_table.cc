@@ -5,6 +5,8 @@
 
 #include "chrome/browser/ui/views/accelerator_table.h"
 
+#include "brave/app/brave_command_ids.h"
+#include "brave/components/commander/common/buildflags/buildflags.h"
 #include "build/build_config.h"
 
 #define GetAcceleratorList GetAcceleratorList_ChromiumImpl
@@ -13,7 +15,10 @@
 
 namespace {
 
-const AcceleratorMapping kBraveAcceleratorMap[] = {
+constexpr AcceleratorMapping kBraveAcceleratorMap[] = {
+    // Ctr+Shift+S (Cmd+Shift+S on Mac)
+    {ui::VKEY_S, ui::EF_PLATFORM_ACCELERATOR | ui::EF_SHIFT_DOWN,
+     IDC_SHARING_HUB_SCREENSHOT},
     {ui::VKEY_M, ui::EF_CONTROL_DOWN, IDC_TOGGLE_TAB_MUTE},
     // Ctrl+B(or Cmd+B)
     {ui::VKEY_B, ui::EF_PLATFORM_ACCELERATOR, IDC_TOGGLE_SIDEBAR},
@@ -25,6 +30,10 @@ const AcceleratorMapping kBraveAcceleratorMap[] = {
     // Alt-Shift-N
     {ui::VKEY_N, ui::EF_ALT_DOWN | ui::EF_SHIFT_DOWN,
      IDC_NEW_OFFTHERECORD_WINDOW_TOR},
+#if BUILDFLAG(ENABLE_COMMANDER)
+    // Open Command with Ctrl+Space
+    {ui::VKEY_SPACE, ui::EF_CONTROL_DOWN, IDC_COMMANDER}
+#endif
 #endif
 };
 
@@ -34,9 +43,9 @@ std::vector<AcceleratorMapping> GetAcceleratorList() {
   std::vector<AcceleratorMapping> accelerator_list(
       GetAcceleratorList_ChromiumImpl());
 
-  accelerator_list.insert(
+  UNSAFE_TODO(accelerator_list.insert(
       accelerator_list.end(), kBraveAcceleratorMap,
-      kBraveAcceleratorMap + std::size(kBraveAcceleratorMap));
+      kBraveAcceleratorMap + std::size(kBraveAcceleratorMap)));
 
   return accelerator_list;
 }

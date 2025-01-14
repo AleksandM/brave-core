@@ -1,7 +1,7 @@
-/* Copyright 2020 The Brave Authors. All rights reserved.
+/* Copyright (c) 2020 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #define InitializePageLoadMetricsForWebContents \
   InitializePageLoadMetricsForWebContents_Chromium
@@ -10,11 +10,9 @@
 
 #include "brave/components/brave_perf_predictor/browser/perf_predictor_page_metrics_observer.h"
 
-namespace chrome {
-
 namespace {
 
-class BravePageLoadMetricsEmbedder : public chrome::PageLoadMetricsEmbedder {
+class BravePageLoadMetricsEmbedder : public PageLoadMetricsEmbedder {
  public:
   explicit BravePageLoadMetricsEmbedder(content::WebContents* web_contents);
   BravePageLoadMetricsEmbedder(const BravePageLoadMetricsEmbedder&) = delete;
@@ -24,19 +22,20 @@ class BravePageLoadMetricsEmbedder : public chrome::PageLoadMetricsEmbedder {
 
  protected:
   // page_load_metrics::PageLoadMetricsEmbedderBase:
-  void RegisterEmbedderObservers(
-      ::page_load_metrics::PageLoadTracker* tracker) override;
+  void RegisterObservers(page_load_metrics::PageLoadTracker* tracker,
+                         content::NavigationHandle* navigation_handle) override;
 };
 
 BravePageLoadMetricsEmbedder::BravePageLoadMetricsEmbedder(
     content::WebContents* web_contents)
-    : chrome::PageLoadMetricsEmbedder(web_contents) {}
+    : PageLoadMetricsEmbedder(web_contents) {}
 
 BravePageLoadMetricsEmbedder::~BravePageLoadMetricsEmbedder() = default;
 
-void BravePageLoadMetricsEmbedder::RegisterEmbedderObservers(
-    page_load_metrics::PageLoadTracker* tracker) {
-  PageLoadMetricsEmbedder::RegisterEmbedderObservers(tracker);
+void BravePageLoadMetricsEmbedder::RegisterObservers(
+    page_load_metrics::PageLoadTracker* tracker,
+    content::NavigationHandle* navigation_handle) {
+  PageLoadMetricsEmbedder::RegisterObservers(tracker, navigation_handle);
 
   tracker->AddObserver(
       std::make_unique<
@@ -55,5 +54,3 @@ void InitializePageLoadMetricsForWebContents(
       web_contents,
       std::make_unique<BravePageLoadMetricsEmbedder>(web_contents));
 }
-
-}  // namespace chrome

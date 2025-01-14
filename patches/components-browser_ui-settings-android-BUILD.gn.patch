@@ -1,0 +1,12 @@
+diff --git a/components/browser_ui/settings/android/BUILD.gn b/components/browser_ui/settings/android/BUILD.gn
+index 2185d62c9f0b69cc639e218d03cd27893c5f6e3a..659c78147b3a7e63e22948af1e13a63311336613 100644
+--- a/components/browser_ui/settings/android/BUILD.gn
++++ b/components/browser_ui/settings/android/BUILD.gn
+@@ -51,6 +51,7 @@ android_library("java") {
+     "//ui/android:ui_no_recycler_view_java",
+   ]
+   resources_package = "org.chromium.components.browser_ui.settings"
++  import("//brave/components/browser_ui/settings/android/sources.gni") sources += brave_components_browser_ui_settings_android_java_sources
+ }
+ 
+ android_resources("java_resources") {

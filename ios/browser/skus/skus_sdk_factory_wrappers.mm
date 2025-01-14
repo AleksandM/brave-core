@@ -8,15 +8,15 @@
 #include "brave/ios/browser/api/skus/skus_sdk.mojom.objc+private.h"
 #include "brave/ios/browser/keyed_service/keyed_service_factory_wrapper+private.h"
 #include "brave/ios/browser/skus/skus_service_factory.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#include "ios/chrome/browser/shared/model/profile/profile_ios.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
 
 @implementation SkusSkusServiceFactory
-+ (nullable id)serviceForBrowserState:(ChromeBrowserState*)browserState {
-  auto service = skus::SkusServiceFactory::GetForBrowserState(browserState);
++ (nullable id)serviceForProfile:(ProfileIOS*)profile {
+  auto service = skus::SkusServiceFactory::GetForBrowserState(profile);
   if (!service) {
     return nil;
   }

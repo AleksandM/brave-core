@@ -12,52 +12,37 @@
 
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
-#include "third_party/rust/cxx/v1/crate/include/cxx.h"
+#include "brave/components/skus/common/skus_sdk.mojom.h"
+#include "third_party/rust/cxx/v1/cxx.h"
 
 class PrefService;
 
 namespace skus {
 
-enum class SkusResult : uint8_t;
 enum class TracingLevel : uint8_t;
 struct HttpRequest;
 struct HttpResponse;
 struct HttpRoundtripContext;
 struct WakeupContext;
+struct SkusResult;
+struct StoragePurgeContext;
+struct StorageSetContext;
+struct StorageGetContext;
 
-class FetchOrderCredentialsCallbackState {
+class RustBoundPostTask {
  public:
-  FetchOrderCredentialsCallbackState();
-  ~FetchOrderCredentialsCallbackState();
-  base::OnceCallback<void(const std::string&)> cb;
-};
+  explicit RustBoundPostTask(
+      base::OnceCallback<void(skus::mojom::SkusResultPtr)> callback);
+  RustBoundPostTask(const RustBoundPostTask&) = delete;
+  ~RustBoundPostTask();
 
-class PrepareCredentialsPresentationCallbackState {
- public:
-  PrepareCredentialsPresentationCallbackState();
-  ~PrepareCredentialsPresentationCallbackState();
-  base::OnceCallback<void(const std::string&)> cb;
-};
+  RustBoundPostTask& operator=(const RustBoundPostTask&) = delete;
 
-class CredentialSummaryCallbackState {
- public:
-  CredentialSummaryCallbackState();
-  ~CredentialSummaryCallbackState();
-  base::OnceCallback<void(const std::string&)> cb;
-};
+  void Run(SkusResult result);
+  void RunWithResponse(SkusResult result, rust::cxxbridge1::Str response);
 
-class RefreshOrderCallbackState {
- public:
-  RefreshOrderCallbackState();
-  ~RefreshOrderCallbackState();
-  base::OnceCallback<void(const std::string&)> cb;
-};
-
-class SubmitReceiptCallbackState {
- public:
-  SubmitReceiptCallbackState();
-  ~SubmitReceiptCallbackState();
-  base::OnceCallback<void(const std::string&)> cb;
+ private:
+  base::OnceCallback<void(skus::mojom::SkusResultPtr)> callback_;
 };
 
 class SkusUrlLoader {
@@ -75,39 +60,49 @@ class SkusContext {
  public:
   virtual ~SkusContext() = default;
   virtual std::unique_ptr<skus::SkusUrlLoader> CreateFetcher() const = 0;
-  virtual std::string GetValueFromStore(std::string key) const = 0;
-  virtual void PurgeStore() const = 0;
-  virtual void UpdateStoreValue(std::string key, std::string value) const = 0;
+  virtual void GetValueFromStore(
+      const std::string& key,
+      rust::cxxbridge1::Fn<void(rust::cxxbridge1::Box<skus::StorageGetContext>,
+                                rust::String value,
+                                bool success)> done,
+      rust::cxxbridge1::Box<skus::StorageGetContext> st_ctx) const = 0;
+  virtual void PurgeStore(
+      rust::cxxbridge1::Fn<
+          void(rust::cxxbridge1::Box<skus::StoragePurgeContext>, bool success)>
+          done,
+      rust::cxxbridge1::Box<skus::StoragePurgeContext> st_ctx) const = 0;
+  virtual void UpdateStoreValue(
+      const std::string& key,
+      const std::string& value,
+      rust::cxxbridge1::Fn<void(rust::cxxbridge1::Box<skus::StorageSetContext>,
+                                bool success)> done,
+      rust::cxxbridge1::Box<skus::StorageSetContext> st_ctx) const = 0;
 };
-
-using RefreshOrderCallback = void (*)(RefreshOrderCallbackState* callback_state,
-                                      SkusResult result,
-                                      rust::cxxbridge1::Str order);
-using FetchOrderCredentialsCallback =
-    void (*)(FetchOrderCredentialsCallbackState* callback_state,
-             SkusResult result);
-using PrepareCredentialsPresentationCallback =
-    void (*)(PrepareCredentialsPresentationCallbackState* callback_state,
-             SkusResult result,
-             rust::cxxbridge1::Str presentation);
-using CredentialSummaryCallback =
-    void (*)(CredentialSummaryCallbackState* callback_state,
-             SkusResult result,
-             rust::cxxbridge1::Str summary);
-using SubmitReceiptCallback =
-    void (*)(SubmitReceiptCallbackState* callback_state, SkusResult result);
 
 void shim_logMessage(rust::cxxbridge1::Str file,
                      uint32_t line,
                      TracingLevel level,
                      rust::cxxbridge1::Str message);
 
-void shim_purge(skus::SkusContext& ctx);  // NOLINT
-void shim_set(skus::SkusContext& ctx,     // NOLINT
-              rust::cxxbridge1::Str key,
-              rust::cxxbridge1::Str value);
-::rust::String shim_get(skus::SkusContext& ctx,  // NOLINT
-                        rust::cxxbridge1::Str key);
+void shim_purge(
+    skus::SkusContext& ctx,  // NOLINT
+    rust::cxxbridge1::Fn<void(rust::cxxbridge1::Box<skus::StoragePurgeContext>,
+                              bool success)> done,
+    rust::cxxbridge1::Box<skus::StoragePurgeContext> st_ctx);
+void shim_set(
+    skus::SkusContext& ctx,  // NOLINT
+    rust::cxxbridge1::Str key,
+    rust::cxxbridge1::Str value,
+    rust::cxxbridge1::Fn<void(rust::cxxbridge1::Box<skus::StorageSetContext>,
+                              bool success)> done,
+    rust::cxxbridge1::Box<skus::StorageSetContext> st_ctx);
+void shim_get(
+    skus::SkusContext& ctx,  // NOLINT
+    rust::cxxbridge1::Str key,
+    rust::cxxbridge1::Fn<void(rust::cxxbridge1::Box<skus::StorageGetContext>,
+                              rust::String value,
+                              bool success)> done,
+    rust::cxxbridge1::Box<skus::StorageGetContext> st_ctx);
 
 void shim_scheduleWakeup(
     ::std::uint64_t delay_ms,

@@ -3,23 +3,35 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(https://github.com/brave/brave-browser/issues/41661): Remove this and
+// convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif
+
 #include "brave/browser/default_protocol_handler_utils_win.h"
 
 #include <shobjidl.h>
+
 #include <winternl.h>
 #include <wrl/client.h>
 
 #include <memory>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "base/base64.h"
+#include "base/containers/span.h"
+#include "base/containers/span_reader.h"
 #include "base/files/file_path.h"
 #include "base/hash/md5.h"
 #include "base/logging.h"
 #include "base/notreached.h"
+#include "base/numerics/byte_conversions.h"
 #include "base/path_service.h"
+#include "base/strings/cstring_view.h"
 #include "base/strings/strcat.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util_win.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
@@ -44,57 +56,57 @@ constexpr wchar_t kUserChoiceKey[] = L"UserChoice";
 constexpr wchar_t kProgIDKey[] = L"ProgID";
 constexpr wchar_t kHashKey[] = L"Hash";
 
-inline DWORD WordSwap(DWORD v) {
+inline uint32_t WordSwap(uint32_t v) {
   return (v >> 16) | (v << 16);
 }
 
-std::wstring HashString(base::WStringPiece input_string) {
-  auto* input_bytes =
-      reinterpret_cast<const unsigned char*>(input_string.data());
-  const int input_byte_count = (input_string.length() + 1) * sizeof(wchar_t);
-
-  constexpr size_t kDWordsPerBlock = 2;
-  constexpr size_t kBlockSize = sizeof(DWORD) * kDWordsPerBlock;
-  // Incomplete blocks are ignored.
-  const int block_count = input_byte_count / kBlockSize;
-
-  if (block_count == 0) {
+std::wstring HashString(base::wcstring_view input) {
+  if (input.size() < 8u) {
+    // It seems this algo doesn't consider anything on the modulo of blocks, so
+    // there's nothing for us to do with small strings.
     return std::wstring();
   }
+  auto bytes = base::as_bytes(base::make_span(input.data(), input.size() + 1));
 
   // Compute an MD5 hash. md5[0] and md5[1] will be used as constant multipliers
   // in the scramble below.
   base::MD5Digest digest;
-  base::MD5Sum(input_bytes, input_byte_count, &digest);
-  auto* md5 = reinterpret_cast<DWORD*>(digest.a);
+  base::MD5Sum(bytes, &digest);
+  auto md5 = base::as_byte_span(digest.a).first<8u>();
+
   // The following loop effectively computes two checksums, scrambled like a
   // hash after every DWORD is added.
+  struct MagicBlock {
+    std::pair<std::array<uint32_t, 5u>, std::array<uint32_t, 5u>> line;
+  };
 
-  // Constant multipliers for the scramble, one set for each DWORD in a block.
-  const DWORD c0s[kDWordsPerBlock][5] = {
-      {md5[0] | 1, 0xCF98B111uL, 0x87085B9FuL, 0x12CEB96DuL, 0x257E1D83uL},
-      {md5[1] | 1, 0xA27416F5uL, 0xD38396FFuL, 0x7C932B89uL, 0xBFA49F69uL}};
-  const DWORD c1s[kDWordsPerBlock][5] = {
-      {md5[0] | 1, 0xEF0569FBuL, 0x689B6B9FuL, 0x79F8A395uL, 0xC3EFEA97uL},
-      {md5[1] | 1, 0xC31713DBuL, 0xDDCD1F0FuL, 0x59C3AF2DuL, 0x35BD1EC9uL}};
+  auto magic_numbers_table = std::to_array<MagicBlock>(
+      {{{{base::numerics::U32FromNativeEndian(md5.first<4u>()) | 1,
+          0xCF98B111uL, 0x87085B9FuL, 0x12CEB96DuL, 0x257E1D83uL},
+         {base::numerics::U32FromNativeEndian(md5.first<4u>()) | 1,
+          0xEF0569FBuL, 0x689B6B9FuL, 0x79F8A395uL, 0xC3EFEA97uL}}},
+       {{{base::numerics::U32FromNativeEndian(md5.last<4u>()) | 1, 0xA27416F5uL,
+          0xD38396FFuL, 0x7C932B89uL, 0xBFA49F69uL},
+         {base::numerics::U32FromNativeEndian(md5.last<4u>()) | 1, 0xC31713DBuL,
+          0xDDCD1F0FuL, 0x59C3AF2DuL, 0x35BD1EC9uL}}}});
 
   // The checksums.
-  DWORD h0 = 0;
-  DWORD h1 = 0;
-  // Accumulated total of the checksum after each DWORD.
-  DWORD h0_acc = 0;
-  DWORD h1_acc = 0;
+  uint32_t h0 = 0;
+  uint32_t h1 = 0;
+  // Accumulated total of the checksum after each uint32_t.
+  uint32_t h0_acc = 0;
+  uint32_t h1_acc = 0;
 
-  for (int i = 0; i < block_count; ++i) {
-    for (size_t j = 0; j < kDWordsPerBlock; ++j) {
-      const DWORD* c0 = c0s[j];
-      const DWORD* c1 = c1s[j];
+  auto reader = base::SpanReader(bytes);
+  while (reader.remaining() >= 8u) {
+    // We clearly don't care about anything under 8u bytes as the mozilla
+    // implementation also doesn't seem to care.
 
-      DWORD input;
-      memcpy(&input, &input_bytes[(i * kDWordsPerBlock + j) * sizeof(DWORD)],
-             sizeof(DWORD));
+    for (const auto& magic_block : magic_numbers_table) {
+      const auto& [c0, c1] = magic_block.line;
+      uint32_t ui32 = base::numerics::U32FromNativeEndian(*reader.Read<4u>());
 
-      h0 += input;
+      h0 += ui32;
       // Scramble 0
       h0 *= c0[0];
       h0 = WordSwap(h0) * c0[1];
@@ -103,7 +115,7 @@ std::wstring HashString(base::WStringPiece input_string) {
       h0 = WordSwap(h0) * c0[4];
       h0_acc += h0;
 
-      h1 += input;
+      h1 += ui32;
       // Scramble 1
       h1 = WordSwap(h1) * c1[1] + h1 * c1[0];
       h1 = (h1 >> 16) * c1[2] + h1 * c1[3];
@@ -112,17 +124,13 @@ std::wstring HashString(base::WStringPiece input_string) {
     }
   }
 
-  DWORD hash[2] = {h0 ^ h1, h0_acc ^ h1_acc};
-  std::string base64_text;
-  base::Base64Encode(
-      base::StringPiece(reinterpret_cast<const char*>(hash), sizeof(hash)),
-      &base64_text);
-  return base::UTF8ToWide(base64_text);
+  uint32_t hash[2] = {h0 ^ h1, h0_acc ^ h1_acc};
+  return base::UTF8ToWide(base::Base64Encode(base::as_byte_span(hash)));
 }
 
-std::wstring FormatUserChoiceString(base::WStringPiece ext,
-                                    base::WStringPiece sid,
-                                    base::WStringPiece prog_id,
+std::wstring FormatUserChoiceString(std::wstring_view ext,
+                                    std::wstring_view sid,
+                                    std::wstring_view prog_id,
                                     SYSTEMTIME timestamp) {
   timestamp.wSecond = 0;
   timestamp.wMilliseconds = 0;
@@ -137,25 +145,19 @@ std::wstring FormatUserChoiceString(base::WStringPiece ext,
   // version. There isn't any known way of deriving it, so we assume this
   // constant value. If we are wrong, we will not be able to generate correct
   // UserChoice hashes.
-  const wchar_t* user_experience =
+  constexpr wchar_t user_experience[] =
       L"User Choice set via Windows User Experience "
       L"{D18B6DD5-6124-4341-9318-804003BAFA0B}";
 
-  const wchar_t* user_choice_fmt =
-      L"%ls%ls%ls"
-      L"%08lx"
-      L"%08lx"
-      L"%ls";
+  const std::wstring file_time_str = base::ASCIIToWide(absl::StrFormat(
+      "%08lx%08lx", file_time.dwHighDateTime, file_time.dwLowDateTime));
 
-  const std::wstring user_choice = base::StringPrintf(
-      user_choice_fmt, ext.data(), sid.data(), prog_id.data(),
-      file_time.dwHighDateTime, file_time.dwLowDateTime, user_experience);
+  std::wstring user_choice =
+      base::StrCat({ext, sid, prog_id, file_time_str, user_experience});
   // For using CharLowerW instead of base::ToLowerASCII().
   // Otherwise, hash test with non-ascii inputs are failed.
-  std::vector<wchar_t> buf(user_choice.begin(), user_choice.end());
-  buf.push_back(0);
-  ::CharLowerW(buf.data());
-  return std::wstring(buf.data());
+  ::CharLowerW(user_choice.data());
+  return user_choice;
 }
 
 bool AddMillisecondsToSystemTime(SYSTEMTIME* system_time,
@@ -201,24 +203,23 @@ bool CheckEqualMinutes(SYSTEMTIME system_time1, SYSTEMTIME system_time2) {
          (file_time1.dwHighDateTime == file_time2.dwHighDateTime);
 }
 
-std::wstring GetAssociationKeyPath(base::WStringPiece protocol) {
-  const wchar_t* key_path_fmt;
+std::wstring GetAssociationKeyPath(std::wstring_view protocol) {
+  const wchar_t* key_path;
   if (protocol[0] == L'.') {
-    key_path_fmt =
-        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\%"
-        L"ls";
+    key_path =
+        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\";
   } else {
-    key_path_fmt =
+    key_path =
         L"SOFTWARE\\Microsoft\\Windows\\Shell\\Associations\\"
-        L"UrlAssociations\\%ls";
+        L"UrlAssociations\\";
   }
 
-  return base::StringPrintf(key_path_fmt, protocol.data());
+  return base::StrCat({key_path, protocol});
 }
 
-bool SetUserChoice(base::WStringPiece ext,
-                   base::WStringPiece sid,
-                   base::WStringPiece prog_id) {
+bool SetUserChoice(std::wstring_view ext,
+                   std::wstring_view sid,
+                   std::wstring_view prog_id) {
   SYSTEMTIME hash_timestamp;
   ::GetSystemTime(&hash_timestamp);
   auto hash = GenerateUserChoiceHash(ext, sid, prog_id, hash_timestamp);
@@ -287,7 +288,7 @@ bool SetUserChoice(base::WStringPiece ext,
   return true;
 }
 
-bool CheckProgIDExists(base::WStringPiece prog_id) {
+bool CheckProgIDExists(std::wstring_view prog_id) {
   base::win::RegKey root(HKEY_CLASSES_ROOT);
   return root.OpenKey(prog_id.data(), KEY_READ) == ERROR_SUCCESS;
 }
@@ -301,7 +302,7 @@ std::wstring GetBrowserProgId() {
 
   const auto suffix = ShellUtil::GetCurrentInstallationSuffix(brave_exe);
   std::wstring brave_html =
-      base::StrCat({install_static::GetProgIdPrefix(), suffix});
+      base::StrCat({install_static::GetBrowserProgIdPrefix(), suffix});
 
   // ProgIds cannot be longer than 39 characters.
   // Ref: http://msdn.microsoft.com/en-us/library/aa911706.aspx.
@@ -311,12 +312,11 @@ std::wstring GetBrowserProgId() {
   if (ShellUtil::GetUserSpecificRegistrySuffix(&new_style_suffix) &&
       suffix == new_style_suffix && brave_html.length() > 39) {
     NOTREACHED();
-    brave_html.erase(39);
   }
   return brave_html;
 }
 
-std::wstring GetProgIdForProtocol(base::WStringPiece protocol) {
+std::wstring GetProgIdForProtocol(std::wstring_view protocol) {
   Microsoft::WRL::ComPtr<IApplicationAssociationRegistration> registration;
   HRESULT hr =
       ::CoCreateInstance(CLSID_ApplicationAssociationRegistration, nullptr,
@@ -342,8 +342,8 @@ std::wstring GetProgIdForProtocol(base::WStringPiece protocol) {
 // the current user, since we want to replace that key ourselves. If the key is
 // owned by someone else, then this check will fail; this is ok because we would
 // likely not want to replace that other user's key anyway.
-bool CheckUserChoiceHash(base::WStringPiece protocol,
-                         base::WStringPiece user_sid) {
+bool CheckUserChoiceHash(std::wstring_view protocol,
+                         std::wstring_view user_sid) {
   auto key_path = GetAssociationKeyPath(protocol);
   if (key_path.empty())
     return false;
@@ -394,9 +394,9 @@ bool CheckUserChoiceHash(base::WStringPiece protocol,
 
 }  // namespace
 
-std::wstring GenerateUserChoiceHash(base::WStringPiece ext,
-                                    base::WStringPiece sid,
-                                    base::WStringPiece prog_id,
+std::wstring GenerateUserChoiceHash(std::wstring_view ext,
+                                    std::wstring_view sid,
+                                    std::wstring_view prog_id,
                                     SYSTEMTIME timestamp) {
   auto user_choice = FormatUserChoiceString(ext, sid, prog_id, timestamp);
   if (user_choice.empty()) {
@@ -407,7 +407,7 @@ std::wstring GenerateUserChoiceHash(base::WStringPiece ext,
   return HashString(user_choice);
 }
 
-bool SetDefaultProtocolHandlerFor(base::WStringPiece protocol) {
+bool SetDefaultProtocolHandlerFor(std::wstring_view protocol) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
 
@@ -446,7 +446,7 @@ bool SetDefaultProtocolHandlerFor(base::WStringPiece protocol) {
   return GetProgIdForProtocol(protocol) == prog_id;
 }
 
-bool IsDefaultProtocolHandlerFor(base::WStringPiece protocol) {
+bool IsDefaultProtocolHandlerFor(std::wstring_view protocol) {
   base::ScopedBlockingCall scoped_blocking_call(FROM_HERE,
                                                 base::BlockingType::MAY_BLOCK);
 

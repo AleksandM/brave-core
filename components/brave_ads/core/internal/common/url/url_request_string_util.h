@@ -8,13 +8,14 @@
 
 #include <string>
 
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom-forward.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom-forward.h"
 
 namespace brave_ads {
 
-std::string UrlRequestToString(const mojom::UrlRequestInfoPtr& url_request);
+std::string UrlRequestToString(
+    const mojom::UrlRequestInfoPtr& mojom_url_request);
 std::string UrlRequestHeadersToString(
-    const mojom::UrlRequestInfoPtr& url_request);
+    const mojom::UrlRequestInfoPtr& mojom_url_request);
 
 }  // namespace brave_ads
 

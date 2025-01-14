@@ -8,14 +8,11 @@
 #include "brave/components/brave_rewards/core/global_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-// npm run test -- brave_unit_tests --filter=ContributionUtilTest.*
+namespace brave_rewards::internal::contribution {
 
-namespace brave_rewards::internal {
-namespace contribution {
+class RewardsContributionUtilTest : public testing::Test {};
 
-class ContributionUtilTest : public testing::Test {};
-
-TEST(ContributionUtilTest, GetReportTypeFromRewardsType) {
+TEST(RewardsContributionUtilTest, GetReportTypeFromRewardsType) {
   ASSERT_EQ(mojom::ReportType::AUTO_CONTRIBUTION,
             GetReportTypeFromRewardsType(mojom::RewardsType::AUTO_CONTRIBUTE));
   ASSERT_EQ(mojom::ReportType::TIP,
@@ -24,7 +21,7 @@ TEST(ContributionUtilTest, GetReportTypeFromRewardsType) {
             GetReportTypeFromRewardsType(mojom::RewardsType::RECURRING_TIP));
 }
 
-TEST(ContributionUtilTest, GetProcessor) {
+TEST(RewardsContributionUtilTest, GetProcessor) {
   ASSERT_EQ(mojom::ContributionProcessor::BRAVE_TOKENS,
             GetProcessor(constant::kWalletUnBlinded));
   ASSERT_EQ(mojom::ContributionProcessor::UPHOLD,
@@ -36,7 +33,7 @@ TEST(ContributionUtilTest, GetProcessor) {
   ASSERT_EQ(mojom::ContributionProcessor::NONE, GetProcessor("random-data"));
 }
 
-TEST(ContributionUtilTest, GetNextProcessor) {
+TEST(RewardsContributionUtilTest, GetNextProcessor) {
   ASSERT_EQ(constant::kWalletUphold,
             GetNextProcessor(constant::kWalletUnBlinded));
   ASSERT_EQ(constant::kWalletBitflyer,
@@ -47,7 +44,7 @@ TEST(ContributionUtilTest, GetNextProcessor) {
   ASSERT_EQ(constant::kWalletUnBlinded, GetNextProcessor("random-data"));
 }
 
-TEST(ContributionUtilTest, HaveEnoughFundsToContribute) {
+TEST(RewardsContributionUtilTest, HaveEnoughFundsToContribute) {
   double amount = 20.0;
   double balance = 0;
   ASSERT_FALSE(HaveEnoughFundsToContribute(&amount, true, balance));
@@ -63,5 +60,4 @@ TEST(ContributionUtilTest, HaveEnoughFundsToContribute) {
   ASSERT_TRUE(HaveEnoughFundsToContribute(&amount, false, balance));
 }
 
-}  // namespace contribution
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::contribution

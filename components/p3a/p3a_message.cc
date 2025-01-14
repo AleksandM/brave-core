@@ -7,9 +7,10 @@
 
 #include <algorithm>
 #include <array>
+#include <string_view>
 #include <vector>
 
-#include "base/containers/flat_set.h"
+#include "base/containers/fixed_flat_set.h"
 #include "base/i18n/timezone.h"
 #include "base/logging.h"
 #include "base/strings/strcat.h"
@@ -17,19 +18,147 @@
 #include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "brave/components/brave_stats/browser/brave_stats_updater_util.h"
+#include "brave/components/l10n/common/locale_util.h"
+#include "brave/components/p3a/metric_config.h"
+#include "brave/components/p3a/region.h"
 #include "brave/components/p3a/uploader.h"
 #include "brave/components/version_info/version_info.h"
+#include "components/prefs/pref_service.h"
+
+#if !BUILDFLAG(IS_IOS)
+#include "brave/components/brave_referrals/common/pref_names.h"
+#endif  // !BUILDFLAG(IS_IOS)
 
 namespace p3a {
 
 namespace {
-constexpr std::size_t kP3AConstellationAttributeCount = 8;
+
+constexpr char kMetricNameAttributeName[] = "metric_name";
+constexpr char kMetricValueAttributeName[] = "metric_value";
+constexpr char kMetricNameAndValueAttributeName[] = "metric_name_and_value";
+constexpr char kPlatformAttributeName[] = "platform";
+constexpr char kGeneralPlatformAttributeName[] = "general_platform";
+constexpr char kChannelAttributeName[] = "channel";
+constexpr char kYosAttributeName[] = "yos";
+constexpr char kWosAttributeName[] = "wos";
+constexpr char kMosAttributeName[] = "mos";
+constexpr char kWoiAttributeName[] = "woi";
+constexpr char kYoiAttributeName[] = "yoi";
+constexpr char kCountryCodeAttributeName[] = "country_code";
+constexpr char kVersionAttributeName[] = "version";
+constexpr char kRegionAttributeName[] = "region";
+constexpr char kSubregionAttributeName[] = "subregion";
+constexpr char kCadenceAttributeName[] = "cadence";
+constexpr char kRefAttributeName[] = "ref";
+
+constexpr char kSlowCadence[] = "slow";
+constexpr char kTypicalCadence[] = "typical";
+constexpr char kExpressCadence[] = "express";
+
+constexpr char kOrganicRefPrefix[] = "BRV";
+constexpr char kRefNone[] = "none";
+constexpr char kRefOther[] = "other";
+
+constexpr auto kLinuxCountries = base::MakeFixedFlatSet<std::string_view>(
+    {"US", "FR", "DE", "GB", "IN", "BR", "PL", "NL", "ES", "CA",
+     "IT", "AU", "MX", "CH", "RU", "ZA", "SE", "BE", "JP", "AT"});
+
+constexpr auto kNotableCountries = base::MakeFixedFlatSet<std::string_view>(
+    {"US", "FR", "PH", "GB", "IN", "DE", "BR", "CA", "IT", "ES",
+     "NL", "MX", "AU", "RU", "JP", "PL", "ID", "KR", "AR", "AT"});
+
+std::vector<std::array<std::string, 2>> PopulateConstellationAttributes(
+    const std::string_view metric_name,
+    const uint64_t metric_value,
+    const MessageMetainfo& meta,
+    const std::optional<MetricConfig>& metric_config,
+    const std::vector<MetricAttribute>& attributes_to_load,
+    bool is_creative) {
+  base::Time::Exploded exploded;
+  meta.date_of_install().LocalExplode(&exploded);
+  DCHECK_GE(exploded.year, 999);
+
+  std::vector<std::array<std::string, 2>> attributes;
+  if (metric_config && metric_config->nebula) {
+    attributes = {
+        {kMetricNameAndValueAttributeName,
+         base::JoinString({metric_name, base::NumberToString(metric_value)},
+                          kP3AMessageNebulaNameValueSeparator)}};
+  } else {
+    attributes = {{kMetricNameAttributeName, std::string(metric_name)}};
+  }
+  std::string country_code;
+  for (const auto& attribute : attributes_to_load) {
+    switch (attribute) {
+      case MetricAttribute::kAnswerIndex:
+        if (metric_config && metric_config->nebula) {
+          continue;
+        }
+        attributes.push_back(
+            {kMetricValueAttributeName, base::NumberToString(metric_value)});
+        break;
+      case MetricAttribute::kVersion:
+        if (is_creative) {
+          continue;
+        }
+        attributes.push_back({kVersionAttributeName, meta.version()});
+        break;
+      case MetricAttribute::kYoi:
+        if (is_creative) {
+          continue;
+        }
+        attributes.push_back(
+            {kYoiAttributeName, base::NumberToString(exploded.year)});
+        break;
+      case MetricAttribute::kChannel:
+        attributes.push_back({kChannelAttributeName, meta.channel()});
+        break;
+      case MetricAttribute::kPlatform:
+        attributes.push_back({kPlatformAttributeName, meta.platform()});
+        break;
+      case MetricAttribute::kCountryCode:
+        if (is_creative) {
+          country_code = meta.country_code_from_locale_raw();
+        } else {
+          country_code = meta.GetCountryCodeForNormalMetrics(
+              metric_config && metric_config->disable_country_strip);
+        }
+        attributes.push_back({kCountryCodeAttributeName, country_code});
+        break;
+      case MetricAttribute::kWoi:
+        if (is_creative) {
+          continue;
+        }
+        attributes.push_back(
+            {kWoiAttributeName, base::NumberToString(meta.woi())});
+        break;
+      case MetricAttribute::kGeneralPlatform:
+        attributes.push_back(
+            {kGeneralPlatformAttributeName, meta.general_platform()});
+        break;
+      case MetricAttribute::kRegion:
+        attributes.push_back({kRegionAttributeName,
+                              std::string(meta.region_identifiers().region)});
+        break;
+      case MetricAttribute::kSubregion:
+        attributes.push_back(
+            {kSubregionAttributeName,
+             std::string(meta.region_identifiers().sub_region)});
+        break;
+      case MetricAttribute::kRef:
+        attributes.push_back({kRefAttributeName, meta.ref()});
+        break;
+    }
+  }
+  return attributes;
+}
+
 }  // namespace
 
 MessageMetainfo::MessageMetainfo() = default;
 MessageMetainfo::~MessageMetainfo() = default;
 
-base::Value::Dict GenerateP3AMessageDict(base::StringPiece metric_name,
+base::Value::Dict GenerateP3AMessageDict(std::string_view metric_name,
                                          uint64_t metric_value,
                                          MetricLogType log_type,
                                          const MessageMetainfo& meta,
@@ -37,19 +166,19 @@ base::Value::Dict GenerateP3AMessageDict(base::StringPiece metric_name,
   base::Value::Dict result;
 
   // Fill basic meta.
-  result.Set("platform", meta.platform);
-  result.Set("channel", meta.channel);
+  result.Set(kPlatformAttributeName, meta.platform());
+  result.Set(kChannelAttributeName, meta.channel());
   // Set the metric
-  result.Set("metric_name", metric_name);
-  result.Set("metric_value", static_cast<int>(metric_value));
+  result.Set(kMetricNameAttributeName, metric_name);
+  result.Set(kMetricValueAttributeName, static_cast<int>(metric_value));
 
   if (upload_type == kP3ACreativeUploadType) {
     return result;
   }
 
   base::Time date_of_install_monday =
-      brave_stats::GetLastMondayTime(meta.date_of_install);
-  base::Time date_of_survey = meta.date_of_survey;
+      brave_stats::GetLastMondayTime(meta.date_of_install());
+  base::Time date_of_survey = meta.date_of_survey();
 
   if (log_type != MetricLogType::kSlow) {
     // Get last monday for the date so that the years of survey/install
@@ -66,60 +195,71 @@ base::Value::Dict GenerateP3AMessageDict(base::StringPiece metric_name,
   date_of_install_monday.LocalExplode(&install_exploded);
 
   DCHECK_GE(survey_exploded.year, 999);
-  result.Set("yos", survey_exploded.year);
+  result.Set(kYosAttributeName, survey_exploded.year);
 
   DCHECK_GE(install_exploded.year, 999);
-  result.Set("yoi", install_exploded.year);
+  result.Set(kYoiAttributeName, install_exploded.year);
 
   // Fill meta.
-  result.Set("country_code", meta.country_code);
-  result.Set("version", meta.version);
-  result.Set("woi", meta.woi);
+  result.Set(kCountryCodeAttributeName,
+             meta.GetCountryCodeForNormalMetrics(false));
+  result.Set(kVersionAttributeName, meta.version());
+  result.Set(kWoiAttributeName, meta.woi());
 
   if (log_type == MetricLogType::kSlow) {
-    result.Set("mos", survey_exploded.month);
+    result.Set(kMosAttributeName, survey_exploded.month);
   } else {
-    result.Set("wos", brave_stats::GetIsoWeekNumber(date_of_survey));
+    result.Set(kWosAttributeName,
+               brave_stats::GetIsoWeekNumber(date_of_survey));
   }
 
   std::string cadence;
   switch (log_type) {
     case MetricLogType::kSlow:
-      cadence = "slow";
+      cadence = kSlowCadence;
       break;
     case MetricLogType::kTypical:
-      cadence = "typical";
+      cadence = kTypicalCadence;
       break;
     case MetricLogType::kExpress:
-      cadence = "express";
+      cadence = kExpressCadence;
       break;
   }
-  result.Set("cadence", cadence);
+  result.Set(kCadenceAttributeName, cadence);
 
   return result;
 }
 
-std::string GenerateP3AConstellationMessage(base::StringPiece metric_name,
-                                            uint64_t metric_value,
-                                            const MessageMetainfo& meta) {
-  base::Time::Exploded exploded;
-  meta.date_of_install.LocalExplode(&exploded);
-  DCHECK_GE(exploded.year, 999);
+std::string GenerateP3AConstellationMessage(
+    std::string_view metric_name,
+    uint64_t metric_value,
+    const MessageMetainfo& meta,
+    const std::string& upload_type,
+    const std::optional<MetricConfig>& metric_config) {
+  std::vector<MetricAttribute> attributes_to_load;
+  if (metric_config && metric_config->attributes) {
+    for (const auto& attr : *metric_config->attributes) {
+      if (attr.has_value()) {
+        attributes_to_load.push_back(attr.value());
+      }
+    }
+  } else {
+    attributes_to_load.assign(std::begin(kDefaultMetricAttributes),
+                              std::end(kDefaultMetricAttributes));
+    if (metric_config && !metric_config->append_attributes.empty()) {
+      for (const auto& attr : metric_config->append_attributes) {
+        if (attr.has_value()) {
+          attributes_to_load.push_back(attr.value());
+        }
+      }
+    }
+  }
 
-  std::array<std::array<std::string, 2>, kP3AConstellationAttributeCount>
-      attributes = {{
-          {"metric_name", std::string(metric_name)},
-          {"metric_value", base::NumberToString(metric_value)},
-          {"version", meta.version},
-          {"yoi", base::NumberToString(exploded.year)},
-          {"channel", meta.channel},
-          {"platform", meta.platform},
-          {"country_code", meta.country_code},
-          {"woi", base::NumberToString(meta.woi)},
-      }};
+  auto attributes = PopulateConstellationAttributes(
+      metric_name, metric_value, meta, metric_config, attributes_to_load,
+      upload_type == kP3ACreativeUploadType);
 
-  std::array<std::string, kP3AConstellationAttributeCount>
-      serialized_attributes;
+  std::vector<std::string> serialized_attributes(attributes.size());
 
   std::transform(attributes.begin(), attributes.end(),
                  serialized_attributes.begin(), [](auto& attr) -> std::string {
@@ -134,28 +274,41 @@ std::string GenerateP3AConstellationMessage(base::StringPiece metric_name,
 void MessageMetainfo::Init(PrefService* local_state,
                            std::string brave_channel,
                            std::string week_of_install) {
-  platform = brave_stats::GetPlatformIdentifier();
-  channel = brave_channel;
+  local_state_ = local_state;
+  platform_ = brave_stats::GetPlatformIdentifier();
+  general_platform_ = brave_stats::GetGeneralPlatformIdentifier();
+  channel_ = brave_channel;
   InitVersion();
+  InitRef();
 
   if (!week_of_install.empty()) {
-    date_of_install = brave_stats::GetYMDAsDate(week_of_install);
+    date_of_install_ = brave_stats::GetYMDAsDate(week_of_install);
   } else {
-    date_of_install = base::Time::Now();
+    date_of_install_ = base::Time::Now();
   }
-  woi = brave_stats::GetIsoWeekNumber(date_of_install);
+  woi_ = brave_stats::GetIsoWeekNumber(date_of_install_);
 
-  country_code = base::ToUpperASCII(base::CountryCodeForCurrentTimezone());
+  country_code_from_timezone_raw_ =
+      base::ToUpperASCII(base::CountryCodeForCurrentTimezone());
+  country_code_from_locale_raw_ = brave_l10n::GetDefaultISOCountryCodeString();
+  country_code_from_timezone_ = country_code_from_timezone_raw_;
+  country_code_from_locale_ = country_code_from_locale_raw_;
+
+  region_identifiers_ =
+      GetRegionIdentifiers(GetCountryCodeForNormalMetrics(true));
+
   MaybeStripCountry();
 
   Update();
 
-  VLOG(2) << "Message meta: " << platform << " " << channel << " " << version
-          << " " << woi << " " << country_code;
+  VLOG(2) << "Message meta: " << platform_ << " " << channel_ << " " << version_
+          << " " << woi_ << " " << country_code_from_timezone_ << " "
+          << country_code_from_locale_ << " " << ref_;
 }
 
 void MessageMetainfo::Update() {
-  date_of_survey = base::Time::Now();
+  date_of_survey_ = base::Time::Now();
+  InitRef();
 }
 
 void MessageMetainfo::InitVersion() {
@@ -165,36 +318,62 @@ void MessageMetainfo::InitVersion() {
       full_version, ".", base::WhitespaceHandling::TRIM_WHITESPACE,
       base::SplitResult::SPLIT_WANT_ALL);
   if (version_numbers.size() <= 2) {
-    version = full_version;
+    version_ = full_version;
   } else {
-    version = base::StrCat({version_numbers[0], ".", version_numbers[1]});
+    version_ = base::StrCat({version_numbers[0], ".", version_numbers[1]});
+  }
+}
+
+void MessageMetainfo::InitRef() {
+  std::string referral_code;
+#if !BUILDFLAG(IS_IOS)
+  if (local_state_ && local_state_->HasPrefPath(kReferralPromoCode)) {
+    referral_code = local_state_->GetString(kReferralPromoCode);
+  }
+#endif  // !BUILDFLAG(IS_IOS)
+  if (referral_code.empty()) {
+    ref_ = kRefNone;
+  } else if (referral_code.starts_with(kOrganicRefPrefix)) {
+    ref_ = referral_code;
+  } else {
+    ref_ = kRefOther;
   }
 }
 
 void MessageMetainfo::MaybeStripCountry() {
   constexpr char kCountryOther[] = "other";
 
-  static base::flat_set<std::string> const kLinuxCountries(
-      {"US", "FR", "DE", "GB", "IN", "BR", "PL", "NL", "ES", "CA", "IT", "AU",
-       "MX", "CH", "RU", "ZA", "SE", "BE", "JP"});
-
-  static base::flat_set<std::string> const kNotableCountries(
-      {"US", "FR", "PH", "GB", "IN", "DE", "BR", "CA", "IT", "ES", "NL", "MX",
-       "AU", "RU", "JP", "PL", "ID", "KR", "AR"});
-
-  if (platform == "linux-bc") {
+  if (platform_ == "linux-bc") {
     // If we have more than 3/0.05 = 60 users in a country for
     // a week of install, we can send country.
-    if (kLinuxCountries.count(country_code) == 0) {
-      country_code = kCountryOther;
+    if (!kLinuxCountries.contains(country_code_from_timezone_)) {
+      country_code_from_timezone_ = kCountryOther;
     }
   } else {
     // Now the minimum platform is MacOS at ~3%, so cut off for a group under
     // here becomes 3/(0.05*0.03) = 2000.
-    if (kNotableCountries.count(country_code) == 0) {
-      country_code = kCountryOther;
+    if (!kNotableCountries.contains(country_code_from_timezone_)) {
+      country_code_from_timezone_ = kCountryOther;
+    }
+    if (!kNotableCountries.contains(country_code_from_locale_)) {
+      country_code_from_locale_ = kCountryOther;
     }
   }
+}
+
+const std::string& MessageMetainfo::GetCountryCodeForNormalMetrics(
+    bool raw) const {
+#if BUILDFLAG(IS_IOS)
+  if (raw) {
+    return country_code_from_locale_raw_;
+  }
+  return country_code_from_locale_;
+#else
+  if (raw) {
+    return country_code_from_timezone_raw_;
+  }
+  return country_code_from_timezone_;
+#endif  // BUILDFLAG(IS_IOS)
 }
 
 }  // namespace p3a

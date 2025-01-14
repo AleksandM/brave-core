@@ -5,7 +5,8 @@
 
 #include "brave/components/l10n/common/locale_subtag_parser_util.h"
 
-#include "absl/types/optional.h"
+#include <optional>
+
 #include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
@@ -20,7 +21,7 @@ constexpr char kUnderscoreSeparator = '_';
 constexpr char kCodeSetSeparator = '.';
 constexpr char kVariantSeparator = '@';
 
-std::string NormalizeLocale(const std::string& locale) {
+std::string NormalizeLocale(std::string_view locale) {
   // Calculate length of locale excluding charset and variant.
   const std::string::size_type pos = locale.find_first_of(base::StrCat(
       {std::string{kCodeSetSeparator}, std::string{kVariantSeparator}}));
@@ -38,8 +39,8 @@ std::string NormalizeLocale(const std::string& locale) {
   return normalized_locale;
 }
 
-absl::optional<LocaleSubtagInfo>& CachedLocaleSubtag() {
-  static base::NoDestructor<absl::optional<LocaleSubtagInfo>>
+std::optional<LocaleSubtagInfo>& CachedLocaleSubtag() {
+  static base::NoDestructor<std::optional<LocaleSubtagInfo>>
       cached_locale_subtag;
   return *cached_locale_subtag;
 }
@@ -51,7 +52,7 @@ std::string& LastLocale() {
 
 }  // namespace
 
-LocaleSubtagInfo ParseLocaleSubtags(const std::string& locale) {
+LocaleSubtagInfo ParseLocaleSubtags(std::string_view locale) {
   if (CachedLocaleSubtag() && LastLocale() == locale) {
     return *CachedLocaleSubtag();
   }

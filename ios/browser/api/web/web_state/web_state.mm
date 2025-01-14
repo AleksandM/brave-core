@@ -9,11 +9,11 @@
 #include <memory>
 
 #include "base/strings/sys_string_conversions.h"
-#include "ios/chrome/browser/main/browser.h"
+#include "ios/chrome/browser/shared/model/browser/browser.h"
 #include "ios/web/public/thread/web_thread.h"
 #include "ios/web/web_state/web_state_impl.h"
 
-#include "net/base/mac/url_conversions.h"
+#include "net/base/apple/url_conversions.h"
 #include "url/gurl.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)

@@ -5,7 +5,13 @@
 
 #include "brave/components/brave_wallet/renderer/resource_helper.h"
 
+#include <optional>
+#include <vector>
+
+#include "base/base64.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/resource/resource_bundle.h"
+#include "ui/gfx/codec/png_codec.h"
 
 namespace brave_wallet {
 
@@ -16,6 +22,27 @@ std::string LoadDataResource(const int id) {
   }
 
   return std::string(resource_bundle.GetRawDataResource(id));
+}
+
+std::optional<std::string> LoadImageResourceAsDataUrl(const int id) {
+  auto& resource_bundle = ui::ResourceBundle::GetSharedInstance();
+  if (resource_bundle.IsGzipped(id)) {
+    return resource_bundle.LoadDataResourceString(id);
+  }
+
+  auto image = resource_bundle.GetImageNamed(id);
+  if (image.IsEmpty()) {
+    return std::nullopt;
+  }
+
+  std::optional<std::vector<uint8_t>> data =
+      gfx::PNGCodec::EncodeBGRASkBitmap(image.AsBitmap(),
+                                        /*discard_transparency=*/false);
+  if (!data) {
+    return std::nullopt;
+  }
+
+  return "data:image/png;base64," + base::Base64Encode(*data);
 }
 
 }  // namespace brave_wallet

@@ -10,6 +10,7 @@
 #include "base/auto_reset.h"
 #include "components/permissions/permission_context_base.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/permission_request_description.h"
 #include "url/origin.h"
 
 namespace permissions {
@@ -35,7 +36,9 @@ void BravePermissionManager::RequestPermissionsForOrigin(
   base::AutoReset<GURL> auto_reset_requesting_origin(&forced_requesting_origin_,
                                                      requesting_origin);
   return RequestPermissionsFromCurrentDocument(
-      permissions, render_frame_host, user_gesture, std::move(callback));
+      render_frame_host,
+      content::PermissionRequestDescription(permissions, user_gesture),
+      std::move(callback));
 }
 
 blink::mojom::PermissionStatus
@@ -46,7 +49,8 @@ BravePermissionManager::GetPermissionStatusForOrigin(
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
   base::AutoReset<GURL> auto_reset_requesting_origin(&forced_requesting_origin_,
                                                      requesting_origin);
-  return GetPermissionStatusForCurrentDocument(permission, render_frame_host);
+  return GetPermissionStatusForCurrentDocument(
+      permission, render_frame_host, /*should_include_device_status=*/false);
 }
 
 }  // namespace permissions

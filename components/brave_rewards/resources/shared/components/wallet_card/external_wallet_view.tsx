@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* Copyright (c) 2021 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
@@ -7,16 +8,12 @@ import * as React from 'react'
 import { ExternalWallet } from '../../lib/external_wallet'
 import { ExternalWalletAction } from './external_wallet_action'
 import { LocaleContext } from '../../lib/locale_context'
-import { GeminiIcon } from '../icons/gemini_icon'
-import { BitflyerIcon } from '../icons/bitflyer_icon'
-import { UpholdIcon } from '../icons/uphold_icon'
+import { WalletProviderIcon } from '../icons/wallet_provider_icon'
 import { CaretIcon } from '../icons/caret_icon'
 import { ArrowNextIcon } from '../icons/arrow_next_icon'
 import { ExternalWalletBubble } from './external_wallet_bubble'
 
 import * as style from './external_wallet_view.style'
-
-import * as mojom from '../../../shared/lib/mojom'
 
 interface Props {
   externalWallet: ExternalWallet | null
@@ -31,18 +28,6 @@ export function ExternalWalletView (props: Props) {
 
   function actionHandler (action: ExternalWalletAction) {
     return () => props.onExternalWalletAction(action)
-  }
-
-  function ProviderIcon () {
-    if (!externalWallet) {
-      return null
-    }
-
-    switch (externalWallet.provider) {
-      case 'gemini': return <GeminiIcon />
-      case 'bitflyer': return <BitflyerIcon />
-      case 'uphold': return <UpholdIcon />
-    }
   }
 
   function toggleBubble () {
@@ -74,13 +59,15 @@ export function ExternalWalletView (props: Props) {
         <button onClick={toggleBubble} className={showBubble ? 'pressed' : ''}>
           <style.buttonText data-test-id='external-wallet-status-text'>
             {
-              getString(externalWallet.status === mojom.WalletStatus.kLoggedOut
+              getString(!externalWallet.authenticated
                 ? 'walletDisconnected'
                 : 'walletVerified')
             }
           </style.buttonText>
           <style.buttonIcons>
-            <span className='provider'><ProviderIcon /></span>
+            <span className='provider'>
+              <WalletProviderIcon provider={externalWallet.provider} />
+            </span>
             <span className='caret'>
               <CaretIcon direction='down' />
             </span>

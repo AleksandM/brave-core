@@ -9,10 +9,13 @@
 #include "brave/browser/download/brave_download_item_model.h"
 #include "chrome/browser/ui/download/download_item_mode.h"
 #include "chrome/browser/ui/views/download/download_item_view.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 
 // The purpose of this subclass is to add URL origin and lock icon to the
 // download item view (shown in the download shelf).
 class BraveDownloadItemView : public DownloadItemView {
+  METADATA_HEADER(BraveDownloadItemView, DownloadItemView)
+
  public:
   BraveDownloadItemView(DownloadUIModel::DownloadUIModelPtr download,
       DownloadShelfView* parent, views::View* accessible_alert);
@@ -21,11 +24,14 @@ class BraveDownloadItemView : public DownloadItemView {
   ~BraveDownloadItemView() override;
 
   // views::View:
-  void Layout() override;
-  gfx::Size CalculatePreferredSize() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
 
   // download::DownloadItem::Observer:
   void OnDownloadUpdated() override;
+
+  // overrides from DownloadItemView:
+  std::u16string CalculateAccessibleName() const override;
 
  protected:
   // views::View:
@@ -51,7 +57,6 @@ class BraveDownloadItemView : public DownloadItemView {
   gfx::ImageSkia GetLockIcon(int height);
 
   // Overrides the accessible name construction to reflect the origin URL.
-  void SetMode(download::DownloadItemMode mode) override;
   void UpdateLabels() override;
   void OnMouseEntered(const ui::MouseEvent& event) override;
   void OnMouseExited(const ui::MouseEvent& event) override;

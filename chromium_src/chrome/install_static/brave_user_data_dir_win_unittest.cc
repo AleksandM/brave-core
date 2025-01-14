@@ -1,6 +1,7 @@
-// Copyright 2016 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
+/* Copyright (c) 2018 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include <algorithm>
 
@@ -53,8 +54,14 @@ class ScopedNTRegistryTestingOverride {
 TEST(UserDataDir, EmptyResultsInDefault) {
   std::wstring result, invalid;
 
-  install_static::GetUserDataDirectoryImpl(L"", kFakeInstallConstants, &result,
-                                           &invalid);
+  install_static::GetUserDataDirectoryImpl(L"brave.exe", kFakeInstallConstants,
+                                           &result, &invalid);
+  EXPECT_TRUE(EndsWith(result, kUserDataDirNameSuffix));
+  EXPECT_EQ(std::wstring(), invalid);
+
+  result = L"";
+  install_static::GetUserDataDirectoryImpl(
+      L"brave.exe --user-data-dir=", kFakeInstallConstants, &result, &invalid);
   EXPECT_TRUE(EndsWith(result, kUserDataDirNameSuffix));
   EXPECT_EQ(std::wstring(), invalid);
 }
@@ -62,8 +69,9 @@ TEST(UserDataDir, EmptyResultsInDefault) {
 TEST(UserDataDir, InvalidResultsInDefault) {
   std::wstring result, invalid;
 
-  install_static::GetUserDataDirectoryImpl(L"<>|:", kFakeInstallConstants,
-                                           &result, &invalid);
+  install_static::GetUserDataDirectoryImpl(L"brave.exe --user-data-dir=<>|:",
+                                           kFakeInstallConstants, &result,
+                                           &invalid);
   EXPECT_TRUE(EndsWith(result, kUserDataDirNameSuffix));
   EXPECT_EQ(L"<>|:", invalid);
 }
@@ -83,8 +91,9 @@ TEST(UserDataDir, RegistrySettingsInHKLMOverrides) {
   LONG rv = key.WriteValue(kUserDataDirRegistryKey, L"yyy");
   ASSERT_EQ(rv, ERROR_SUCCESS);
 
-  install_static::GetUserDataDirectoryImpl(L"xxx", kFakeInstallConstants,
-                                           &result, &invalid);
+  install_static::GetUserDataDirectoryImpl(L"brave.exe --user-data-dir=xxx",
+                                           kFakeInstallConstants, &result,
+                                           &invalid);
 
   EXPECT_TRUE(EndsWith(result, L"\\yyy"));
   EXPECT_EQ(std::wstring(), invalid);
@@ -105,8 +114,9 @@ TEST(UserDataDir, RegistrySettingsInHKCUOverrides) {
   LONG rv = key.WriteValue(kUserDataDirRegistryKey, L"yyy");
   ASSERT_EQ(rv, ERROR_SUCCESS);
 
-  install_static::GetUserDataDirectoryImpl(L"xxx", kFakeInstallConstants,
-                                           &result, &invalid);
+  install_static::GetUserDataDirectoryImpl(L"brave.exe --user-data-dir=xxx",
+                                           kFakeInstallConstants, &result,
+                                           &invalid);
 
   EXPECT_TRUE(EndsWith(result, L"\\yyy"));
   EXPECT_EQ(std::wstring(), invalid);
@@ -134,8 +144,9 @@ TEST(UserDataDir, RegistrySettingsInHKLMTakesPrecedenceOverHKCU) {
   rv = key2.WriteValue(kUserDataDirRegistryKey, L"222");
   ASSERT_EQ(rv, ERROR_SUCCESS);
 
-  install_static::GetUserDataDirectoryImpl(L"xxx", kFakeInstallConstants,
-                                           &result, &invalid);
+  install_static::GetUserDataDirectoryImpl(L"brave.exe --user-data-dir=xxx",
+                                           kFakeInstallConstants, &result,
+                                           &invalid);
 
   EXPECT_TRUE(EndsWith(result, L"\\111"));
   EXPECT_EQ(std::wstring(), invalid);
@@ -153,8 +164,9 @@ TEST(UserDataDir, RegistrySettingWithPathExpansionHKCU) {
   LONG rv = key.WriteValue(kUserDataDirRegistryKey, L"${windows}");
   ASSERT_EQ(rv, ERROR_SUCCESS);
 
-  install_static::GetUserDataDirectoryImpl(L"xxx", kFakeInstallConstants,
-                                           &result, &invalid);
+  install_static::GetUserDataDirectoryImpl(L"brave.exe --user-data-dir=xxx",
+                                           kFakeInstallConstants, &result,
+                                           &invalid);
 
   EXPECT_EQ(strlen("X:\\WINDOWS"), result.size());
   EXPECT_EQ(std::wstring::npos, result.find(L"${windows}"));

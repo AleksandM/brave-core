@@ -5,6 +5,9 @@
 
 #include "brave/components/p3a/histograms_braveizer.h"
 
+#include <array>
+#include <string>
+
 #include "base/functional/bind.h"
 #include "base/memory/ref_counted.h"
 #include "base/metrics/histogram_macros.h"
@@ -17,14 +20,13 @@ namespace {
 
 // Please keep this list sorted and synced with |DoHistogramBravezation|.
 // clang-format off
-constexpr const char* kBravezationHistograms[] = {
-    "Bookmarks.Count.OnProfileLoad",
+constexpr auto kBravezationHistograms = std::to_array<std::string_view>({
     "DefaultBrowser.State",
     "Extensions.LoadExtension",
     "Tabs.TabCount",
     "Tabs.TabCountPerLoad",
     "Tabs.WindowCount",
-};
+});
 // clang-format on
 
 }  // namespace
@@ -41,11 +43,11 @@ HistogramsBraveizer::HistogramsBraveizer() = default;
 HistogramsBraveizer::~HistogramsBraveizer() = default;
 
 void HistogramsBraveizer::InitCallbacks() {
-  for (const char* histogram_name : kBravezationHistograms) {
+  for (std::string_view histogram_name : kBravezationHistograms) {
     histogram_sample_callbacks_.push_back(
         std::make_unique<
             base::StatisticsRecorder::ScopedHistogramSampleObserver>(
-            histogram_name,
+            std::string(histogram_name),
             base::BindRepeating(&HistogramsBraveizer::DoHistogramBravetization,
                                 this)));
   }
@@ -58,13 +60,6 @@ void HistogramsBraveizer::DoHistogramBravetization(
     uint64_t name_hash,
     base::HistogramBase::Sample sample) {
   DCHECK(histogram_name);
-  if (strcmp("Bookmarks.Count.OnProfileLoad", histogram_name) == 0) {
-    p3a_utils::RecordToHistogramBucket(
-        "Brave.Core.BookmarksCountOnProfileLoad.2",
-        {5, 20, 100, 500, 1000, 5000, 10000}, sample);
-    return;
-  }
-
   if (strcmp("DefaultBrowser.State", histogram_name) == 0) {
     int answer = 0;
     switch (sample) {
@@ -79,7 +74,7 @@ void HistogramsBraveizer::DoHistogramBravetization(
         answer = 1;
         break;
       default:
-        NOTREACHED();
+        return;
     }
     UMA_HISTOGRAM_BOOLEAN("Brave.Core.IsDefault", answer);
   }

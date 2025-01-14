@@ -4,67 +4,53 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import styled from 'styled-components'
+import AlertReact from '@brave/leo/react/alert'
+import * as leo from '@brave/leo/tokens/css/variables'
+import LeoSegmentedControl, {
+  SegmentedControlProps
+} from '@brave/leo/react/segmentedControl'
 
+// Assets
 import ClipboardIcon from '../../../../assets/svg-icons/copy-to-clipboard-icon.svg'
-import { WalletButton } from '../../../shared/style'
+
+// Shared Styles
+import { WalletButton, Row } from '../../../shared/style'
+import {
+  layoutPanelWidth //
+} from '../../wallet-page-wrapper/wallet-page-wrapper.style'
 
 export const StyledWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  padding: 20px 15px 20px 15px;
-  min-height: 320px;
+  padding: 20px 0px;
+  height: 100%;
+  min-height: 200px;
 `
 
-export const Input = styled.input`
-  outline: none;
-  width: 250px;
-  background-image: none;
-  background-color: ${(p) => p.theme.color.background02};
-  box-shadow: none;
-  border: ${(p) => `1px solid ${p.theme.color.interactive08}`};
-  border-radius: 4px;
-  font-family: Poppins;
-  font-style: normal;
-  font-size: 13px;
-  line-height: 20px;
-  letter-spacing: 0.01em;
-  padding: 10px;
-  margin-bottom: 16px;
-  color: ${(p) => p.theme.color.text01};
-  ::placeholder {
-    font-family: Poppins;
-    font-style: normal;
-    font-size: 12px;
-    letter-spacing: 0.01em;
-    color: ${(p) => p.theme.color.text03};
-    font-weight: normal;
-  }
-  :focus {
-    outline: none;
-  }
-  ::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  ::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
+export const EditWrapper = styled(StyledWrapper)`
+  gap: 14px;
+  & > * {
+    width: 250px;
   }
 `
 
-export const QRCodeWrapper = styled.img`
+export const QRCodeWrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 210px;
-  height: 210px;
-  border-radius: 8px;
-  border: 2px solid ${(p) => p.theme.color.disabled};
+  width: 185px;
+  height: 185px;
+  border-radius: 16px;
+  border: 2px solid ${leo.color.divider.subtle};
   margin-bottom: 16px;
+`
+
+export const QRCodeImage = styled.img`
+  width: 170px;
+  height: 170px;
 `
 
 export const AddressButton = styled(WalletButton)`
@@ -81,13 +67,14 @@ export const AddressButton = styled(WalletButton)`
   outline: none;
   background: none;
   border: none;
+  word-wrap: break-word;
+  word-break: break-all;
+  flex-wrap: wrap;
 `
 
 export const ButtonRow = styled.div`
+  width: 100%;
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
 `
 
 export const CopyIcon = styled.div`
@@ -107,31 +94,7 @@ export const PrivateKeyWrapper = styled.div`
   justify-content: flex-start;
   width: 100%;
   height: 100%;
-`
-
-export const WarningWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  background-color: ${(p) => p.theme.color.warningBackground};
-  border-radius: 16px;
-  padding: 10px;
-  margin-bottom: 40px;
-`
-
-export const WarningText = styled.span`
-  font-family: Poppins;
-  font-size: 12px;
-  line-height: 18px;
-  letter-spacing: 0.01em;
-  text-align: center;
-  color: ${(p) => p.theme.color.text02};
-  a {
-    color: inherit;
-    text-decoration: underline;
-  }
+  width: 250px;
 `
 
 export const PrivateKeyBubble = styled(WalletButton)`
@@ -158,10 +121,15 @@ export const PrivateKeyBubble = styled(WalletButton)`
 
 export const ButtonWrapper = styled.div`
   display: flex;
+  width: 100%;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   margin-top: 40px;
+
+  & > * {
+    width: 100%;
+  }
 `
 
 export const ErrorText = styled.span`
@@ -179,30 +147,19 @@ export const Line = styled.div`
   background: ${(p) => p.theme.color.divider01};
 `
 
-export const AccountCircle = styled.div<{
-  orb: string
-}>`
-  width: 40px;
-  height: 40px;
-  border-radius: 100%;
-  background-image: url(${(p) => p.orb});
-  background-size: cover;
-  margin-right: 12px;
+export const Alert = styled(AlertReact)`
+  margin-bottom: 15px;
+
+  &:first-of-type {
+    margin: 15px 0px;
+  }
 `
 
-export const NameAndIcon = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: row;
-  margin-bottom: 20px;
+export const ControlsWrapper = styled(Row)`
+  margin-bottom: 24px;
+  --leo-segmented-control-width: 100%;
 `
 
-export const AccountName = styled.span`
-  font-family: Poppins;
-  font-size: 13px;
-  line-height: 20px;
-  letter-spacing: 0.01em;
-  font-weight: 600;
-  color: ${(p) => p.theme.color.text01};
-`
+export const SegmentedControl = styled(LeoSegmentedControl).attrs({
+  size: window.innerWidth <= layoutPanelWidth ? 'small' : 'default'
+})<SegmentedControlProps>``

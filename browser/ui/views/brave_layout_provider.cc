@@ -13,10 +13,19 @@ int BraveLayoutProvider::GetCornerRadiusMetric(views::Emphasis emphasis,
     case views::Emphasis::kNone:
       return 0;
     case views::Emphasis::kLow:
-    case views::Emphasis::kMedium:
       return 2;
-    case views::Emphasis::kHigh:
+    case views::Emphasis::kMedium:
     case views::Emphasis::kMaximum:
+      return 8;
+    case views::Emphasis::kHigh:
       return 4;
   }
+}
+
+int BraveLayoutProvider::GetDistanceMetric(int metric) const {
+  if (metric == views::DISTANCE_CONTROL_VERTICAL_TEXT_PADDING) {
+    return 8;
+  }
+
+  return ChromeLayoutProvider::GetDistanceMetric(metric);
 }

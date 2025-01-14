@@ -1,32 +1,29 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* Copyright (c) 2023 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import * as React from 'react'
 
 import { useActions, useRewardsData } from '../lib/redux_hooks'
-import { lookupExternalWalletProviderName } from '../../shared/lib/external_wallet'
+import { externalWalletProviderFromString, getExternalWalletProviderName } from '../../shared/lib/external_wallet'
 import { LocaleContext } from '../../shared/lib/locale_context'
+import { contactSupportURL } from '../../shared/lib/rewards_urls'
 import { ModalRedirect } from '../../ui/components'
 import * as mojom from '../../shared/lib/mojom'
 
 export function ProviderRedirectModal () {
   const { getString } = React.useContext(LocaleContext)
   const actions = useActions()
-  const { externalWallet, modalRedirect } = useRewardsData((data) => ({
-    externalWallet: data.externalWallet,
+  const { modalRedirectProvider, modalRedirect } = useRewardsData((data) => ({
+    modalRedirectProvider: data.ui.modalRedirectProvider,
     modalRedirect: data.ui.modalRedirect
   }))
 
-  const walletType = externalWallet ? externalWallet.type : ''
-  const providerName = lookupExternalWalletProviderName(walletType)
-
-  const onRedirectError = () => {
-    actions.hideRedirectModal()
-    if (externalWallet && externalWallet.loginUrl) {
-      window.open(externalWallet.loginUrl, '_self', 'noreferrer')
-    }
-  }
+  const walletType =
+    externalWalletProviderFromString(modalRedirectProvider) || undefined
+  const providerName =
+    walletType ? getExternalWalletProviderName(walletType) : ''
 
   switch (modalRedirect) {
     case 'show':
@@ -39,11 +36,13 @@ export function ProviderRedirectModal () {
       )
     case 'hide':
       return null
-    case mojom.ConnectExternalWalletError.kDeviceLimitReached:
+    case mojom.ConnectExternalWalletResult.kSuccess:
+      return null
+    case mojom.ConnectExternalWalletResult.kDeviceLimitReached:
       return (
         <ModalRedirect
           id={'redirect-modal-device-limit-reached'}
-          errorText={[getString('redirectModalDeviceLimitReachedText')]}
+          errorText={[getString('redirectModalDeviceLimitReachedText').replace('$1', providerName)]}
           titleText={getString('redirectModalDeviceLimitReachedTitle')}
           learnMore={'https://support.brave.com/hc/en-us/articles/360056508071'}
           buttonText={getString('redirectModalClose')}
@@ -51,7 +50,7 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kFlaggedWallet:
+    case mojom.ConnectExternalWalletResult.kFlaggedWallet:
       return (
         <ModalRedirect
           id={'redirect-modal-flagged-wallet'}
@@ -67,7 +66,7 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kKYCRequired:
+    case mojom.ConnectExternalWalletResult.kKYCRequired:
       return (
         <ModalRedirect
           id={'redirect-modal-id-verification-required'}
@@ -78,7 +77,7 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kMismatchedCountries:
+    case mojom.ConnectExternalWalletResult.kMismatchedCountries:
       return (
         <ModalRedirect
           id={'redirect-modal-mismatched-countries'}
@@ -90,7 +89,7 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kMismatchedProviderAccounts:
+    case mojom.ConnectExternalWalletResult.kMismatchedProviderAccounts:
       return (
         <ModalRedirect
           id={'redirect-modal-mismatched-provider-accounts'}
@@ -102,7 +101,7 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kProviderUnavailable:
+    case mojom.ConnectExternalWalletResult.kProviderUnavailable:
       return (
         <ModalRedirect
           id={'redirect-modal-provider-unavailable'}
@@ -116,7 +115,7 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kRegionNotSupported:
+    case mojom.ConnectExternalWalletResult.kRegionNotSupported:
       return (
         <ModalRedirect
           id={'redirect-modal-region-not-supported'}
@@ -130,19 +129,19 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kRequestSignatureVerificationFailure:
+    case mojom.ConnectExternalWalletResult.kRequestSignatureVerificationFailure:
       return (
         <ModalRedirect
           id={'redirect-modal-wallet-ownership-verification-failure'}
           errorText={[getString('redirectModalWalletOwnershipVerificationFailureText').replace('$1', providerName)]}
-          errorTextLink={'https://community.brave.com'}
+          errorTextLink={contactSupportURL}
           titleText={getString('redirectModalWalletOwnershipVerificationFailureTitle')}
           buttonText={getString('redirectModalClose')}
           walletType={walletType}
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kUpholdBATNotAllowed:
+    case mojom.ConnectExternalWalletResult.kUpholdBATNotAllowed:
       return (
         <ModalRedirect
           id={'redirect-modal-uphold-bat-not-allowed'}
@@ -154,7 +153,7 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kUpholdInsufficientCapabilities:
+    case mojom.ConnectExternalWalletResult.kUpholdInsufficientCapabilities:
       return (
         <ModalRedirect
           id={'redirect-modal-uphold-insufficient-capabilities'}
@@ -165,12 +164,12 @@ export function ProviderRedirectModal () {
           onClick={actions.hideRedirectModal}
         />
       )
-    case mojom.ConnectExternalWalletError.kUpholdTransactionVerificationFailure:
+    case mojom.ConnectExternalWalletResult.kUpholdTransactionVerificationFailure:
       return (
         <ModalRedirect
           id={'redirect-modal-wallet-ownership-verification-failure'}
           errorText={[getString('redirectModalWalletOwnershipVerificationFailureText').replace('$1', providerName)]}
-          errorTextLink={'https://community.brave.com'}
+          errorTextLink={contactSupportURL}
           titleText={getString('redirectModalWalletOwnershipVerificationFailureTitle')}
           buttonText={getString('redirectModalClose')}
           walletType={walletType}
@@ -178,16 +177,17 @@ export function ProviderRedirectModal () {
         />
       )
     default:
-      // on modalRedirect === 'error', or on an unhandled mojom.ConnectExternalWalletError
+      // on modalRedirect === 'error', or on an unhandled mojom.ConnectExternalWalletResult
       return (
         <ModalRedirect
           id={'redirect-modal-error'}
-          errorText={[getString('redirectModalError')]}
-          buttonText={getString('processingRequestButton')}
-          titleText={getString('processingRequest')}
+          errorText={[getString('redirectModalUnableToCompleteRequest')]}
+          errorTextLink={contactSupportURL}
+          titleText={getString('redirectModalSomethingWentWrong')}
+          buttonText={getString('redirectModalClose')}
           walletType={walletType}
           displayCloseButton={true}
-          onClick={onRedirectError}
+          onClick={actions.hideRedirectModal}
           onClose={actions.hideRedirectModal}
         />
       )

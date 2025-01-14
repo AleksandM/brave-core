@@ -6,22 +6,35 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_SIMULATION_REQUEST_HELPER_H_
 #define BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_SIMULATION_REQUEST_HELPER_H_
 
+#include <optional>
 #include <string>
+
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 
 namespace brave_wallet {
 
 namespace evm {
 
-absl::optional<std::string> EncodeScanTransactionParams(
-    mojom::TransactionInfoPtr tx_info);
+std::optional<std::string> EncodeScanTransactionParams(
+    const mojom::TransactionInfo& tx_info);
 
 }  // namespace evm
 
 namespace solana {
 
-absl::optional<std::string> EncodeScanTransactionParams(
-    mojom::SolanaTransactionRequestUnionPtr request);
+std::optional<std::string> EncodeScanTransactionParams(
+    const mojom::SignSolTransactionsRequest& sign_sol_transactions_request);
+void PopulateRecentBlockhash(
+    mojom::SignSolTransactionsRequest& sign_sol_transactions_request,
+    const std::string& recent_blockhash);
+bool HasEmptyRecentBlockhash(
+    const mojom::SignSolTransactionsRequest& sign_sol_transactions_request);
+
+std::optional<std::string> EncodeScanTransactionParams(
+    const mojom::TransactionInfo& tx_info);
+void PopulateRecentBlockhash(mojom::TransactionInfo& tx_info,
+                             const std::string& recent_blockhash);
+bool HasEmptyRecentBlockhash(const mojom::TransactionInfo& tx_info);
 
 }  // namespace solana
 

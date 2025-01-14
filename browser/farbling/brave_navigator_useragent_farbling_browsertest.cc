@@ -5,22 +5,22 @@
 
 #include <memory>
 
+#include "base/functional/function_ref.h"
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/thread_test_helper.h"
 #include "base/version.h"
-#include "brave/browser/brave_content_browser_client.h"
 #include "brave/browser/extensions/brave_base_local_data_files_browsertest.h"
 #include "brave/components/brave_component_updater/browser/local_data_files_service.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
-#include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/chrome_content_client.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/embedder_support/user_agent_utils.h"
@@ -31,9 +31,23 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
+#include "extensions/buildflags/buildflags.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
+#include "services/network/public/cpp/network_switches.h"
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+#include "chrome/browser/extensions/chrome_test_extension_loader.h"
+#include "extensions/browser/api/offscreen/offscreen_document_manager.h"
+#include "extensions/browser/background_script_executor.h"
+#include "extensions/browser/lazy_context_id.h"
+#include "extensions/browser/lazy_context_task_queue.h"
+#include "extensions/browser/offscreen_document_host.h"
+#include "extensions/common/extension.h"
+#include "extensions/common/switches.h"
+#include "extensions/test/test_extension_dir.h"
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
 
 using brave_shields::ControlType;
 using content::TitleWatcher;
@@ -56,7 +70,7 @@ constexpr char kGetHighEntropyValuesScript[] = R"(
 void CheckUserAgentMetadataVersionsList(
     const base::Value::List& versions_list,
     const std::string& expected_version,
-    std::function<void(const std::string&)> check_greased_version) {
+    base::FunctionRef<void(const std::string&)> check_greased_version) {
   // Expect 3 items in the list: Brave, Chromium, and greased.
   EXPECT_EQ(3UL, versions_list.size());
 
@@ -81,25 +95,73 @@ void CheckUserAgentMetadataVersionsList(
   EXPECT_TRUE(has_chromium_brand);
 }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+// Wakes up the service worker for the `extension` in the given `profile`.
+void WakeUpServiceWorker(const extensions::Extension& extension,
+                         Profile& profile) {
+  base::RunLoop run_loop;
+  const auto context_id =
+      extensions::LazyContextId::ForExtension(&profile, &extension);
+  ASSERT_TRUE(context_id.IsForServiceWorker());
+  context_id.GetTaskQueue()->AddPendingTask(
+      context_id,
+      base::BindOnce(
+          [](std::unique_ptr<extensions::LazyContextTaskQueue::ContextInfo>) {})
+          .Then(run_loop.QuitWhenIdleClosure()));
+  run_loop.Run();
+}
+
+// Creates a new offscreen document through an API call, expecting success.
+void ProgrammaticallyCreateOffscreenDocument(
+    const extensions::Extension& extension,
+    Profile& profile) {
+  static constexpr char kScript[] =
+      R"((async () => {
+            let message;
+            try {
+              await chrome.offscreen.createDocument(
+                  {
+                    url: 'offscreen.html',
+                    reasons: ['TESTING'],
+                    justification: 'testing'
+                  });
+              message = 'success';
+            } catch (e) {
+              message = 'Error: ' + e.toString();
+            }
+            chrome.test.sendScriptResult(message);
+          })();)";
+  base::Value result = extensions::BackgroundScriptExecutor::ExecuteScript(
+      &profile, extension.id(), kScript,
+      extensions::BackgroundScriptExecutor::ResultCapture::kSendScriptResult);
+  ASSERT_TRUE(result.is_string());
+  EXPECT_EQ("success", result.GetString());
+}
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
+
 }  // namespace
 
 class BraveNavigatorUserAgentFarblingBrowserTest : public InProcessBrowserTest {
  public:
+  BraveNavigatorUserAgentFarblingBrowserTest() {
+    feature_list_.InitAndEnableFeature(
+        brave_shields::features::kBraveShowStrictFingerprintingMode);
+  }
+
+  void SetUp() override {
+    https_server_ = std::make_unique<net::EmbeddedTestServer>(
+        net::test_server::EmbeddedTestServer::TYPE_HTTPS);
+    ASSERT_TRUE(https_server_->InitializeAndListen());
+    InProcessBrowserTest::SetUp();
+  }
+
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
 
-    content_client_ = std::make_unique<ChromeContentClient>();
-    content::SetContentClient(content_client_.get());
-    browser_content_client_ = std::make_unique<BraveContentBrowserClient>();
-    content::SetBrowserClientForTesting(browser_content_client_.get());
-
     mock_cert_verifier_.mock_cert_verifier()->set_default_result(net::OK);
     host_resolver()->AddRule("*", "127.0.0.1");
-    https_server_ = std::make_unique<net::EmbeddedTestServer>(
-        net::test_server::EmbeddedTestServer::TYPE_HTTPS);
     content::SetupCrossSiteRedirector(https_server_.get());
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     https_server_->ServeFilesFromDirectory(test_data_dir);
@@ -108,17 +170,18 @@ class BraveNavigatorUserAgentFarblingBrowserTest : public InProcessBrowserTest {
         base::Unretained(this)));
     user_agents_.clear();
 
-    ASSERT_TRUE(https_server_->Start());
-  }
-
-  void TearDown() override {
-    browser_content_client_.reset();
-    content_client_.reset();
+    https_server_->StartAcceptingConnections();
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
     InProcessBrowserTest::SetUpCommandLine(command_line);
     mock_cert_verifier_.SetUpCommandLine(command_line);
+    command_line->AppendSwitchASCII(
+        network::switches::kHostResolverRules,
+        base::StringPrintf("MAP *:443 127.0.0.1:%d", https_server_->port()));
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+    command_line->AppendSwitch(extensions::switches::kOffscreenDocumentTesting);
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)
   }
 
   void SetUpInProcessBrowserTestFixture() override {
@@ -170,12 +233,56 @@ class BraveNavigatorUserAgentFarblingBrowserTest : public InProcessBrowserTest {
     return browser()->tab_strip_model()->GetActiveWebContents();
   }
 
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  void TestExtensionOffscreenDocument(std::string_view page_path,
+                                      std::string_view script_path,
+                                      std::string_view script_path2 = {}) {
+    extensions::TestExtensionDir test_extension_dir;
+    test_extension_dir.WriteManifest(R"({
+      "name": "Offscreen Document Test",
+      "manifest_version": 3,
+      "version": "0.1",
+      "background": {"service_worker": "background.js"},
+      "permissions": ["offscreen"]
+    })");
+    test_extension_dir.WriteFile(FILE_PATH_LITERAL("background.js"), "");
+    test_extension_dir.CopyFileTo(
+        base::PathService::CheckedGet(brave::DIR_TEST_DATA)
+            .AppendASCII(page_path),
+        FILE_PATH_LITERAL("offscreen.html"));
+    test_extension_dir.CopyFileTo(
+        base::PathService::CheckedGet(brave::DIR_TEST_DATA)
+            .AppendASCII(script_path),
+        base::FilePath::FromASCII(script_path).BaseName().value());
+    if (!script_path2.empty()) {
+      test_extension_dir.CopyFileTo(
+          base::PathService::CheckedGet(brave::DIR_TEST_DATA)
+              .AppendASCII(script_path2),
+          base::FilePath::FromASCII(script_path2).BaseName().value());
+    }
+
+    extensions::ChromeTestExtensionLoader extension_loader(
+        browser()->profile());
+    scoped_refptr<const extensions::Extension> extension =
+        extension_loader.LoadExtension(test_extension_dir.UnpackedPath());
+    WakeUpServiceWorker(*extension, *browser()->profile());
+    ProgrammaticallyCreateOffscreenDocument(*extension, *browser()->profile());
+    extensions::OffscreenDocumentHost* offscreen_document =
+        extensions::OffscreenDocumentManager::Get(browser()->profile())
+            ->GetOffscreenDocumentForExtension(*extension);
+    ASSERT_TRUE(offscreen_document) << "Offscreen document not created.";
+    content::WaitForLoadStop(offscreen_document->host_contents());
+
+    TitleWatcher watcher(offscreen_document->host_contents(), u"pass");
+    EXPECT_EQ(u"pass", watcher.WaitAndGetTitle());
+  }
+#endif
+
  private:
   content::ContentMockCertVerifier mock_cert_verifier_;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
-  std::unique_ptr<ChromeContentClient> content_client_;
-  std::unique_ptr<BraveContentBrowserClient> browser_content_client_;
   std::vector<std::string> user_agents_;
+  base::test::ScopedFeatureList feature_list_;
 };
 
 // Tests results of farbling user agent
@@ -228,11 +335,11 @@ IN_PROC_BROWSER_TEST_F(BraveNavigatorUserAgentFarblingBrowserTest,
   // test known values
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url_b));
   auto max_ua_b = EvalJs(contents(), kUserAgentScript);
-  EXPECT_EQ(default_ua_b + "    ", max_ua_b);
+  EXPECT_EQ(default_ua_b + "   ", max_ua_b);
   BlockFingerprinting(domain_z);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url_z));
   auto max_ua_z = EvalJs(contents(), kUserAgentScript);
-  EXPECT_EQ(default_ua_z + "  ", max_ua_z);
+  EXPECT_EQ(default_ua_z + " ", max_ua_z);
 
   // test that web workers also inherit the farbled user agent
   // (farbling level is still maximum)
@@ -255,6 +362,17 @@ IN_PROC_BROWSER_TEST_F(BraveNavigatorUserAgentFarblingBrowserTest,
   EXPECT_EQ(last_requested_http_user_agent(), unfarbled_ua);
   TitleWatcher watcher4(contents(), expected_title);
   EXPECT_EQ(expected_title, watcher4.WaitAndGetTitle());
+
+  // test that shared workers also inherit the farbled user agent
+  // (farbling level is still maximum)
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(
+      browser(), https_server()->GetURL(
+                     domain_b, "/navigator/shared-workers-useragent.html")));
+  // HTTP User-Agent header we just sent in that request should be the same as
+  // the unfarbled user agent
+  EXPECT_EQ(last_requested_http_user_agent(), unfarbled_ua);
+  TitleWatcher watcher5(contents(), expected_title);
+  EXPECT_EQ(expected_title, watcher5.WaitAndGetTitle());
 
   // Farbling level: off
   // verify that user agent is reset properly after having been farbled
@@ -400,3 +518,30 @@ IN_PROC_BROWSER_TEST_F(BraveNavigatorUserAgentFarblingBrowserTest,
   ASSERT_NE(nullptr, ua_full_version);
   EXPECT_EQ(expected_full_version, *ua_full_version);
 }
+
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+IN_PROC_BROWSER_TEST_F(BraveNavigatorUserAgentFarblingBrowserTest,
+                       ExtensionOffscreenDocument) {
+  TestExtensionOffscreenDocument("navigator/ua-remote-iframe.html",
+                                 "navigator/ua-remote-iframe.js");
+}
+
+IN_PROC_BROWSER_TEST_F(BraveNavigatorUserAgentFarblingBrowserTest,
+                       ExtensionOffscreenDocumentWorker) {
+  TestExtensionOffscreenDocument("navigator/workers-useragent.html",
+                                 "navigator/workers-useragent.js");
+}
+
+IN_PROC_BROWSER_TEST_F(BraveNavigatorUserAgentFarblingBrowserTest,
+                       ExtensionOffscreenDocumentRemoteIframe) {
+  TestExtensionOffscreenDocument("navigator/workers-remote-iframe.html",
+                                 "navigator/workers-remote-iframe.js");
+}
+
+IN_PROC_BROWSER_TEST_F(BraveNavigatorUserAgentFarblingBrowserTest,
+                       ExtensionOffscreenDocumentSharedWorker) {
+  TestExtensionOffscreenDocument("navigator/shared-workers-useragent.html",
+                                 "navigator/shared-workers-useragent.js",
+                                 "navigator/shared-workers-worker.js");
+}
+#endif  // BUILDFLAG(ENABLE_EXTENSIONS)

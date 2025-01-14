@@ -5,414 +5,507 @@
 
 #include "brave/components/brave_ads/core/internal/ads_impl.h"
 
+#include <memory>
+#include <optional>
 #include <utility>
 
-#include "base/check.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/functional/bind.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"  // IWYU pragma: keep
-#include "brave/components/brave_ads/core/ad_content_value_util.h"
+#include "base/trace_event/trace_event.h"
 #include "brave/components/brave_ads/core/internal/account/wallet/wallet_util.h"
-#include "brave/components/brave_ads/core/internal/ads/ad_events/ad_events.h"
-#include "brave/components/brave_ads/core/internal/ads_client_helper.h"
+#include "brave/components/brave_ads/core/internal/ads_client/ads_client_util.h"
+#include "brave/components/brave_ads/core/internal/ads_core/ads_core_util.h"
+#include "brave/components/brave_ads/core/internal/ads_notifier_manager.h"
 #include "brave/components/brave_ads/core/internal/common/logging_util.h"
 #include "brave/components/brave_ads/core/internal/creatives/notification_ads/notification_ad_manager.h"
+#include "brave/components/brave_ads/core/internal/database/database_maintenance.h"
 #include "brave/components/brave_ads/core/internal/database/database_manager.h"
 #include "brave/components/brave_ads/core/internal/deprecated/client/client_state_manager.h"
 #include "brave/components/brave_ads/core/internal/deprecated/confirmations/confirmation_state_manager.h"
 #include "brave/components/brave_ads/core/internal/diagnostics/diagnostic_manager.h"
-#include "brave/components/brave_ads/core/internal/history/history_manager.h"
+#include "brave/components/brave_ads/core/internal/history/ad_history_manager.h"
 #include "brave/components/brave_ads/core/internal/legacy_migration/client/legacy_client_migration.h"
 #include "brave/components/brave_ads/core/internal/legacy_migration/confirmations/legacy_confirmation_migration.h"
-#include "brave/components/brave_ads/core/internal/legacy_migration/rewards/legacy_rewards_migration.h"
-#include "brave/components/brave_ads/core/notification_ad_info.h"
+#include "brave/components/brave_ads/core/internal/user_engagement/ad_events/ad_events.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client.h"
+#include "brave/components/brave_ads/core/public/ads_constants.h"
+#include "brave/components/brave_ads/core/public/service/ads_service_callback.h"
 
 namespace brave_ads {
 
-namespace {
+AdsImpl::AdsImpl(AdsClient& ads_client,
+                 const base::FilePath& database_path,
+                 std::unique_ptr<TokenGeneratorInterface> token_generator)
+    : global_state_(ads_client, database_path, std::move(token_generator)),
+      database_maintenance_(std::make_unique<database::Maintenance>()) {}
 
-void FailedToInitialize(InitializeCallback callback) {
-  BLOG(0, "Failed to initialize ads");
+AdsImpl::~AdsImpl() = default;
 
-  std::move(callback).Run(/*success*/ false);
+void AdsImpl::AddObserver(std::unique_ptr<AdsObserverInterface> observer) {
+  // `AdsNotifierManager` takes ownership of `ads_observer`.
+  AdsNotifierManager::GetInstance().AddObserver(std::move(observer));
 }
 
-}  // namespace
-
-AdsImpl::AdsImpl(AdsClient* ads_client)
-    : global_state_(ads_client),
-      account_(&token_generator_),
-      ad_handler_(account_),
-      user_reactions_(account_) {
-  account_.AddObserver(this);
+void AdsImpl::SetSysInfo(mojom::SysInfoPtr mojom_sys_info) {
+  GlobalState::GetInstance()->SysInfo().device_id = mojom_sys_info->device_id;
 }
 
-AdsImpl::~AdsImpl() {
-  account_.RemoveObserver(this);
+void AdsImpl::SetBuildChannel(mojom::BuildChannelInfoPtr mojom_build_channel) {
+  auto& build_channel = GlobalState::GetInstance()->BuildChannel();
+  build_channel.is_release = mojom_build_channel->is_release;
+  build_channel.name = mojom_build_channel->name;
 }
 
-void AdsImpl::SetSysInfo(mojom::SysInfoPtr sys_info) {
-  auto& sys_info_state = GlobalState::GetInstance()->SysInfo();
-  sys_info_state.device_id = sys_info->device_id;
+void AdsImpl::SetFlags(mojom::FlagsPtr mojom_flags) {
+  auto& flags = GlobalState::GetInstance()->Flags();
+  flags.should_debug = mojom_flags->should_debug;
+  flags.did_override_from_command_line =
+      mojom_flags->did_override_from_command_line;
+  flags.environment_type = mojom_flags->environment_type;
 }
 
-void AdsImpl::SetBuildChannel(mojom::BuildChannelInfoPtr build_channel) {
-  auto& build_channel_state = GlobalState::GetInstance()->BuildChannel();
-  build_channel_state.is_release = build_channel->is_release;
-  build_channel_state.name = build_channel->name;
-}
-
-void AdsImpl::SetFlags(mojom::FlagsPtr flags) {
-  auto& flags_state = GlobalState::GetInstance()->Flags();
-  flags_state.should_debug = flags->should_debug;
-  flags_state.did_override_from_command_line =
-      flags->did_override_from_command_line;
-  flags_state.environment_type = flags->environment_type;
-}
-
-void AdsImpl::Initialize(mojom::WalletInfoPtr wallet,
+void AdsImpl::Initialize(mojom::WalletInfoPtr mojom_wallet,
                          InitializeCallback callback) {
   BLOG(1, "Initializing ads");
+
+  TRACE_EVENT_NESTABLE_ASYNC_BEGIN0(kTraceEventCategory, "AdsImpl::Initialize",
+                                    TRACE_ID_LOCAL(this));
 
   if (is_initialized_) {
     BLOG(1, "Already initialized ads");
     return FailedToInitialize(std::move(callback));
   }
 
-  CreateOrOpenDatabase(std::move(wallet), std::move(callback));
+  CreateOrOpenDatabase(std::move(mojom_wallet), std::move(callback));
 }
 
 void AdsImpl::Shutdown(ShutdownCallback callback) {
   if (!is_initialized_) {
     BLOG(0, "Shutdown failed as not initialized");
-    return std::move(callback).Run(/*success*/ false);
+    return std::move(callback).Run(/*success=*/false);
   }
 
-  NotificationAdManager::GetInstance().CloseAll();
+  NotificationAdManager::GetInstance().RemoveAll(/*should_close=*/true);
 
-  NotificationAdManager::GetInstance().RemoveAll();
-
-  std::move(callback).Run(/*success*/ true);
+  std::move(callback).Run(/*success=*/true);
 }
 
-absl::optional<NotificationAdInfo> AdsImpl::MaybeGetNotificationAd(
-    const std::string& placement_id) {
-  return NotificationAdManager::GetInstance().MaybeGetForPlacementId(
-      placement_id);
-}
-
-void AdsImpl::TriggerNotificationAdEvent(
-    const std::string& placement_id,
-    const mojom::NotificationAdEventType event_type,
-    TriggerAdEventCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*success*/ false);
+void AdsImpl::GetInternals(GetInternalsCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(&AdsImpl::GetInternals,
+                                          weak_factory_.GetWeakPtr(),
+                                          std::move(callback)));
   }
 
-  ad_handler_.TriggerNotificationAdEvent(placement_id, event_type,
-                                         std::move(callback));
+  database::table::CreativeSetConversions database_table;
+  database_table.GetActive(base::BindOnce(&AdsImpl::GetActiveCallback,
+                                          weak_factory_.GetWeakPtr(),
+                                          std::move(callback)));
 }
 
-void AdsImpl::MaybeServeNewTabPageAd(MaybeServeNewTabPageAdCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*ad*/ absl::nullopt);
+void AdsImpl::GetActiveCallback(
+    GetInternalsCallback callback,
+    bool success,
+    const CreativeSetConversionList& creative_set_conversions) {
+  if (!success) {
+    BLOG(0, "Failed to get creative set conversions");
+    return std::move(callback).Run({});
   }
 
-  ad_handler_.MaybeServeNewTabPageAd(std::move(callback));
-}
+  base::Value::List list;
+  list.reserve(creative_set_conversions.size());
+  for (const auto& creative_set_conversion : creative_set_conversions) {
+    if (!creative_set_conversion.IsValid()) {
+      continue;
+    }
 
-void AdsImpl::TriggerNewTabPageAdEvent(
-    const std::string& placement_id,
-    const std::string& creative_instance_id,
-    const mojom::NewTabPageAdEventType event_type,
-    TriggerAdEventCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*success*/ false);
+    list.Append(base::Value::Dict()
+                    .Set("URL Pattern", creative_set_conversion.url_pattern)
+                    .Set("Expires At", creative_set_conversion.expire_at
+                                           ->InSecondsFSinceUnixEpoch()));
   }
 
-  ad_handler_.TriggerNewTabPageAdEvent(placement_id, creative_instance_id,
-                                       event_type, std::move(callback));
-}
-
-void AdsImpl::TriggerPromotedContentAdEvent(
-    const std::string& placement_id,
-    const std::string& creative_instance_id,
-    const mojom::PromotedContentAdEventType event_type,
-    TriggerAdEventCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*success*/ false);
-  }
-
-  ad_handler_.TriggerPromotedContentAdEvent(placement_id, creative_instance_id,
-                                            event_type, std::move(callback));
-}
-
-void AdsImpl::MaybeServeInlineContentAd(
-    const std::string& dimensions,
-    MaybeServeInlineContentAdCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(dimensions, /*ad*/ absl::nullopt);
-  }
-
-  ad_handler_.MaybeServeInlineContentAd(dimensions, std::move(callback));
-}
-
-void AdsImpl::TriggerInlineContentAdEvent(
-    const std::string& placement_id,
-    const std::string& creative_instance_id,
-    const mojom::InlineContentAdEventType event_type,
-    TriggerAdEventCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*success*/ false);
-  }
-
-  ad_handler_.TriggerInlineContentAdEvent(placement_id, creative_instance_id,
-                                          event_type, std::move(callback));
-}
-
-void AdsImpl::TriggerSearchResultAdEvent(
-    mojom::SearchResultAdInfoPtr ad_mojom,
-    const mojom::SearchResultAdEventType event_type,
-    TriggerAdEventCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*success*/ false);
-  }
-
-  ad_handler_.TriggerSearchResultAdEvent(std::move(ad_mojom), event_type,
-                                         std::move(callback));
-}
-
-void AdsImpl::PurgeOrphanedAdEventsForType(
-    const mojom::AdType ad_type,
-    PurgeOrphanedAdEventsForTypeCallback callback) {
-  CHECK(mojom::IsKnownEnumValue(ad_type));
-
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*success*/ false);
-  }
-
-  PurgeOrphanedAdEvents(
-      ad_type,
-      base::BindOnce(
-          [](const mojom::AdType ad_type,
-             PurgeOrphanedAdEventsForTypeCallback callback,
-             const bool success) {
-            if (!success) {
-              BLOG(0, "Failed to purge orphaned ad events for " << ad_type);
-              return std::move(callback).Run(/*success*/ false);
-            }
-
-            RebuildAdEventHistoryFromDatabase();
-
-            BLOG(1, "Successfully purged orphaned ad events for " << ad_type);
-            std::move(callback).Run(/*success*/ true);
-          },
-          ad_type, std::move(callback)));
-}
-
-HistoryItemList AdsImpl::GetHistory(const HistoryFilterType filter_type,
-                                    const HistorySortType sort_type,
-                                    const base::Time from_time,
-                                    const base::Time to_time) {
-  return is_initialized_
-             ? HistoryManager::Get(filter_type, sort_type, from_time, to_time)
-             : HistoryItemList{};
-}
-
-void AdsImpl::GetStatementOfAccounts(GetStatementOfAccountsCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*statement*/ nullptr);
-  }
-
-  Account::GetStatement(std::move(callback));
+  std::move(callback).Run(std::move(list));
 }
 
 void AdsImpl::GetDiagnostics(GetDiagnosticsCallback callback) {
-  if (!is_initialized_) {
-    return std::move(callback).Run(/*diagnostics*/ absl::nullopt);
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(&AdsImpl::GetDiagnostics,
+                                          weak_factory_.GetWeakPtr(),
+                                          std::move(callback)));
   }
 
   DiagnosticManager::GetInstance().GetDiagnostics(std::move(callback));
 }
 
-mojom::UserReactionType AdsImpl::ToggleLikeAd(const base::Value::Dict& value) {
-  return is_initialized_
-             ? HistoryManager::GetInstance().LikeAd(AdContentFromValue(value))
-             : mojom::UserReactionType::kNeutral;
+void AdsImpl::GetStatementOfAccounts(GetStatementOfAccountsCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(&AdsImpl::GetStatementOfAccounts,
+                                          weak_factory_.GetWeakPtr(),
+                                          std::move(callback)));
+  }
+
+  GetAccount().GetStatement(std::move(callback));
 }
 
-mojom::UserReactionType AdsImpl::ToggleDislikeAd(
-    const base::Value::Dict& value) {
-  return is_initialized_ ? HistoryManager::GetInstance().DislikeAd(
-                               AdContentFromValue(value))
-                         : mojom::UserReactionType::kNeutral;
+void AdsImpl::MaybeServeInlineContentAd(
+    const std::string& dimensions,
+    MaybeServeInlineContentAdCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(&AdsImpl::MaybeServeInlineContentAd,
+                                          weak_factory_.GetWeakPtr(),
+                                          dimensions, std::move(callback)));
+  }
+
+  GetAdHandler().MaybeServeInlineContentAd(dimensions, std::move(callback));
 }
 
-mojom::UserReactionType AdsImpl::ToggleLikeCategory(
-    const std::string& category,
-    const mojom::UserReactionType user_reaction_type) {
-  return is_initialized_ ? HistoryManager::GetInstance().LikeCategory(
-                               category, user_reaction_type)
-                         : mojom::UserReactionType::kNeutral;
+void AdsImpl::TriggerInlineContentAdEvent(
+    const std::string& placement_id,
+    const std::string& creative_instance_id,
+    mojom::InlineContentAdEventType mojom_ad_event_type,
+    TriggerAdEventCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(
+        &AdsImpl::TriggerInlineContentAdEvent, weak_factory_.GetWeakPtr(),
+        placement_id, creative_instance_id, mojom_ad_event_type,
+        std::move(callback)));
+  }
+
+  GetAdHandler().TriggerInlineContentAdEvent(placement_id, creative_instance_id,
+                                             mojom_ad_event_type,
+                                             std::move(callback));
 }
 
-mojom::UserReactionType AdsImpl::ToggleDislikeCategory(
-    const std::string& category,
-    const mojom::UserReactionType user_reaction_type) {
-  return is_initialized_ ? HistoryManager::GetInstance().DislikeCategory(
-                               category, user_reaction_type)
-                         : mojom::UserReactionType::kNeutral;
+void AdsImpl::MaybeServeNewTabPageAd(MaybeServeNewTabPageAdCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(&AdsImpl::MaybeServeNewTabPageAd,
+                                          weak_factory_.GetWeakPtr(),
+                                          std::move(callback)));
+  }
+
+  GetAdHandler().MaybeServeNewTabPageAd(std::move(callback));
 }
 
-bool AdsImpl::ToggleSaveAd(const base::Value::Dict& value) {
-  return is_initialized_ ? HistoryManager::GetInstance().ToggleSaveAd(
-                               AdContentFromValue(value))
-                         : false;
+void AdsImpl::TriggerNewTabPageAdEvent(
+    const std::string& placement_id,
+    const std::string& creative_instance_id,
+    mojom::NewTabPageAdEventType mojom_ad_event_type,
+    TriggerAdEventCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(
+        &AdsImpl::TriggerNewTabPageAdEvent, weak_factory_.GetWeakPtr(),
+        placement_id, creative_instance_id, mojom_ad_event_type,
+        std::move(callback)));
+  }
+
+  GetAdHandler().TriggerNewTabPageAdEvent(placement_id, creative_instance_id,
+                                          mojom_ad_event_type,
+                                          std::move(callback));
 }
 
-bool AdsImpl::ToggleMarkAdAsInappropriate(const base::Value::Dict& value) {
-  return is_initialized_
-             ? HistoryManager::GetInstance().ToggleMarkAdAsInappropriate(
-                   AdContentFromValue(value))
-             : false;
+void AdsImpl::MaybeGetNotificationAd(const std::string& placement_id,
+                                     MaybeGetNotificationAdCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(&AdsImpl::MaybeGetNotificationAd,
+                                          weak_factory_.GetWeakPtr(),
+                                          placement_id, std::move(callback)));
+  }
+
+  std::move(callback).Run(
+      NotificationAdManager::GetInstance().MaybeGetForPlacementId(
+          placement_id));
+}
+
+void AdsImpl::TriggerNotificationAdEvent(
+    const std::string& placement_id,
+    mojom::NotificationAdEventType mojom_ad_event_type,
+    TriggerAdEventCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(
+        &AdsImpl::TriggerNotificationAdEvent, weak_factory_.GetWeakPtr(),
+        placement_id, mojom_ad_event_type, std::move(callback)));
+  }
+
+  GetAdHandler().TriggerNotificationAdEvent(placement_id, mojom_ad_event_type,
+                                            std::move(callback));
+}
+
+void AdsImpl::TriggerPromotedContentAdEvent(
+    const std::string& placement_id,
+    const std::string& creative_instance_id,
+    mojom::PromotedContentAdEventType mojom_ad_event_type,
+    TriggerAdEventCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(
+        &AdsImpl::TriggerPromotedContentAdEvent, weak_factory_.GetWeakPtr(),
+        placement_id, creative_instance_id, mojom_ad_event_type,
+        std::move(callback)));
+  }
+
+  GetAdHandler().TriggerPromotedContentAdEvent(
+      placement_id, creative_instance_id, mojom_ad_event_type,
+      std::move(callback));
+}
+
+void AdsImpl::MaybeGetSearchResultAd(const std::string& placement_id,
+                                     MaybeGetSearchResultAdCallback callback) {
+  if (task_queue_.should_queue()) {
+    task_queue_.Add(base::BindOnce(&AdsImpl::MaybeGetSearchResultAd,
+                                   weak_factory_.GetWeakPtr(), placement_id,
+                                   std::move(callback)));
+    return;
+  }
+
+  std::optional<mojom::CreativeSearchResultAdInfoPtr> ad =
+      GetAdHandler().MaybeGetSearchResultAd(placement_id);
+  std::move(callback).Run(ad ? std::move(*ad)
+                             : mojom::CreativeSearchResultAdInfoPtr());
+}
+
+void AdsImpl::TriggerSearchResultAdEvent(
+    mojom::CreativeSearchResultAdInfoPtr mojom_creative_ad,
+    mojom::SearchResultAdEventType mojom_ad_event_type,
+    TriggerAdEventCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(
+        base::BindOnce(&AdsImpl::TriggerSearchResultAdEvent,
+                       weak_factory_.GetWeakPtr(), std::move(mojom_creative_ad),
+                       mojom_ad_event_type, std::move(callback)));
+  }
+
+  GetAdHandler().TriggerSearchResultAdEvent(
+      std::move(mojom_creative_ad), mojom_ad_event_type, std::move(callback));
+}
+
+void AdsImpl::PurgeOrphanedAdEventsForType(
+    mojom::AdType mojom_ad_type,
+    PurgeOrphanedAdEventsForTypeCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(
+        &AdsImpl::PurgeOrphanedAdEventsForType, weak_factory_.GetWeakPtr(),
+        mojom_ad_type, std::move(callback)));
+  }
+
+  PurgeOrphanedAdEvents(
+      mojom_ad_type,
+      base::BindOnce(
+          [](mojom::AdType mojom_ad_type,
+             PurgeOrphanedAdEventsForTypeCallback callback, bool success) {
+            if (!success) {
+              BLOG(0,
+                   "Failed to purge orphaned ad events for " << mojom_ad_type);
+            } else {
+              BLOG(1, "Purged orphaned ad events for " << mojom_ad_type);
+            }
+
+            std::move(callback).Run(success);
+          },
+          mojom_ad_type, std::move(callback)));
+}
+
+void AdsImpl::GetAdHistory(base::Time from_time,
+                           base::Time to_time,
+                           GetAdHistoryForUICallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(&AdsImpl::GetAdHistory,
+                                          weak_factory_.GetWeakPtr(), from_time,
+                                          to_time, std::move(callback)));
+  }
+
+  AdHistoryManager::GetForUI(from_time, to_time, std::move(callback));
+}
+
+void AdsImpl::ToggleLikeAd(mojom::ReactionInfoPtr mojom_reaction,
+                           ToggleReactionCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(
+        base::BindOnce(&AdsImpl::ToggleLikeAd, weak_factory_.GetWeakPtr(),
+                       std::move(mojom_reaction), std::move(callback)));
+  }
+
+  GetReactions().ToggleLikeAd(std::move(mojom_reaction), std::move(callback));
+}
+
+void AdsImpl::ToggleDislikeAd(mojom::ReactionInfoPtr mojom_reaction,
+                              ToggleReactionCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(
+        base::BindOnce(&AdsImpl::ToggleDislikeAd, weak_factory_.GetWeakPtr(),
+                       std::move(mojom_reaction), std::move(callback)));
+  }
+
+  GetReactions().ToggleDislikeAd(std::move(mojom_reaction),
+                                 std::move(callback));
+}
+
+void AdsImpl::ToggleLikeSegment(mojom::ReactionInfoPtr mojom_reaction,
+                                ToggleReactionCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(
+        base::BindOnce(&AdsImpl::ToggleLikeSegment, weak_factory_.GetWeakPtr(),
+                       std::move(mojom_reaction), std::move(callback)));
+  }
+
+  GetReactions().ToggleLikeSegment(std::move(mojom_reaction),
+                                   std::move(callback));
+}
+
+void AdsImpl::ToggleDislikeSegment(mojom::ReactionInfoPtr mojom_reaction,
+                                   ToggleReactionCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(
+        &AdsImpl::ToggleDislikeSegment, weak_factory_.GetWeakPtr(),
+        std::move(mojom_reaction), std::move(callback)));
+  }
+
+  GetReactions().ToggleDislikeSegment(std::move(mojom_reaction),
+                                      std::move(callback));
+}
+
+void AdsImpl::ToggleSaveAd(mojom::ReactionInfoPtr mojom_reaction,
+                           ToggleReactionCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(
+        base::BindOnce(&AdsImpl::ToggleSaveAd, weak_factory_.GetWeakPtr(),
+                       std::move(mojom_reaction), std::move(callback)));
+  }
+
+  GetReactions().ToggleSaveAd(std::move(mojom_reaction), std::move(callback));
+}
+
+void AdsImpl::ToggleMarkAdAsInappropriate(mojom::ReactionInfoPtr mojom_reaction,
+                                          ToggleReactionCallback callback) {
+  if (task_queue_.should_queue()) {
+    return task_queue_.Add(base::BindOnce(
+        &AdsImpl::ToggleMarkAdAsInappropriate, weak_factory_.GetWeakPtr(),
+        std::move(mojom_reaction), std::move(callback)));
+  }
+
+  GetReactions().ToggleMarkAdAsInappropriate(std::move(mojom_reaction),
+                                             std::move(callback));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 
-void AdsImpl::CreateOrOpenDatabase(mojom::WalletInfoPtr wallet,
+void AdsImpl::CreateOrOpenDatabase(mojom::WalletInfoPtr mojom_wallet,
                                    InitializeCallback callback) {
   DatabaseManager::GetInstance().CreateOrOpen(base::BindOnce(
       &AdsImpl::CreateOrOpenDatabaseCallback, weak_factory_.GetWeakPtr(),
-      std::move(wallet), std::move(callback)));
+      std::move(mojom_wallet), std::move(callback)));
 }
 
-void AdsImpl::CreateOrOpenDatabaseCallback(mojom::WalletInfoPtr wallet,
+void AdsImpl::CreateOrOpenDatabaseCallback(mojom::WalletInfoPtr mojom_wallet,
                                            InitializeCallback callback,
-                                           const bool success) {
+                                           bool success) {
   if (!success) {
     BLOG(0, "Failed to create or open database");
     return FailedToInitialize(std::move(callback));
   }
 
-  PurgeExpiredAdEvents(base::BindOnce(&AdsImpl::PurgeExpiredAdEventsCallback,
-                                      weak_factory_.GetWeakPtr(),
-                                      std::move(wallet), std::move(callback)));
+  MigrateClientState(base::BindOnce(
+      &AdsImpl::MigrateClientStateCallback, weak_factory_.GetWeakPtr(),
+      std::move(mojom_wallet), std::move(callback)));
 }
 
-void AdsImpl::PurgeExpiredAdEventsCallback(mojom::WalletInfoPtr wallet,
-                                           InitializeCallback callback,
-                                           const bool success) {
-  if (!success) {
-    BLOG(0, "Failed to purge expired ad events");
-    return FailedToInitialize(std::move(callback));
+void AdsImpl::FailedToInitialize(InitializeCallback callback) {
+  TRACE_EVENT_NESTABLE_ASYNC_END0(kTraceEventCategory, "AdsImpl::Initialize",
+                                  TRACE_ID_LOCAL(this));
+
+  BLOG(0, "Failed to initialize ads");
+
+  std::move(callback).Run(/*success=*/false);
+}
+
+void AdsImpl::SuccessfullyInitialized(mojom::WalletInfoPtr mojom_wallet,
+                                      InitializeCallback callback) {
+  TRACE_EVENT_NESTABLE_ASYNC_END0(kTraceEventCategory, "AdsImpl::Initialize",
+                                  TRACE_ID_LOCAL(this));
+
+  BLOG(1, "Successfully initialized ads");
+
+  is_initialized_ = true;
+
+  if (mojom_wallet) {
+    GetAccount().SetWallet(mojom_wallet->payment_id,
+                           mojom_wallet->recovery_seed_base64);
   }
 
-  PurgeOrphanedAdEvents(mojom::AdType::kNewTabPageAd,
-                        base::BindOnce(&AdsImpl::PurgeOrphanedAdEventsCallback,
-                                       weak_factory_.GetWeakPtr(),
-                                       std::move(wallet), std::move(callback)));
+  GetAdsClient().NotifyPendingObservers();
+
+  task_queue_.FlushAndStopQueueing();
+
+  std::move(callback).Run(/*success=*/true);
 }
 
-void AdsImpl::PurgeOrphanedAdEventsCallback(mojom::WalletInfoPtr wallet,
-                                            InitializeCallback callback,
-                                            const bool success) {
-  if (!success) {
-    BLOG(0, "Failed to purge orphaned ad events");
-    return FailedToInitialize(std::move(callback));
-  }
-
-  RebuildAdEventHistoryFromDatabase();
-
-  rewards::Migrate(base::BindOnce(&AdsImpl::MigrateRewardsStateCallback,
-                                  weak_factory_.GetWeakPtr(), std::move(wallet),
-                                  std::move(callback)));
-}
-
-void AdsImpl::MigrateRewardsStateCallback(mojom::WalletInfoPtr wallet,
-                                          InitializeCallback callback,
-                                          const bool success) {
-  if (!success) {
-    return FailedToInitialize(std::move(callback));
-  }
-
-  client::Migrate(base::BindOnce(&AdsImpl::MigrateClientStateCallback,
-                                 weak_factory_.GetWeakPtr(), std::move(wallet),
-                                 std::move(callback)));
-}
-
-void AdsImpl::MigrateClientStateCallback(mojom::WalletInfoPtr wallet,
+void AdsImpl::MigrateClientStateCallback(mojom::WalletInfoPtr mojom_wallet,
                                          InitializeCallback callback,
-                                         const bool success) {
+                                         bool success) {
   if (!success) {
     return FailedToInitialize(std::move(callback));
   }
 
-  ClientStateManager::GetInstance().Load(base::BindOnce(
+  ClientStateManager::GetInstance().LoadState(base::BindOnce(
       &AdsImpl::LoadClientStateCallback, weak_factory_.GetWeakPtr(),
-      std::move(wallet), std::move(callback)));
+      std::move(mojom_wallet), std::move(callback)));
 }
 
-void AdsImpl::LoadClientStateCallback(mojom::WalletInfoPtr wallet,
+void AdsImpl::LoadClientStateCallback(mojom::WalletInfoPtr mojom_wallet,
                                       InitializeCallback callback,
-                                      const bool success) {
+                                      bool success) {
   if (!success) {
+    // TODO(https://github.com/brave/brave-browser/issues/32066): Detect
+    // potential defects using `DumpWithoutCrashing`.
+    SCOPED_CRASH_KEY_STRING64("Issue32066", "failure_reason",
+                              "Failed to load client state");
+    base::debug::DumpWithoutCrashing();
+
     return FailedToInitialize(std::move(callback));
   }
 
-  confirmations::Migrate(base::BindOnce(
+  MigrateConfirmationState(base::BindOnce(
       &AdsImpl::MigrateConfirmationStateCallback, weak_factory_.GetWeakPtr(),
-      std::move(wallet), std::move(callback)));
+      std::move(mojom_wallet), std::move(callback)));
 }
 
-void AdsImpl::MigrateConfirmationStateCallback(mojom::WalletInfoPtr wallet,
-                                               InitializeCallback callback,
-                                               const bool success) {
+void AdsImpl::MigrateConfirmationStateCallback(
+    mojom::WalletInfoPtr mojom_wallet,
+    InitializeCallback callback,
+    bool success) {
   if (!success) {
     return FailedToInitialize(std::move(callback));
   }
 
-  absl::optional<WalletInfo> new_wallet;
-  if (wallet) {
-    new_wallet = ToWallet(wallet->payment_id, wallet->recovery_seed);
-    if (!new_wallet) {
+  std::optional<WalletInfo> wallet;
+  if (mojom_wallet) {
+    wallet = CreateWalletFromRecoverySeed(&*mojom_wallet);
+    if (!wallet) {
       BLOG(0, "Invalid wallet");
       return FailedToInitialize(std::move(callback));
     }
   }
 
-  ConfirmationStateManager::GetInstance().Load(
-      new_wallet, base::BindOnce(&AdsImpl::LoadConfirmationStateCallback,
-                                 weak_factory_.GetWeakPtr(), std::move(wallet),
-                                 std::move(callback)));
+  ConfirmationStateManager::GetInstance().LoadState(
+      wallet, base::BindOnce(&AdsImpl::LoadConfirmationStateCallback,
+                             weak_factory_.GetWeakPtr(),
+                             std::move(mojom_wallet), std::move(callback)));
 }
 
-void AdsImpl::LoadConfirmationStateCallback(mojom::WalletInfoPtr wallet,
+void AdsImpl::LoadConfirmationStateCallback(mojom::WalletInfoPtr mojom_wallet,
                                             InitializeCallback callback,
-                                            const bool success) {
+                                            bool success) {
   if (!success) {
+    // TODO(https://github.com/brave/brave-browser/issues/32066): Detect
+    // potential defects using `DumpWithoutCrashing`.
+    SCOPED_CRASH_KEY_STRING64("Issue32066", "failure_reason",
+                              "Failed to load confirmation state");
+    base::debug::DumpWithoutCrashing();
+
+    BLOG(0, "Failed to load confirmation state");
     return FailedToInitialize(std::move(callback));
   }
 
-  SuccessfullyInitialized(std::move(wallet), std::move(callback));
-}
-
-void AdsImpl::SuccessfullyInitialized(mojom::WalletInfoPtr wallet,
-                                      InitializeCallback callback) {
-  BLOG(1, "Successfully initialized ads");
-
-  is_initialized_ = true;
-
-  if (wallet) {
-    account_.SetWallet(wallet->payment_id, wallet->recovery_seed);
-  }
-
-  AdsClientHelper::GetInstance()->BindPendingObservers();
-
-  std::move(callback).Run(/*success*/ true);
-}
-
-void AdsImpl::OnStatementOfAccountsDidChange() {
-  // TODO(https://github.com/brave/brave-browser/issues/28726): Decouple.
-  AdsClientHelper::GetInstance()->UpdateAdRewards();
+  SuccessfullyInitialized(std::move(mojom_wallet), std::move(callback));
 }
 
 }  // namespace brave_ads

@@ -24,7 +24,9 @@ import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
 import org.chromium.base.Log;
+import org.chromium.brave_wallet.mojom.AccountId;
 import org.chromium.brave_wallet.mojom.AccountInfo;
+import org.chromium.brave_wallet.mojom.CoinType;
 import org.chromium.brave_wallet.mojom.SignMessageRequest;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.app.BraveActivity;
@@ -32,12 +34,13 @@ import org.chromium.chrome.browser.app.domain.WalletModel;
 import org.chromium.chrome.browser.crypto_wallet.adapters.SignMessagePagerAdapter;
 import org.chromium.chrome.browser.crypto_wallet.util.JavaUtils;
 import org.chromium.chrome.browser.crypto_wallet.util.Utils;
-import org.chromium.url.GURL;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+/** Fragment used by DApps sign operation */
 public class SignMessageFragment extends BaseDAppsBottomSheetDialogFragment {
     private static final String TAG = "SignMessageFragment";
 
@@ -50,7 +53,7 @@ public class SignMessageFragment extends BaseDAppsBottomSheetDialogFragment {
     private TextView mAccountName;
     private TextView mNetworkName;
     private Button mBtCancel;
-    private Button mBtSign;
+    protected Button mBtSign;
     private TextView mWebSite;
     private ExecutorService mExecutor;
     private Handler mHandler;
@@ -66,6 +69,7 @@ public class SignMessageFragment extends BaseDAppsBottomSheetDialogFragment {
         try {
             BraveActivity activity = BraveActivity.getBraveActivity();
             mWalletModel = activity.getWalletModel();
+            registerKeyringObserver(mWalletModel.getKeyringModel());
         } catch (BraveActivity.BraveActivityNotFoundException e) {
             Log.e(TAG, "onCreate ", e);
         }
@@ -91,8 +95,9 @@ public class SignMessageFragment extends BaseDAppsBottomSheetDialogFragment {
     }
 
     private void notifySignMessageRequestProcessed(boolean approved) {
-        getBraveWalletService().notifySignMessageRequestProcessed(
-                approved, mCurrentSignMessageRequest.id, null, null);
+        getBraveWalletService()
+                .notifySignMessageRequestProcessed(
+                        approved, mCurrentSignMessageRequest.id, null, null);
         fillSignMessageInfo(false);
     }
 
@@ -101,47 +106,75 @@ public class SignMessageFragment extends BaseDAppsBottomSheetDialogFragment {
     }
 
     private void fillSignMessageInfo(boolean init) {
-        getBraveWalletService().getPendingSignMessageRequests(requests -> {
-            if (requests == null || requests.length == 0) {
-                Intent intent = new Intent();
-                getActivity().setResult(Activity.RESULT_OK, intent);
-                getActivity().finish();
+        getBraveWalletService()
+                .getPendingSignMessageRequests(
+                        requests -> {
+                            if (requests == null || requests.length == 0) {
+                                Intent intent = new Intent();
+                                getActivity().setResult(Activity.RESULT_OK, intent);
+                                getActivity().finish();
 
-                return;
-            }
-            mCurrentSignMessageRequest = requests[0];
-            mSignMessagePagerAdapter =
-                    new SignMessagePagerAdapter(this, mTabTitles, mCurrentSignMessageRequest);
+                                return;
+                            }
 
-            mViewPager.setAdapter(mSignMessagePagerAdapter);
-            new TabLayoutMediator(mTabLayout, mViewPager,
-                    (tab, position) -> tab.setText(mTabTitles.get(position)))
-                    .attach();
-            if (init) {
-                mBtCancel.setOnClickListener(v -> { notifySignMessageRequestProcessed(false); });
-                mBtSign.setOnClickListener(v -> { notifySignMessageRequestProcessed(true); });
-            }
-            if (mCurrentSignMessageRequest.originInfo != null
-                    && URLUtil.isValidUrl(mCurrentSignMessageRequest.originInfo.originSpec)) {
-                mWebSite.setText(
-                        Utils.geteTLD(new GURL(mCurrentSignMessageRequest.originInfo.originSpec),
-                                mCurrentSignMessageRequest.originInfo.eTldPlusOne));
-            }
-            updateAccount(mCurrentSignMessageRequest.address);
-            updateNetwork(mCurrentSignMessageRequest.chainId);
-        });
+                            mCurrentSignMessageRequest = requests[0];
+                            mSignMessagePagerAdapter =
+                                    new SignMessagePagerAdapter(
+                                            this, mTabTitles, mCurrentSignMessageRequest);
+
+                            mViewPager.setAdapter(mSignMessagePagerAdapter);
+                            new TabLayoutMediator(
+                                            mTabLayout,
+                                            mViewPager,
+                                            (tab, position) ->
+                                                    tab.setText(mTabTitles.get(position)))
+                                    .attach();
+                            if (init) {
+                                mBtCancel.setOnClickListener(
+                                        v -> {
+                                            notifySignMessageRequestProcessed(false);
+                                        });
+                                mBtSign.setOnClickListener(
+                                        v -> {
+                                            notifySignMessageRequestProcessed(true);
+                                        });
+                            }
+                            if (mCurrentSignMessageRequest.originInfo != null
+                                    && URLUtil.isValidUrl(
+                                            mCurrentSignMessageRequest.originInfo.originSpec)) {
+                                mWebSite.setText(
+                                        Utils.geteTldSpanned(
+                                                mCurrentSignMessageRequest.originInfo));
+                            }
+                            updateAccount(mCurrentSignMessageRequest.accountId);
+                            updateNetwork(mCurrentSignMessageRequest.chainId);
+                        });
     }
 
-    private void updateAccount(String address) {
+    private void updateAccount(AccountId accountId) {
+        if (accountId == null) {
+            return;
+        }
+        assert (accountId.coin == CoinType.ETH || accountId.coin == CoinType.SOL);
+
         try {
             BraveActivity activity = BraveActivity.getBraveActivity();
-            activity.getWalletModel().getKeyringModel().getAccounts(accountInfos -> {
-                if (address == null) return;
-                AccountInfo accountInfo = Utils.findAccount(accountInfos, address);
-                String accountText = (accountInfo != null ? accountInfo.name + "\n" : "") + address;
-                Utils.setBlockiesBitmapResource(mExecutor, mHandler, mAccountImage, address, true);
-                mAccountName.setText(accountText);
-            });
+            activity.getWalletModel()
+                    .getKeyringModel()
+                    .getAccounts(
+                            accountInfos -> {
+                                AccountInfo accountInfo =
+                                        Utils.findAccount(accountInfos, accountId);
+                                if (accountInfo == null) {
+                                    return;
+                                }
+                                assert (accountInfo.address != null);
+
+                                Utils.setBlockiesBitmapResourceFromAccount(
+                                        mExecutor, mHandler, mAccountImage, accountInfo, true);
+                                String accountText = accountInfo.name + "\n" + accountInfo.address;
+                                mAccountName.setText(accountText);
+                            });
         } catch (BraveActivity.BraveActivityNotFoundException e) {
             Log.e(TAG, "updateAccount " + e);
         }

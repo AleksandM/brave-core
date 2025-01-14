@@ -6,8 +6,8 @@
 #include "brave/components/brave_ads/core/internal/creatives/inline_content_ads/inline_content_ad_builder.h"
 
 #include "base/uuid.h"
-#include "brave/components/brave_ads/core/inline_content_ad_info.h"
 #include "brave/components/brave_ads/core/internal/creatives/inline_content_ads/creative_inline_content_ad_info.h"
+#include "brave/components/brave_ads/core/public/ad_units/inline_content_ad/inline_content_ad_info.h"
 
 namespace brave_ads {
 
@@ -23,7 +23,7 @@ InlineContentAdInfo BuildInlineContentAd(
     const std::string& placement_id) {
   InlineContentAdInfo ad;
 
-  ad.type = AdType::kInlineContentAd;
+  ad.type = mojom::AdType::kInlineContentAd;
   ad.placement_id = placement_id;
   ad.creative_instance_id = creative_ad.creative_instance_id;
   ad.creative_set_id = creative_ad.creative_set_id;

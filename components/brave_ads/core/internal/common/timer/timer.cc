@@ -5,14 +5,20 @@
 
 #include "brave/components/brave_ads/core/internal/common/timer/timer.h"
 
-#include <algorithm>
-#include <cstdint>
+#include <optional>
 #include <utility>
 
+#include "base/check_is_test.h"
+#include "base/debug/crash_logging.h"
+#include "base/debug/dump_without_crashing.h"
 #include "base/time/time.h"
-#include "brave/components/brave_ads/core/internal/privacy/random/random_util.h"
+#include "brave/components/brave_ads/core/internal/common/random/random_util.h"
 
 namespace brave_ads {
+
+namespace {
+std::optional<base::TimeDelta> g_timer_delay_for_testing;
+}  // namespace
 
 Timer::Timer() = default;
 
@@ -21,20 +27,29 @@ Timer::~Timer() {
 }
 
 base::Time Timer::Start(const base::Location& location,
-                        const base::TimeDelta delay,
+                        base::TimeDelta delay,
                         base::OnceClosure user_task) {
   Stop();
 
-  const base::Time fire_at = base::Time::Now() + delay;
+  const base::Time fire_at =
+      base::Time::Now() + g_timer_delay_for_testing.value_or(delay);
   timer_.Start(location, fire_at, std::move(user_task));
   return fire_at;
 }
 
 base::Time Timer::StartWithPrivacy(const base::Location& location,
-                                   const base::TimeDelta delay,
+                                   base::TimeDelta delay,
                                    base::OnceClosure user_task) {
-  base::TimeDelta rand_delay = privacy::RandTimeDelta(delay);
+  base::TimeDelta rand_delay = RandTimeDelta(delay);
   if (rand_delay.is_negative()) {
+    // TODO(https://github.com/brave/brave-browser/issues/32066):
+    // Detect potential defects using `DumpWithoutCrashing`.
+    SCOPED_CRASH_KEY_NUMBER("Issue32066", "rand_delay",
+                            rand_delay.InMicroseconds());
+    SCOPED_CRASH_KEY_STRING64("Issue32066", "failure_reason",
+                              "Invalid random timer delay");
+    base::debug::DumpWithoutCrashing();
+
     rand_delay = base::Seconds(1);
   }
 
@@ -46,13 +61,20 @@ bool Timer::IsRunning() const {
 }
 
 bool Timer::Stop() {
-  if (!IsRunning()) {
-    return false;
-  }
-
+  const bool was_running = IsRunning();
   timer_.Stop();
+  return was_running;
+}
 
-  return true;
+ScopedTimerDelaySetterForTesting::ScopedTimerDelaySetterForTesting(
+    base::TimeDelta delay) {
+  CHECK_IS_TEST();
+
+  g_timer_delay_for_testing = delay;
+}
+
+ScopedTimerDelaySetterForTesting::~ScopedTimerDelaySetterForTesting() {
+  g_timer_delay_for_testing = std::nullopt;
 }
 
 }  // namespace brave_ads

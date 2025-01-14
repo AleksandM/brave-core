@@ -5,12 +5,11 @@
 
 declare namespace chrome.braveWallet {
   const ready: () => void
-  const shouldPromptForSetup: (callback: (shouldPrompt: boolean) => void) => void
+  const shouldPromptForSetup: (
+    callback: (shouldPrompt: boolean) => void
+  ) => void
   const loadUI: (callback: () => void) => void
   const isNativeWalletEnabled: (callback: (enabled: boolean) => void) => void
-  const isNftPinningEnabled: (callback: (enabled: boolean) => void) => void
   const notifyWalletUnlock: () => void
   const getWeb3ProviderList: (callback: (types: string) => void) => void
-  const getPinnedNftCount: (callback: (val: number) => void) => void
-  const clearPinnedNft: (callback: (val: boolean) => void) => void
 }

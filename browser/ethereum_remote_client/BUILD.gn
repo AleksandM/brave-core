@@ -1,3 +1,8 @@
+# Copyright (c) 2024 The Brave Authors. All rights reserved.
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this file,
+# You can obtain one at https://mozilla.org/MPL/2.0/.
+
 import("//brave/browser/ethereum_remote_client/buildflags/buildflags.gni")
 import("//brave/build/config.gni")
 import("//build/config/features.gni")
@@ -8,14 +13,12 @@ source_set("ethereum_remote_client") {
   include_dirs = [ "//brave/third_party/ethash/src/include" ]
 
   sources = [
-    "ethereum_remote_client_constants.cc",
     "ethereum_remote_client_constants.h",
     "ethereum_remote_client_delegate.h",
     "ethereum_remote_client_service.cc",
     "ethereum_remote_client_service.h",
     "features.cc",
     "features.h",
-    "pref_names.cc",
     "pref_names.h",
   ]
 
@@ -47,7 +50,7 @@ source_set("browser") {
   ]
   deps = [
     "//brave/browser/ethereum_remote_client",
-    "//brave/browser/extensions",
+    "//brave/browser/extensions:component_loader",
     "//chrome/browser/extensions",
     "//chrome/browser/profiles",
     "//components/keyed_service/content",

@@ -2,34 +2,31 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
+
 import styled from 'styled-components'
-import { WalletButton } from '../../../../shared/style'
 
-import Ipfs from '../../../../../assets/svg-icons/nft-ipfs/ipfs.svg'
-import PlusIcon from '../../../../../assets/svg-icons/plus-icon.svg'
+// Shared Styles
+import { Row, ScrollableColumn } from '../../../../shared/style'
+import {
+  layoutPanelWidth //
+} from '../../../wallet-page-wrapper/wallet-page-wrapper.style'
 
-export const FilterTokenRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-direction: row;
-  width: 100%;
-  gap: 14px;
-  position: relative;
-  padding: 0px 20px;
-`
-
-export const NftGrid = styled.div`
+export const NftGrid = styled.div<{
+  padding?: string
+}>`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  grid-gap: 25px;
+  grid-gap: 16px;
   box-sizing: border-box;
   width: 100%;
-  @media screen and (max-width: 700px) {
+  padding: ${(p) => p.padding ?? '16px'};
+  @media screen and (max-width: ${layoutPanelWidth}px) {
     grid-template-columns: repeat(2, 1fr);
+    grid-gap: 8px;
+    padding: ${(p) => p.padding ?? '8px'};
   }
-  @media screen and (max-width: 545px) {
-    grid-template-columns: repeat(1, 1fr);
+  & > * {
+    min-height: 250px;
   }
 `
 
@@ -41,55 +38,16 @@ export const EmptyStateText = styled.div`
   font-family: Poppins;
 `
 
-export const IpfsButton = styled(WalletButton)`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: transparent;
-  border-radius: 6px;
-  border: 1px solid ${(p) => p.theme.color.interactive08};
-  padding: 6px;
-  align-self: flex-start;
-`
-
-export const IpfsIcon = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  mask-image: url(${Ipfs});
-  -webkit-mask-image: url(${Ipfs});
-  mask-repeat: no-repeat;
-  background-color: ${(p) => p.theme.color.interactive07};
-  cursor: pointer;
-
-  &:hover {
-    background-color: #469ea2;
+export const BannerWrapper = styled(Row)`
+  padding: 0px 32px;
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    padding: 0px 16px;
   }
 `
 
-export const AddButton = styled(WalletButton)`
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 10px;
-  width: 38px;
-  height:38px;
-  border: 1px solid ${p => p.theme.color.interactive08};
-  background-color: ${(p) => p.theme.color.background02};
-  border-radius: 6px;
-  align-self: flex-start;
-  cursor: pointer;
-`
-
-export const AddIcon = styled.div`
-  width: 20px;
-  height: 20px;
-  background-color: ${(p) => p.theme.color.interactive07};
-  mask-image: url(${PlusIcon});
-  mask-size: contain;
-  mask-repeat: no-repeat;
-  mask-position: center;
+export const NFTListWrapper = styled(ScrollableColumn)`
+  padding: 0px 32px 32px 32px;
+  @media screen and (max-width: ${layoutPanelWidth}px) {
+    padding: 0px 16px 16px 16px;
+  }
 `

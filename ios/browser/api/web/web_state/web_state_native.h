@@ -4,10 +4,11 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include <memory>
+
 #include "base/memory/weak_ptr.h"
-#include "base/strings/string_piece.h"
 #include "components/sessions/core/session_id.h"
 #include "ios/web/public/web_state_observer.h"
+#include "url/gurl.h"
 
 #ifndef BRAVE_IOS_BROWSER_API_WEB_WEB_STATE_WEB_STATE_NATIVE_H_
 #define BRAVE_IOS_BROWSER_API_WEB_WEB_STATE_WEB_STATE_NATIVE_H_
@@ -16,7 +17,6 @@ class Browser;
 class GURL;
 
 namespace brave {
-class NavigationDelegate;
 
 class NativeWebState final {
  public:
@@ -38,13 +38,12 @@ class NativeWebState final {
    private:
     // WebStateObserver:
     void WebStateDestroyed(web::WebState* web_state) override;
-    NativeWebState* native_state_;  // NOT OWNED
+    raw_ptr<NativeWebState> native_state_;
   };
 
-  Browser* browser_;
+  raw_ptr<Browser> browser_;
   SessionID session_id_;
-  std::unique_ptr<NavigationDelegate> navigation_delegate_;
-  web::WebState* web_state_;
+  raw_ptr<web::WebState> web_state_;
   std::unique_ptr<Observer> web_state_observer_;
 };
 

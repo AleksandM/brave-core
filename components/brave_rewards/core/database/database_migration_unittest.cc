@@ -12,32 +12,37 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/task_environment.h"
+#include "brave/components/brave_rewards/common/mojom/rewards_core.mojom.h"
+#include "brave/components/brave_rewards/common/mojom/rewards_engine.mojom-test-utils.h"
 #include "brave/components/brave_rewards/core/database/database_migration.h"
 #include "brave/components/brave_rewards/core/database/database_util.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
-#include "brave/components/brave_rewards/core/test/bat_ledger_test.h"
-#include "brave/components/brave_rewards/core/test/test_ledger_client.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
+#include "brave/components/brave_rewards/core/state/state_keys.h"
+#include "brave/components/brave_rewards/core/test/rewards_engine_test.h"
+#include "brave/components/brave_rewards/core/test/test_rewards_engine_client.h"
 #include "build/build_config.h"
 #include "sql/statement.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-// npm run test -- brave_unit_tests --filter=LedgerDatabaseMigrationTest.*
+// npm run test -- brave_unit_tests --filter=RewardsDatabaseMigrationTest.*
 
 namespace brave_rewards::internal {
 using database::DatabaseMigration;
 
-class LedgerDatabaseMigrationTest : public BATLedgerTest {
+class RewardsDatabaseMigrationTest : public RewardsEngineTest {
  public:
-  LedgerDatabaseMigrationTest() { is_testing = true; }
+  RewardsDatabaseMigrationTest() {
+    engine().GetOptionsForTesting().is_testing = true;
+  }
 
-  ~LedgerDatabaseMigrationTest() override {
+  ~RewardsDatabaseMigrationTest() override {
     DatabaseMigration::SetTargetVersionForTesting(0);
-    is_testing = false;
+    engine().GetOptionsForTesting().is_testing = false;
   }
 
  protected:
   sql::Database* GetDB() {
-    return GetTestLedgerClient()->database()->GetInternalDatabaseForTesting();
+    return client().database().GetInternalDatabaseForTesting();
   }
 
   std::string GetExpectedSchema() {
@@ -75,7 +80,7 @@ class LedgerDatabaseMigrationTest : public BATLedgerTest {
     base::FilePath path = GetTestDataPath().AppendASCII(script_path);
     std::string init_script;
     ASSERT_TRUE(base::ReadFileToString(path, &init_script));
-    ASSERT_TRUE(GetDB()->Execute(init_script.c_str()));
+    ASSERT_TRUE(GetDB()->Execute(init_script));
   }
 
   void InitializeDatabaseAtVersion(int version) {
@@ -84,29 +89,29 @@ class LedgerDatabaseMigrationTest : public BATLedgerTest {
 
     std::string init_script;
     ASSERT_TRUE(base::ReadFileToString(path, &init_script));
-    ASSERT_TRUE(GetDB()->Execute(init_script.c_str()));
+    ASSERT_TRUE(GetDB()->Execute(init_script));
   }
 
   int CountTableRows(const std::string& table) {
     const std::string sql =
         base::StringPrintf("SELECT COUNT(*) FROM %s", table.c_str());
-    sql::Statement s(GetDB()->GetUniqueStatement(sql.c_str()));
+    sql::Statement s(GetDB()->GetUniqueStatement(sql));
     return s.Step() ? static_cast<int>(s.ColumnInt64(0)) : -1;
   }
 };
 
-TEST_F(LedgerDatabaseMigrationTest, SchemaCheck) {
+TEST_F(RewardsDatabaseMigrationTest, SchemaCheck) {
   DatabaseMigration::SetTargetVersionForTesting(database::GetCurrentVersion());
-  InitializeLedger();
+  InitializeEngine();
   std::string expected_schema = GetExpectedSchema();
   EXPECT_FALSE(expected_schema.empty());
   EXPECT_EQ(GetDB()->GetSchema(), expected_schema);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_4_ActivityInfo) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_4_ActivityInfo) {
   DatabaseMigration::SetTargetVersionForTesting(4);
   InitializeDatabaseAtVersion(3);
-  InitializeLedger();
+  InitializeEngine();
 
   sql::Statement info_sql(GetDB()->GetUniqueStatement(R"sql(
       SELECT publisher_id, visits FROM activity_info
@@ -126,10 +131,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_4_ActivityInfo) {
   EXPECT_EQ(list.at(1)->visits, 5u);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_5_ActivityInfo) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_5_ActivityInfo) {
   DatabaseMigration::SetTargetVersionForTesting(5);
   InitializeDatabaseAtVersion(4);
-  InitializeLedger();
+  InitializeEngine();
 
   sql::Statement info_sql(GetDB()->GetUniqueStatement(R"sql(
       SELECT publisher_id, visits FROM activity_info
@@ -152,10 +157,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_5_ActivityInfo) {
   EXPECT_EQ(list.at(2)->visits, 3u);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_6_ActivityInfo) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_6_ActivityInfo) {
   DatabaseMigration::SetTargetVersionForTesting(6);
   InitializeDatabaseAtVersion(5);
-  InitializeLedger();
+  InitializeEngine();
 
   sql::Statement info_sql(GetDB()->GetUniqueStatement(R"sql(
       SELECT publisher_id, visits, duration, score, percent, weight,
@@ -202,10 +207,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_6_ActivityInfo) {
   EXPECT_EQ(list.at(2)->reconcile_stamp, 1553423066u);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_8_PendingContribution) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_8_PendingContribution) {
   DatabaseMigration::SetTargetVersionForTesting(8);
   InitializeDatabaseAtVersion(7);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("pending_contribution"), 1);
 
@@ -225,10 +230,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_8_PendingContribution) {
             static_cast<int>(mojom::RewardsType::ONE_TIME_TIP));
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_11_ContributionInfo) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_11_ContributionInfo) {
   DatabaseMigration::SetTargetVersionForTesting(11);
   InitializeDatabaseAtVersion(10);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("contribution_info"), 5);
   EXPECT_EQ(CountTableRows("contribution_info_publishers"), 4);
@@ -243,7 +248,7 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_11_ContributionInfo) {
   )sql";
 
   // One-time tip
-  sql::Statement tip_sql(GetDB()->GetUniqueStatement(query.c_str()));
+  sql::Statement tip_sql(GetDB()->GetUniqueStatement(query));
   tip_sql.BindString(0, "id_1570614352_%");
 
   ASSERT_TRUE(tip_sql.Step());
@@ -256,7 +261,7 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_11_ContributionInfo) {
   EXPECT_EQ(tip_sql.ColumnDouble(6), 1.0);
 
   // Auto contribute
-  sql::Statement ac_sql(GetDB()->GetUniqueStatement(query.c_str()));
+  sql::Statement ac_sql(GetDB()->GetUniqueStatement(query));
   ac_sql.BindString(0, "id_1574671381_%");
 
   ASSERT_TRUE(ac_sql.Step());
@@ -269,10 +274,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_11_ContributionInfo) {
   EXPECT_EQ(ac_sql.ColumnDouble(6), 0.0);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_12_ContributionInfo) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_12_ContributionInfo) {
   DatabaseMigration::SetTargetVersionForTesting(12);
   InitializeDatabaseAtVersion(11);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("pending_contribution"), 4);
 
@@ -296,17 +301,17 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_12_ContributionInfo) {
   EXPECT_FALSE(info_sql.Step());
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_13_Promotion) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_13_Promotion) {
   DatabaseMigration::SetTargetVersionForTesting(13);
   InitializeDatabaseAtVersion(12);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_EQ(CountTableRows("promotion"), 1);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_14_UnblindedToken) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_14_UnblindedToken) {
   DatabaseMigration::SetTargetVersionForTesting(14);
   InitializeDatabaseAtVersion(13);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("unblinded_tokens"), 5);
 
@@ -338,10 +343,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_14_UnblindedToken) {
   EXPECT_EQ(promotion_sql.ColumnDouble(0), 1.25);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_16_ContributionInfo) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_16_ContributionInfo) {
   DatabaseMigration::SetTargetVersionForTesting(16);
   InitializeDatabaseAtVersion(15);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("contribution_info"), 5);
 
@@ -361,10 +366,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_16_ContributionInfo) {
   EXPECT_EQ(list.at(4), 1583310925);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_18_Promotion) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_18_Promotion) {
   DatabaseMigration::SetTargetVersionForTesting(18);
   InitializeDatabaseAtVersion(17);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("promotion"), 2);
 
@@ -390,10 +395,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_18_Promotion) {
   EXPECT_EQ(status.at(1), 4);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_18_CredsBatch) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_18_CredsBatch) {
   DatabaseMigration::SetTargetVersionForTesting(18);
   InitializeDatabaseAtVersion(17);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("creds_batch"), 2);
 
@@ -420,7 +425,7 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_18_CredsBatch) {
 
   mojom::CredsBatch creds_expected;
   creds_expected.trigger_id = "36baa4c3-f92d-4121-b6d9-db44cb273a02";
-  creds_expected.trigger_type = mojom::CredsBatchType::PROMOTION;
+  creds_expected.trigger_type = creds_database.trigger_type;
   creds_expected.creds =
       R"(["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"])";
   creds_expected.blinded_creds =
@@ -442,10 +447,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_18_CredsBatch) {
   EXPECT_EQ(static_cast<int>(creds_database.status), 2);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_18_UnblindedToken) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_18_UnblindedToken) {
   DatabaseMigration::SetTargetVersionForTesting(18);
   InitializeDatabaseAtVersion(17);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("unblinded_tokens"), 80);
 
@@ -468,10 +473,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_18_UnblindedToken) {
   EXPECT_EQ(expires_at, 1640995200ul);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_21_ContributionInfoPublishers) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_21_ContributionInfoPublishers) {
   DatabaseMigration::SetTargetVersionForTesting(21);
   InitializeDatabaseAtVersion(20);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("contribution_info_publishers"), 4);
 
@@ -510,10 +515,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_21_ContributionInfoPublishers) {
   EXPECT_EQ(list.at(3)->contributed_amount, 1.0);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_23_ContributionQueue) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_23_ContributionQueue) {
   DatabaseMigration::SetTargetVersionForTesting(23);
   InitializeDatabaseAtVersion(22);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("contribution_queue"), 1);
 
@@ -555,10 +560,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_23_ContributionQueue) {
   EXPECT_EQ(queue_publisher.amount_percent, 456.0);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_24_ContributionQueue) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_24_ContributionQueue) {
   DatabaseMigration::SetTargetVersionForTesting(24);
   InitializeDatabaseAtVersion(23);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("contribution_queue"), 1);
 
@@ -585,10 +590,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_24_ContributionQueue) {
   EXPECT_EQ(contribution_queue.completed_at, 0u);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_26_UnblindedTokens) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_26_UnblindedTokens) {
   DatabaseMigration::SetTargetVersionForTesting(26);
   InitializeDatabaseAtVersion(25);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("unblinded_tokens"), 10);
 
@@ -664,10 +669,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_26_UnblindedTokens) {
   EXPECT_EQ(token->redeem_type, mojom::RewardsType::ONE_TIME_TIP);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_27_UnblindedTokens) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_27_UnblindedTokens) {
   DatabaseMigration::SetTargetVersionForTesting(27);
   InitializeDatabaseAtVersion(26);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("unblinded_tokens"), 1);
 
@@ -698,10 +703,10 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_27_UnblindedTokens) {
   EXPECT_EQ(reserved_at, 0ul);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_28_ServerPublisherInfoCleared) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_28_ServerPublisherInfoCleared) {
   DatabaseMigration::SetTargetVersionForTesting(28);
   InitializeDatabaseAtVersion(27);
-  InitializeLedger();
+  InitializeEngine();
 
   EXPECT_EQ(CountTableRows("server_publisher_info"), 1);
   EXPECT_EQ(CountTableRows("server_publisher_banner"), 1);
@@ -721,69 +726,71 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_28_ServerPublisherInfoCleared) {
   }
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_30_NotBitflyerRegion) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_30_NonJapan) {
   DatabaseMigration::SetTargetVersionForTesting(30);
   InitializeDatabaseAtVersion(29);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_EQ(CountTableRows("unblinded_tokens"), 1);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_30_BitflyerRegion) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_30_Japan) {
   DatabaseMigration::SetTargetVersionForTesting(30);
   InitializeDatabaseAtVersion(29);
-  GetTestLedgerClient()->SetIsBitFlyerRegionForTesting(true);
-  InitializeLedger();
+  mojom::RewardsEngineClientAsyncWaiter(&client()).SetStringState(
+      state::kDeclaredGeo, "JP");
+  InitializeEngine();
   EXPECT_EQ(CountTableRows("unblinded_tokens"), 0);
   EXPECT_EQ(CountTableRows("unblinded_tokens_bap"), 1);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_31) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_31) {
   DatabaseMigration::SetTargetVersionForTesting(31);
   InitializeDatabaseAtVersion(30);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_TRUE(GetDB()->DoesColumnExist("pending_contribution", "processor"));
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_32_NotBitflyerRegion) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_32_NonJapan) {
   DatabaseMigration::SetTargetVersionForTesting(32);
   InitializeDatabaseAtVersion(30);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_EQ(CountTableRows("balance_report_info"), 1);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_32_BitflyerRegion) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_32_Japan) {
   DatabaseMigration::SetTargetVersionForTesting(32);
   InitializeDatabaseAtVersion(30);
-  GetTestLedgerClient()->SetIsBitFlyerRegionForTesting(true);
-  InitializeLedger();
+  mojom::RewardsEngineClientAsyncWaiter(&client()).SetStringState(
+      state::kDeclaredGeo, "JP");
+  InitializeEngine();
   EXPECT_EQ(CountTableRows("balance_report_info"), 0);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_33) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_33) {
   DatabaseMigration::SetTargetVersionForTesting(33);
   InitializeDatabaseAtVersion(32);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_FALSE(GetDB()->DoesColumnExist("pending_contribution", "processor"));
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_34) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_34) {
   DatabaseMigration::SetTargetVersionForTesting(34);
   InitializeDatabaseAtVersion(33);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_TRUE(GetDB()->DoesColumnExist("promotion", "claimable_until"));
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_35) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_35) {
   DatabaseMigration::SetTargetVersionForTesting(35);
   InitializeDatabaseAtVersion(34);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_FALSE(GetDB()->DoesTableExist("server_publisher_amounts"));
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_36) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_36) {
   DatabaseMigration::SetTargetVersionForTesting(36);
   InitializeDatabaseAtVersion(35);
-  InitializeLedger();
+  InitializeEngine();
   sql::Statement sql(GetDB()->GetUniqueStatement(R"sql(
       SELECT status FROM server_publisher_info
   )sql"));
@@ -791,32 +798,32 @@ TEST_F(LedgerDatabaseMigrationTest, Migration_36) {
   EXPECT_EQ(sql.ColumnInt64(0), 0);
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_37) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_37) {
   DatabaseMigration::SetTargetVersionForTesting(37);
   InitializeDatabaseAtVersion(36);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_TRUE(GetDB()->DoesTableExist("external_transactions"));
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_38) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_38) {
   DatabaseMigration::SetTargetVersionForTesting(38);
   InitializeDatabaseAtVersion(37);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_TRUE(
       GetDB()->DoesColumnExist("recurring_donation", "next_contribution_at"));
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_39) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_39) {
   DatabaseMigration::SetTargetVersionForTesting(39);
   InitializeDatabaseAtVersion(38);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_TRUE(GetDB()->DoesColumnExist("server_publisher_banner", "web3_url"));
 }
 
-TEST_F(LedgerDatabaseMigrationTest, Migration_40) {
+TEST_F(RewardsDatabaseMigrationTest, Migration_40) {
   DatabaseMigration::SetTargetVersionForTesting(40);
   InitializeDatabaseAtVersion(39);
-  InitializeLedger();
+  InitializeEngine();
   EXPECT_FALSE(GetDB()->DoesTableExist("pending_contribution"));
   EXPECT_FALSE(GetDB()->DoesTableExist("processed_publisher"));
 }

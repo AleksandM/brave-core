@@ -13,7 +13,6 @@
 #include "base/no_destructor.h"
 #include "brave/browser/brave_vpn/dns/brave_vpn_dns_observer_service_win.h"
 #include "brave/browser/brave_vpn/vpn_utils.h"
-#include "brave/components/brave_vpn/common/brave_vpn_utils.h"
 #include "brave/components/brave_vpn/common/features.h"
 #include "brave/components/brave_vpn/common/pref_names.h"
 #include "chrome/browser/browser_process.h"
@@ -37,18 +36,18 @@ BraveVpnDnsObserverFactory::BraveVpnDnsObserverFactory()
           "BraveVpnDNSObserverService",
           BrowserContextDependencyManager::GetInstance()) {}
 
-KeyedService* BraveVpnDnsObserverFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+BraveVpnDnsObserverFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new BraveVpnDnsObserverService(g_browser_process->local_state(),
-                                        user_prefs::UserPrefs::Get(context));
+  return std::make_unique<BraveVpnDnsObserverService>(
+      g_browser_process->local_state(), user_prefs::UserPrefs::Get(context));
 }
 
 // static
 BraveVpnDnsObserverService* BraveVpnDnsObserverFactory::GetServiceForContext(
     content::BrowserContext* context) {
   if (!base::FeatureList::IsEnabled(
-          brave_vpn::features::kBraveVPNDnsProtection) ||
-      base::FeatureList::IsEnabled(features::kBraveVPNUseWireguardService)) {
+          brave_vpn::features::kBraveVPNDnsProtection)) {
     return nullptr;
   }
   DCHECK(brave_vpn::IsAllowedForContext(context));

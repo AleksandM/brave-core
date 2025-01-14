@@ -6,8 +6,8 @@
 #include "brave/components/brave_ads/core/internal/creatives/promoted_content_ads/promoted_content_ad_builder.h"
 
 #include "base/uuid.h"
+#include "brave/components/brave_ads/core/internal/ad_units/promoted_content_ad/promoted_content_ad_info.h"
 #include "brave/components/brave_ads/core/internal/creatives/promoted_content_ads/creative_promoted_content_ad_info.h"
-#include "brave/components/brave_ads/core/promoted_content_ad_info.h"
 
 namespace brave_ads {
 
@@ -23,7 +23,7 @@ PromotedContentAdInfo BuildPromotedContentAd(
     const std::string& placement_id) {
   PromotedContentAdInfo promoted_content_ad;
 
-  promoted_content_ad.type = AdType::kPromotedContentAd;
+  promoted_content_ad.type = mojom::AdType::kPromotedContentAd;
   promoted_content_ad.placement_id = placement_id;
   promoted_content_ad.creative_instance_id =
       creative_promoted_content_ad.creative_instance_id;

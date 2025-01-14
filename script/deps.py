@@ -13,6 +13,8 @@ import tempfile
 import time
 import zipfile
 
+from lib.util import extract_zip
+
 try:
     from urllib2 import HTTPError, URLError, urlopen
 except ImportError:  # For Py3 compatibility
@@ -53,7 +55,8 @@ def DownloadUrl(url, output_file):
         except URLError as e:
             sys.stdout.write('\n')
             print(e)
-            if num_retries == 0 or isinstance(e, HTTPError) and e.code == 404: # pylint: disable=no-member
+            if num_retries == 0 or isinstance(
+                    e, HTTPError) and e.code in [403, 404]:  # pylint: disable=no-member,line-too-long
                 raise e
             num_retries -= 1
             print("Retrying in {} s ...".format(retry_wait_s))
@@ -70,22 +73,27 @@ def DownloadAndUnpack(url, output_dir, path_prefix=None):
     """Download an archive from url and extract into output_dir. If path_prefix
        is not None, only extract files whose paths within the archive start
        with path_prefix."""
-    with tempfile.TemporaryFile() as f:
-        DownloadUrl(url, f)
-        f.seek(0)
+    with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
         try:
-            os.unlink(output_dir)
-        except OSError:
-            pass
-        shutil.rmtree(output_dir, ignore_errors=True)
-        EnsureDirExists(output_dir)
-        if url.endswith('.zip'):
-            assert path_prefix is None
-            zipfile.ZipFile(f).extractall(path=output_dir)
-        else:
-            t = tarfile.open(mode='r:gz', fileobj=f)
-            members = None
-            if path_prefix is not None:
-                members = [m for m in t.getmembers(
-                ) if m.name.startswith(path_prefix)]
-            t.extractall(path=output_dir, members=members)
+            DownloadUrl(url, tmp_file)
+            tmp_file.close()
+            try:
+                os.unlink(output_dir)
+            except OSError:
+                pass
+            shutil.rmtree(output_dir, ignore_errors=True)
+            EnsureDirExists(output_dir)
+            if url.endswith('.zip'):
+                assert path_prefix is None
+                extract_zip(tmp_file.name, output_dir)
+            else:
+                t = tarfile.open(tmp_file.name, mode='r:gz')
+                members = None
+                if path_prefix is not None:
+                    members = [
+                        m for m in t.getmembers()
+                        if m.name.startswith(path_prefix)
+                    ]
+                t.extractall(path=output_dir, members=members)
+        finally:
+            os.unlink(tmp_file.name)

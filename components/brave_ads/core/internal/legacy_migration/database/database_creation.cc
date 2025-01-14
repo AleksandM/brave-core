@@ -8,17 +8,15 @@
 #include <utility>
 
 #include "base/check.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
+#include "base/location.h"
+#include "brave/components/brave_ads/core/internal/account/confirmations/queue/confirmation_queue_database_table.h"
 #include "brave/components/brave_ads/core/internal/account/deposits/deposits_database_table.h"
 #include "brave/components/brave_ads/core/internal/account/transactions/transactions_database_table.h"
-#include "brave/components/brave_ads/core/internal/ads/ad_events/ad_events_database_table.h"
 #include "brave/components/brave_ads/core/internal/common/database/database_transaction_util.h"
-#include "brave/components/brave_ads/core/internal/conversions/conversion_queue_database_table.h"
-#include "brave/components/brave_ads/core/internal/conversions/conversions_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/campaigns_database_table.h"
+#include "brave/components/brave_ads/core/internal/creatives/conversions/creative_set_conversion_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/creative_ads_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/dayparts_database_table.h"
-#include "brave/components/brave_ads/core/internal/creatives/embeddings_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/geo_targets_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/inline_content_ads/creative_inline_content_ads_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/new_tab_page_ads/creative_new_tab_page_ad_wallpapers_database_table.h"
@@ -26,85 +24,80 @@
 #include "brave/components/brave_ads/core/internal/creatives/notification_ads/creative_notification_ads_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/promoted_content_ads/creative_promoted_content_ads_database_table.h"
 #include "brave/components/brave_ads/core/internal/creatives/segments_database_table.h"
-#include "brave/components/brave_ads/core/internal/legacy_migration/database/database_constants.h"
-#include "brave/components/brave_ads/core/internal/processors/contextual/text_embedding/text_embedding_html_events_database_table.h"
+#include "brave/components/brave_ads/core/internal/history/ad_history_database_table.h"
+#include "brave/components/brave_ads/core/internal/user_engagement/ad_events/ad_events_database_table.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads::database {
 
 namespace {
 
-void Create(mojom::DBTransactionInfo* transaction) {
-  CHECK(transaction);
+void Create(const mojom::DBTransactionInfoPtr& mojom_db_transaction) {
+  CHECK(mojom_db_transaction);
 
-  table::Conversions conversions_database_table;
-  conversions_database_table.Create(transaction);
+  Execute(mojom_db_transaction, "PRAGMA auto_vacuum = FULL;");
 
-  table::ConversionQueue conversion_queue_database_table;
-  conversion_queue_database_table.Create(transaction);
+  table::ConfirmationQueue confirmation_queue_database_table;
+  confirmation_queue_database_table.Create(mojom_db_transaction);
 
   table::AdEvents ad_events_database_table;
-  ad_events_database_table.Create(transaction);
-
-  table::TextEmbeddingHtmlEvents text_embedding_html_events_database_table;
-  text_embedding_html_events_database_table.Create(transaction);
+  ad_events_database_table.Create(mojom_db_transaction);
 
   table::Transactions transactions_database_table;
-  transactions_database_table.Create(transaction);
+  transactions_database_table.Create(mojom_db_transaction);
+
+  table::AdHistory ad_history_database_table;
+  ad_history_database_table.Create(mojom_db_transaction);
 
   table::Campaigns campaigns_database_table;
-  campaigns_database_table.Create(transaction);
+  campaigns_database_table.Create(mojom_db_transaction);
 
   table::Segments segments_database_table;
-  segments_database_table.Create(transaction);
-
-  table::Embeddings embeddings_database_table;
-  embeddings_database_table.Create(transaction);
+  segments_database_table.Create(mojom_db_transaction);
 
   table::Deposits deposits_database_table;
-  deposits_database_table.Create(transaction);
+  deposits_database_table.Create(mojom_db_transaction);
+
+  table::CreativeSetConversions creative_set_conversion_database_table;
+  creative_set_conversion_database_table.Create(mojom_db_transaction);
 
   table::CreativeNotificationAds creative_notification_ads_database_table;
-  creative_notification_ads_database_table.Create(transaction);
+  creative_notification_ads_database_table.Create(mojom_db_transaction);
 
   table::CreativeInlineContentAds creative_inline_content_ads_database_table;
-  creative_inline_content_ads_database_table.Create(transaction);
+  creative_inline_content_ads_database_table.Create(mojom_db_transaction);
 
   table::CreativeNewTabPageAds creative_new_tab_page_ads_database_table;
-  creative_new_tab_page_ads_database_table.Create(transaction);
+  creative_new_tab_page_ads_database_table.Create(mojom_db_transaction);
 
   table::CreativeNewTabPageAdWallpapers
       creative_new_tab_page_ad_wallpapers_database_table;
-  creative_new_tab_page_ad_wallpapers_database_table.Create(transaction);
+  creative_new_tab_page_ad_wallpapers_database_table.Create(
+      mojom_db_transaction);
 
   table::CreativePromotedContentAds
       creative_promoted_content_ads_database_table;
-  creative_promoted_content_ads_database_table.Create(transaction);
+  creative_promoted_content_ads_database_table.Create(mojom_db_transaction);
 
   table::CreativeAds creative_ads_database_table;
-  creative_ads_database_table.Create(transaction);
+  creative_ads_database_table.Create(mojom_db_transaction);
 
   table::GeoTargets geo_targets_database_table;
-  geo_targets_database_table.Create(transaction);
+  geo_targets_database_table.Create(mojom_db_transaction);
 
   table::Dayparts dayparts_database_table;
-  dayparts_database_table.Create(transaction);
+  dayparts_database_table.Create(mojom_db_transaction);
 }
 
 }  // namespace
 
 void Create(ResultCallback callback) {
-  mojom::DBTransactionInfoPtr transaction = mojom::DBTransactionInfo::New();
+  mojom::DBTransactionInfoPtr mojom_db_transaction =
+      mojom::DBTransactionInfo::New();
+  Create(mojom_db_transaction);
 
-  Create(&*transaction);
-
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::MIGRATE;
-
-  transaction->version = database::kVersion;
-  transaction->compatible_version = database::kCompatibleVersion;
-  transaction->commands.push_back(std::move(command));
-
-  RunTransaction(std::move(transaction), std::move(callback));
+  RunDBTransaction(FROM_HERE, std::move(mojom_db_transaction),
+                   std::move(callback));
 }
 
 }  // namespace brave_ads::database

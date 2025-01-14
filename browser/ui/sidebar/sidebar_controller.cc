@@ -5,22 +5,32 @@
 
 #include "brave/browser/ui/sidebar/sidebar_controller.h"
 
+#include <optional>
 #include <vector>
 
+#include "base/check_op.h"
 #include "brave/browser/ui/brave_browser.h"
 #include "brave/browser/ui/sidebar/sidebar.h"
 #include "brave/browser/ui/sidebar/sidebar_model.h"
 #include "brave/browser/ui/sidebar/sidebar_service_factory.h"
 #include "brave/browser/ui/sidebar/sidebar_utils.h"
-#include "brave/components/sidebar/sidebar_service.h"
+#include "brave/components/sidebar/browser/pref_names.h"
+#include "brave/components/sidebar/browser/sidebar_service.h"
+#include "brave/components/sidebar/common/features.h"
 #include "chrome/browser/history/history_service_factory.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/browser_tabstrip.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 #include "chrome/browser/ui/singleton_tabs.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/views/side_panel/side_panel_entry_id.h"
+#include "chrome/browser/ui/views/side_panel/side_panel_ui.h"
+#include "components/prefs/pref_service.h"
 
 namespace sidebar {
 
@@ -52,7 +62,7 @@ SidebarController::SidebarController(BraveBrowser* browser, Profile* profile)
 
 SidebarController::~SidebarController() = default;
 
-bool SidebarController::IsActiveIndex(absl::optional<size_t> index) const {
+bool SidebarController::IsActiveIndex(std::optional<size_t> index) const {
   return sidebar_model_->active_index() == index;
 }
 
@@ -74,20 +84,26 @@ bool SidebarController::DoesBrowserHaveOpenedTabForItem(
   return false;
 }
 
-void SidebarController::ActivateItemAt(absl::optional<size_t> index,
+void SidebarController::ActivateItemAt(std::optional<size_t> index,
                                        WindowOpenDisposition disposition) {
   // disengaged means there is no active item.
   if (!index) {
     sidebar_model_->SetActiveIndex(index);
-    UpdateSidebarVisibility();
     return;
   }
+
+  DCHECK_LT(index.value(), sidebar_model_->GetAllSidebarItems().size());
 
   const auto& item = sidebar_model_->GetAllSidebarItems()[*index];
   // Only an item for panel can get activated.
   if (item.open_in_panel) {
     sidebar_model_->SetActiveIndex(index);
-    UpdateSidebarVisibility();
+
+    if (sidebar::features::kOpenOneShotLeoPanel.Get() &&
+        item.built_in_item_type == SidebarItem::BuiltInItemType::kChatUI) {
+      // Prevent one-time Leo panel open.
+      browser_->profile()->GetPrefs()->SetBoolean(kLeoPanelOneShotOpen, true);
+    }
     return;
   }
 
@@ -101,13 +117,32 @@ void SidebarController::ActivateItemAt(absl::optional<size_t> index,
     return;
   }
 
-  // Iterate whenever builtin panel icon clicks.
+  // Iterate whenever builtin shortcut type item icon clicks.
   if (IsBuiltInType(item)) {
     IterateOrLoadAtActiveTab(item.url);
     return;
   }
 
   LoadAtTab(item.url);
+}
+
+void SidebarController::ActivatePanelItem(
+    SidebarItem::BuiltInItemType panel_item) {
+  // For panel item activation, SidePanelUI is the single source of truth.
+  auto* panel_ui = browser_->GetFeatures().side_panel_ui();
+  if (!panel_ui) {
+    return;
+  }
+  if (panel_item == SidebarItem::BuiltInItemType::kNone) {
+    panel_ui->Close();
+    return;
+  }
+
+  panel_ui->Show(sidebar::SidePanelIdFromSideBarItemType(panel_item));
+}
+
+void SidebarController::DeactivateCurrentPanel() {
+  ActivatePanelItem(SidebarItem::BuiltInItemType::kNone);
 }
 
 bool SidebarController::ActiveTabFromOtherBrowsersForHost(const GURL& url) {
@@ -173,7 +208,7 @@ void SidebarController::LoadAtTab(const GURL& url) {
 
 void SidebarController::OnShowSidebarOptionChanged(
     SidebarService::ShowSidebarOption option) {
-  UpdateSidebarVisibility();
+  sidebar_->SetSidebarShowOption(option);
 }
 
 void SidebarController::AddItemWithCurrentTab() {
@@ -189,6 +224,18 @@ void SidebarController::AddItemWithCurrentTab() {
                           SidebarItem::BuiltInItemType::kNone, false));
 }
 
+void SidebarController::UpdateActiveItemState(
+    std::optional<SidebarItem::BuiltInItemType> active_panel_item) {
+  if (!active_panel_item) {
+    ActivateItemAt(std::nullopt);
+    return;
+  }
+
+  if (auto index = sidebar_model_->GetIndexOf(*active_panel_item)) {
+    ActivateItemAt(*index);
+  }
+}
+
 void SidebarController::SetSidebar(Sidebar* sidebar) {
   DCHECK(!sidebar_);
   // |sidebar| can be null in unit test.
@@ -196,15 +243,8 @@ void SidebarController::SetSidebar(Sidebar* sidebar) {
     return;
   sidebar_ = sidebar;
 
-  UpdateSidebarVisibility();
   sidebar_model_->Init(HistoryServiceFactory::GetForProfile(
       browser_->profile(), ServiceAccessType::EXPLICIT_ACCESS));
-}
-
-void SidebarController::UpdateSidebarVisibility() {
-  DCHECK(sidebar_);
-  sidebar_->SetSidebarShowOption(
-      GetSidebarService(browser_)->GetSidebarShowOption());
 }
 
 }  // namespace sidebar

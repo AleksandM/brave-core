@@ -6,18 +6,14 @@
 #include "brave/components/playlist/browser/playlist_media_file_downloader.h"
 
 #include <algorithm>
+#include <string_view>
 #include <utility>
 
-#include "base/containers/fixed_flat_map.h"
-#include "base/files/file.h"
 #include "base/files/file_util.h"
 #include "base/functional/bind.h"
-#include "base/json/json_reader.h"
-#include "base/json/json_writer.h"
-#include "base/strings/string_number_conversions.h"
-#include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
-#include "brave/components/playlist/browser/playlist_constants.h"
+#include "base/uuid.h"
+#include "brave/components/playlist/browser/mime_util.h"
 #include "build/build_config.h"
 #include "components/download/public/common/download_item_impl.h"
 #include "components/download/public/common/download_task_runner.h"
@@ -25,50 +21,10 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/download_request_utils.h"
 #include "content/public/browser/storage_partition.h"
-#include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "url/gurl.h"
 
 namespace playlist {
-
-// References
-// * List of mimetypes registered to IANA
-//   * Video:
-//   https://www.iana.org/assignments/media-types/media-types.xhtml#video
-//   * Audio:
-//   https://www.iana.org/assignments/media-types/media-types.xhtml#audio
-// * Chromium media framework supports
-//   * media/base/mime_util_internal.cc
-// * Mimetype to extension
-//   * https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
-constexpr auto kMimeTypeToExtension =
-    base::MakeFixedFlatMap<base::StringPiece /*mime_type*/,
-                           base::StringPiece /*extension*/>({
-        {"audio/wav", "wav"},
-        {"audio/x-wav", "wav"},
-        {"audio/webm", "weba"},
-        {"video/webm", "webm"},
-        {"audio/ogg", "oga"},
-        {"video/ogg", "ogv"},
-        {"application/ogg", "ogx"},
-        {"audio/flac", "flac"},
-        {"audio/mpeg", "mp3"},
-        {"audio/mp3", "mp3"},
-        {"audio/x-mp3", "mp3"},
-        {"video/mpeg", "mpeg"},
-        {"audio/mp4", "mp4"},
-        {"video/mp4", "mp4"},
-        {"audio/aac", "aac"},
-        {"audio/x-m4a", "m4a"},
-        {"video/x-m4v", "m4v"},
-        {"video/3gpp", "3gp"},
-        // Stream types
-        {"application/x-mpegurl", "m3u8"},
-        {"application/vnd.apple.mpegurl", "m3u8"},
-        {"audio/mpegurl", "m3u8"},
-        {"audio/x-mpegurl", "m3u8"},
-        {"video/mp2t", "ts"},
-    });
 
 namespace {
 
@@ -119,16 +75,41 @@ PlaylistMediaFileDownloader::~PlaylistMediaFileDownloader() {
 void PlaylistMediaFileDownloader::NotifyFail(const std::string& id) {
   CHECK(!id.empty());
   delegate_->OnMediaFileGenerationFailed(id);
-  ResetDownloadStatus();
+  if (current_item_ && current_item_->id == id) {
+    // As this callback could be called from the async callbacks from
+    // DownloadManager, the new item can be already in progress.
+    ResetDownloadStatus();
+  }
 }
 
 void PlaylistMediaFileDownloader::NotifySucceed(
     const std::string& id,
-    const std::string& media_file_path) {
+    const std::string& media_file_path,
+    int64_t received_bytes) {
   DCHECK(!id.empty());
   DCHECK(!media_file_path.empty());
-  delegate_->OnMediaFileReady(id, media_file_path);
-  ResetDownloadStatus();
+  delegate_->OnMediaFileReady(id, media_file_path, received_bytes);
+  if (current_item_ && current_item_->id == id) {
+    // As this callback could be called from the async callbacks from
+    // DownloadManager, the new item can be already in progress.
+    ResetDownloadStatus();
+  }
+}
+
+void PlaylistMediaFileDownloader::ScheduleToCancelDownloadItem(
+    const std::string& guid) {
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(&PlaylistMediaFileDownloader::CancelDownloadItem,
+                     weak_factory_.GetWeakPtr(), guid));
+}
+
+void PlaylistMediaFileDownloader::CancelDownloadItem(const std::string& guid) {
+  if (auto* download_item = download_manager_->GetDownloadByGuid(guid);
+      download_item &&
+      download_item->GetState() == download::DownloadItem::IN_PROGRESS) {
+    download_item->Cancel(/*user_cancel=*/true);
+  }
 }
 
 void PlaylistMediaFileDownloader::ScheduleToDetachCachedFile(
@@ -177,12 +158,14 @@ void PlaylistMediaFileDownloader::DownloadMediaFileForPlaylistItem(
 
   if (item->cached) {
     DVLOG(2) << __func__ << ": media file is already downloaded";
-    NotifySucceed(current_item_->id, current_item_->media_path.spec());
+    NotifySucceed(current_item_->id, current_item_->media_path.spec(), {});
     return;
   }
 
   in_progress_ = true;
   current_item_ = item->Clone();
+  current_download_item_guid_ =
+      base::Uuid::GenerateRandomV4().AsLowercaseString();
   if (!download_manager_) {
     // Creates our own manager. The arguments below are what's used by
     // AwBrowserContext::RetrieveInProgressDownloadManager().
@@ -212,10 +195,15 @@ void PlaylistMediaFileDownloader::DownloadMediaFileForPlaylistItem(
 
 void PlaylistMediaFileDownloader::OnDownloadCreated(
     download::DownloadItem* item) {
-  DVLOG(2) << __func__;
-  DCHECK(current_item_) << "This shouldn't happen as we unobserve the manager "
-                           "when a process for an item is done";
-  DCHECK_EQ(item->GetGuid(), current_item_->id);
+  DVLOG(2) << __func__ << " " << item->GetGuid();
+
+  if (current_download_item_guid_ != item->GetGuid()) {
+    // This can happen when a user canceled it. But we should
+    // observe the item anyway to handle the lifecycle of
+    // download item.
+    ScheduleToCancelDownloadItem(item->GetGuid());
+    return;
+  }
 
   DCHECK(!download_item_observation_.IsObservingSource(item));
   download_item_observation_.AddObservation(item);
@@ -234,15 +222,17 @@ void PlaylistMediaFileDownloader::OnDownloadUpdated(
                << download::DownloadInterruptReasonToString(
                       item->GetLastReason());
     ScheduleToDetachCachedFile(item);
-    OnMediaFileDownloaded({}, {});
+    OnMediaFileDownloaded(item->GetGuid(), {}, {}, {});
     return;
   }
 
-  base::TimeDelta time_remaining;
-  item->TimeRemaining(&time_remaining);
-  delegate_->OnMediaFileDownloadProgressed(
-      current_item_->id, item->GetTotalBytes(), item->GetReceivedBytes(),
-      item->PercentComplete(), time_remaining);
+  if (current_download_item_guid_ == item->GetGuid()) {
+    base::TimeDelta time_remaining;
+    item->TimeRemaining(&time_remaining);
+    delegate_->OnMediaFileDownloadProgressed(
+        current_item_->id, item->GetTotalBytes(), item->GetReceivedBytes(),
+        item->PercentComplete(), time_remaining);
+  }
 
   if (item->IsDone()) {
     ScheduleToDetachCachedFile(item);
@@ -252,19 +242,22 @@ void PlaylistMediaFileDownloader::OnDownloadUpdated(
     std::string mime_type;
     header->GetMimeType(&mime_type);
     DVLOG(2) << "mime_type from response header: " << mime_type;
-    OnMediaFileDownloaded(mime_type, destination_path_);
+    OnMediaFileDownloaded(item->GetGuid(), mime_type, destination_path_,
+                          item->GetReceivedBytes());
     return;
   }
 }
 
 void PlaylistMediaFileDownloader::OnRenameFile(const base::FilePath& new_path,
+                                               int64_t received_bytes,
                                                bool result) {
   if (result) {
-    NotifySucceed(current_item_->id, new_path.AsUTF8Unsafe());
+    NotifySucceed(current_item_->id, new_path.AsUTF8Unsafe(), received_bytes);
   } else {
     DLOG(WARNING)
         << "Failed to rename file with extension, but shouldn't be fatal error";
-    NotifySucceed(current_item_->id, destination_path_.AsUTF8Unsafe());
+    NotifySucceed(current_item_->id, destination_path_.AsUTF8Unsafe(),
+                  received_bytes);
   }
 }
 
@@ -280,7 +273,8 @@ void PlaylistMediaFileDownloader::DownloadMediaFile(const GURL& url) {
   auto params = std::make_unique<download::DownloadUrlParameters>(
       url, GetNetworkTrafficAnnotationTagForURLLoad());
   params->set_file_path(destination_path_);
-  params->set_guid(current_item_->id);
+  params->set_guid(current_download_item_guid_);
+
   params->set_transient(true);
   params->set_require_safety_checks(false);
   DCHECK(download_manager_->CanDownload(params.get()));
@@ -288,11 +282,14 @@ void PlaylistMediaFileDownloader::DownloadMediaFile(const GURL& url) {
 }
 
 void PlaylistMediaFileDownloader::OnMediaFileDownloaded(
+    const std::string& download_item_guid,
     const std::string& mime_type,
-    base::FilePath path) {
+    base::FilePath path,
+    int64_t received_bytes) {
   DVLOG(2) << __func__ << ": downloaded media file at " << path;
-
-  DCHECK(current_item_);
+  if (download_item_guid != current_download_item_guid_) {
+    return;
+  }
 
   if (path.empty()) {
     // This fail is handled during the generation.
@@ -309,20 +306,21 @@ void PlaylistMediaFileDownloader::OnMediaFileDownloaded(
     // Try to infer proper extension from mime_type
     // TODO(sko) It's unlikely but there could be parameter or suffix delimited
     // with "+" or ";" in |mime_type|.
-    if (kMimeTypeToExtension.count(mime_type)) {
-      auto new_path =
-          path.AddExtensionASCII(kMimeTypeToExtension.at(mime_type));
+    if (auto extension = mime_util::GetFileExtensionForMimetype(mime_type);
+        extension.has_value()) {
+      auto new_path = path.AddExtension(*extension);
       delegate_->GetTaskRunner()->PostTaskAndReplyWithResult(
           FROM_HERE, base::BindOnce(&base::Move, path, new_path),
           base::BindOnce(&PlaylistMediaFileDownloader::OnRenameFile,
-                         weak_factory_.GetWeakPtr(), new_path));
+                         weak_factory_.GetWeakPtr(), new_path, received_bytes));
       return;
     }
 
     DLOG(WARNING) << "We can't find out what extension the file should have.";
   }
 
-  NotifySucceed(current_item_->id, destination_path_.AsUTF8Unsafe());
+  NotifySucceed(current_item_->id, destination_path_.AsUTF8Unsafe(),
+                received_bytes);
 }
 
 void PlaylistMediaFileDownloader::RequestCancelCurrentPlaylistGeneration() {
@@ -342,6 +340,10 @@ void PlaylistMediaFileDownloader::ResetDownloadStatus() {
   in_progress_ = false;
   current_item_.reset();
   destination_path_.clear();
+  if (!current_download_item_guid_.empty()) {
+    ScheduleToCancelDownloadItem(current_download_item_guid_);
+    current_download_item_guid_.clear();
+  }
 }
 
 }  // namespace playlist

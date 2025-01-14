@@ -15,6 +15,7 @@ import store from '../store'
 import { useNewTabData, getGridSitesData } from './default/data/storybookState'
 import { onChangeColoredBackground, onUseBraveBackground, onShowBrandedImageChanged } from './default/data/backgroundWallpaper'
 import getTodayState from './default/data/todayStorybookState'
+import getBraveVPNState from './default/data/braveVPNStorybookState'
 import getBraveNewsDisplayAd from './default/data/getBraveNewsDisplayAd'
 import { getDataUrl, getUnpaddedAsDataUrl } from '../../common/privateCDN'
 import { images, updateImages } from '../data/backgrounds'
@@ -37,7 +38,7 @@ window.braveStorybookUnpadUrl = async function UnpadUrl (paddedUrl: string, mime
   return await getDataUrl(buffer)
 }
 
-const StoreProvider: React.FunctionComponent = ({ children }) => {
+const StoreProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   return (
     <ReduxProvider store={store}>
      {children}
@@ -65,11 +66,13 @@ export const Regular = () => {
   const newTabData = useNewTabData(state.newTabData)
   const gridSitesData = getGridSitesData(state.gridSitesData)
   const todayState = getTodayState()
+  const braveVPNState = getBraveVPNState()
 
   return (
     <NewTabPage
       newTabData={newTabData}
       todayData={todayState}
+      braveVPNData={braveVPNState}
       gridSitesData={gridSitesData}
       actions={getActions()}
       saveShowBackgroundImage={doNothing}

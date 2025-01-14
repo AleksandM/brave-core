@@ -7,9 +7,7 @@ import styled from 'styled-components'
 
 import * as mixins from '../../shared/lib/css_mixins'
 
-export const root = styled.div`
-  --settings-panel-title-color: #696fdc;
-`
+export const root = styled.div``
 
 export const description = styled.div`
   color: var(--brave-palette-neutral600);
@@ -30,34 +28,4 @@ export const showAll = styled.div`
     letter-spacing: -0.01em;
     color: #4C54D2;
   }
-`
-
-export const restart = styled.div`
-  text-align: center;
-  margin-top: 32px;
-
-  button {
-    ${mixins.buttonReset}
-    padding: 7px 20px;
-    font-weight: 500;
-    font-size: 12px;
-    color: #212529;
-    background: ;
-    border: 1px solid #AEB1C2;
-    border-radius: 20px;
-    cursor: pointer;
-
-    &:hover {
-      background: rgba(0, 0, 0, 0.02);
-    }
-  }
-`
-
-export const panelItemLineBreak = styled.div`
-  flex-basis: 100%;
-  height: 0;
-`
-
-export const inlineTippingSiteItem = styled.div`
-  margin-left: 16px;
 `

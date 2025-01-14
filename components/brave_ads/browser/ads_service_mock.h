@@ -6,126 +6,141 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_BROWSER_ADS_SERVICE_MOCK_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_BROWSER_ADS_SERVICE_MOCK_H_
 
+#include <cstdint>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "brave/components/brave_ads/browser/ads_service.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom-shared.h"
+#include "brave/components/brave_ads/core/browser/service/ads_service.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom-forward.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
 namespace brave_ads {
 
 class AdsServiceMock : public AdsService {
  public:
-  AdsServiceMock();
+  explicit AdsServiceMock(std::unique_ptr<Delegate> delegate);
 
   AdsServiceMock(const AdsServiceMock&) = delete;
   AdsServiceMock& operator=(const AdsServiceMock&) = delete;
 
-  AdsServiceMock(AdsServiceMock&&) noexcept = delete;
-  AdsServiceMock& operator=(AdsServiceMock&&) noexcept = delete;
-
   ~AdsServiceMock() override;
 
-  MOCK_CONST_METHOD0(IsEnabled, bool());
+  MOCK_METHOD(void,
+              AddBatAdsObserver,
+              (mojo::PendingRemote<bat_ads::mojom::BatAdsObserver>
+                   bat_ads_observer_pending_remote));
 
-  MOCK_CONST_METHOD0(GetMaximumNotificationAdsPerHour, int64_t());
+  MOCK_METHOD(bool, IsBrowserUpgradeRequiredToServeAds, (), (const));
 
-  MOCK_CONST_METHOD0(ShouldAllowSubdivisionTargeting, bool());
-  MOCK_CONST_METHOD0(GetSubdivisionTargetingCode, std::string());
-  MOCK_METHOD1(SetSubdivisionTargetingCode, void(const std::string&));
-  MOCK_CONST_METHOD0(GetAutoDetectedSubdivisionTargetingCode, std::string());
-  MOCK_METHOD1(SetAutoDetectedSubdivisionTargetingCode,
-               void(const std::string&));
+  MOCK_METHOD(int64_t, GetMaximumNotificationAdsPerHour, (), (const));
 
-  MOCK_CONST_METHOD0(NeedsBrowserUpgradeToServeAds, bool());
+  MOCK_METHOD(void, OnNotificationAdShown, (const std::string&));
+  MOCK_METHOD(void, OnNotificationAdClosed, (const std::string&, bool));
+  MOCK_METHOD(void, OnNotificationAdClicked, (const std::string&));
 
-  MOCK_METHOD2(ShowScheduledCaptcha,
-               void(const std::string&, const std::string&));
-  MOCK_METHOD0(SnoozeScheduledCaptcha, void());
+  MOCK_METHOD(void, GetInternals, (GetInternalsCallback));
 
-  MOCK_METHOD1(OnNotificationAdShown, void(const std::string&));
-  MOCK_METHOD2(OnNotificationAdClosed, void(const std::string&, bool));
-  MOCK_METHOD1(OnNotificationAdClicked, void(const std::string&));
+  MOCK_METHOD(void, GetDiagnostics, (GetDiagnosticsCallback));
 
-  MOCK_METHOD1(GetDiagnostics, void(GetDiagnosticsCallback));
+  MOCK_METHOD(void, GetStatementOfAccounts, (GetStatementOfAccountsCallback));
 
-  MOCK_METHOD2(OnDidUpdateResourceComponent,
-               void(const std::string&, const std::string&));
+  MOCK_METHOD(void,
+              MaybeServeInlineContentAd,
+              (const std::string&, MaybeServeInlineContentAdCallback));
+  MOCK_METHOD(void,
+              TriggerInlineContentAdEvent,
+              (const std::string&,
+               const std::string&,
+               mojom::InlineContentAdEventType,
+               TriggerAdEventCallback));
 
-  MOCK_METHOD1(GetStatementOfAccounts, void(GetStatementOfAccountsCallback));
+  MOCK_METHOD(std::optional<NewTabPageAdInfo>,
+              MaybeGetPrefetchedNewTabPageAdForDisplay,
+              ());
+  MOCK_METHOD(void, PrefetchNewTabPageAd, ());
+  MOCK_METHOD(void,
+              TriggerNewTabPageAdEvent,
+              (const std::string&,
+               const std::string&,
+               mojom::NewTabPageAdEventType,
+               TriggerAdEventCallback));
+  MOCK_METHOD(void,
+              OnFailedToPrefetchNewTabPageAd,
+              (const std::string&, const std::string&));
 
-  MOCK_METHOD2(MaybeServeInlineContentAd,
-               void(const std::string&,
-                    MaybeServeInlineContentAdAsDictCallback));
-  MOCK_METHOD4(TriggerInlineContentAdEvent,
-               void(const std::string&,
-                    const std::string&,
-                    mojom::InlineContentAdEventType,
-                    TriggerAdEventCallback));
+  MOCK_METHOD(void,
+              TriggerPromotedContentAdEvent,
+              (const std::string&,
+               const std::string&,
+               mojom::PromotedContentAdEventType,
+               TriggerAdEventCallback));
 
-  MOCK_METHOD0(GetPrefetchedNewTabPageAdForDisplay,
-               absl::optional<NewTabPageAdInfo>());
-  MOCK_METHOD0(PrefetchNewTabPageAd, void());
-  MOCK_METHOD4(TriggerNewTabPageAdEvent,
-               void(const std::string&,
-                    const std::string&,
-                    mojom::NewTabPageAdEventType,
-                    TriggerAdEventCallback));
-  MOCK_METHOD2(OnFailedToPrefetchNewTabPageAd,
-               void(const std::string&, const std::string&));
+  MOCK_METHOD(void,
+              MaybeGetSearchResultAd,
+              (const std::string&, MaybeGetSearchResultAdCallback));
+  MOCK_METHOD(void,
+              TriggerSearchResultAdEvent,
+              (mojom::CreativeSearchResultAdInfoPtr,
+               mojom::SearchResultAdEventType,
+               TriggerAdEventCallback));
 
-  MOCK_METHOD4(TriggerPromotedContentAdEvent,
-               void(const std::string&,
-                    const std::string&,
-                    mojom::PromotedContentAdEventType,
-                    TriggerAdEventCallback));
+  MOCK_METHOD(void,
+              PurgeOrphanedAdEventsForType,
+              (mojom::AdType, PurgeOrphanedAdEventsForTypeCallback));
 
-  MOCK_METHOD3(TriggerSearchResultAdEvent,
-               void(mojom::SearchResultAdInfoPtr,
-                    const mojom::SearchResultAdEventType,
-                    TriggerAdEventCallback));
+  MOCK_METHOD(void,
+              GetAdHistory,
+              (base::Time, base::Time, GetAdHistoryForUICallback));
 
-  MOCK_METHOD2(PurgeOrphanedAdEventsForType,
-               void(mojom::AdType, PurgeOrphanedAdEventsForTypeCallback));
+  MOCK_METHOD(void, ClearData, (ClearDataCallback callback));
 
-  MOCK_METHOD3(GetHistory, void(base::Time, base::Time, GetHistoryCallback));
+  MOCK_METHOD(void,
+              ToggleLikeAd,
+              (mojom::ReactionInfoPtr, ToggleReactionCallback));
+  MOCK_METHOD(void,
+              ToggleDislikeAd,
+              (mojom::ReactionInfoPtr, ToggleReactionCallback));
+  MOCK_METHOD(void,
+              ToggleLikeSegment,
+              (mojom::ReactionInfoPtr, ToggleReactionCallback));
+  MOCK_METHOD(void,
+              ToggleDislikeSegment,
+              (mojom::ReactionInfoPtr, ToggleReactionCallback));
+  MOCK_METHOD(void,
+              ToggleSaveAd,
+              (mojom::ReactionInfoPtr, ToggleReactionCallback));
+  MOCK_METHOD(void,
+              ToggleMarkAdAsInappropriate,
+              (mojom::ReactionInfoPtr, ToggleReactionCallback));
 
-  MOCK_METHOD2(ToggleLikeAd, void(base::Value::Dict, ToggleLikeAdCallback));
-  MOCK_METHOD2(ToggleDislikeAd,
-               void(base::Value::Dict, ToggleDislikeAdCallback));
-  MOCK_METHOD3(ToggleLikeCategory,
-               void(const std::string&,
-                    mojom::UserReactionType,
-                    ToggleLikeCategoryCallback));
-  MOCK_METHOD3(ToggleDislikeCategory,
-               void(const std::string&,
-                    mojom::UserReactionType,
-                    ToggleDislikeCategoryCallback));
-  MOCK_METHOD2(ToggleSaveAd, void(base::Value::Dict, ToggleSaveAdCallback));
-  MOCK_METHOD2(ToggleMarkAdAsInappropriate,
-               void(base::Value::Dict, ToggleMarkAdAsInappropriateCallback));
+  MOCK_METHOD(void,
+              NotifyTabTextContentDidChange,
+              (int32_t tab_id,
+               const std::vector<GURL>& redirect_chain,
+               const std::string& text));
+  MOCK_METHOD(void,
+              NotifyTabHtmlContentDidChange,
+              (int32_t tab_id,
+               const std::vector<GURL>& redirect_chain,
+               const std::string& html));
+  MOCK_METHOD(void, NotifyTabDidStartPlayingMedia, (int32_t tab_id));
+  MOCK_METHOD(void, NotifyTabDidStopPlayingMedia, (int32_t tab_id));
+  MOCK_METHOD(void,
+              NotifyTabDidChange,
+              (int32_t tab_id,
+               const std::vector<GURL>& redirect_chain,
+               bool is_new_navigation,
+               bool is_restoring,
+               bool is_visible));
+  MOCK_METHOD(void, NotifyTabDidLoad, (int32_t tab_id, int http_status_code));
+  MOCK_METHOD(void, NotifyDidCloseTab, (int32_t tab_id));
+  MOCK_METHOD(void, NotifyUserGestureEventTriggered, (int32_t tab_id));
+  MOCK_METHOD(void, NotifyBrowserDidBecomeActive, ());
+  MOCK_METHOD(void, NotifyBrowserDidResignActive, ());
 
-  MOCK_METHOD3(NotifyTabTextContentDidChange,
-               void(int32_t tab_id,
-                    const std::vector<GURL>& redirect_chain,
-                    const std::string& text));
-  MOCK_METHOD3(NotifyTabHtmlContentDidChange,
-               void(int32_t tab_id,
-                    const std::vector<GURL>& redirect_chain,
-                    const std::string& html));
-  MOCK_METHOD1(NotifyTabDidStartPlayingMedia, void(int32_t tab_id));
-  MOCK_METHOD1(NotifyTabDidStopPlayingMedia, void(int32_t tab_id));
-  MOCK_METHOD3(NotifyTabDidChange,
-               void(int32_t tab_id,
-                    const std::vector<GURL>& redirect_chain,
-                    bool is_visible));
-  MOCK_METHOD1(NotifyDidCloseTab, void(int32_t tab_id));
-  MOCK_METHOD1(NotifyUserGestureEventTriggered, void(int32_t));
-  MOCK_METHOD0(NotifyBrowserDidBecomeActive, void());
-  MOCK_METHOD0(NotifyBrowserDidResignActive, void());
-
-  MOCK_METHOD0(NotifyDidSolveAdaptiveCaptcha, void());
+  MOCK_METHOD(void, NotifyDidSolveAdaptiveCaptcha, ());
 };
 
 }  // namespace brave_ads

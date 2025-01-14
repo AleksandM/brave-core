@@ -18,7 +18,7 @@ branding_replacements = [
     (r'(Google)(?! Play)', r'Brave'),
     (r'Chromium', r'Brave'),
     (r'Chrome', r'Brave'),
-    (r'क्रोमियम', 'Brave'), # Chromium in Hindi
+    (r'क्रोमियम', r'Brave'),  # Chromium in Hindi
 ]
 
 
@@ -33,11 +33,6 @@ default_replacements = [
     (r'Incognito', r'Private'),
     (r'inco&gnito', r'&private'),
     (r'Inco&gnito', r'&Private'),
-    (r'People', r'Profiles'),
-    # 'people' but only in the context of profiles, not humans.
-    (r'(?<!authenticate )people', r'profiles'),
-    (r'(Person)(?!\w)', r'Profile'),
-    (r'(person)(?!\w)', r'profile'),
     (r'Bookmarks Bar\n', r'Bookmarks\n'),
     (r'Bookmarks bar\n', r'Bookmarks\n'),
     (r'bookmarks bar\n', r'bookmarks\n'),
@@ -54,7 +49,7 @@ fixup_replacements = [
     (r'Brave Safe Browsing', r'Google Safe Browsing'),
     (r'Safe Browsing \(protects you and your device from dangerous sites\)',
      r'Google Safe Browsing (protects you and your device from dangerous sites)'
-    ),
+     ),
     (r'Sends URLs of some pages you visit to Brave',
      r'Sends URLs of some pages you visit to Google'),
     (r'Google Google', r'Google'),
@@ -66,7 +61,9 @@ fixup_replacements = [
     (r'Brave Pay', r'Google Pay'),
     (r'Brave Photos', r'Google Photos'),
     (r'Brave Projects', r'Chromium Projects'),
+    (r'Brave Root Program', r'Chrome Root Program'),
     (r'BraveVox', r'ChromeVox'),
+    (r'powered by Brave AI', r'powered by Google AI'),
 ]
 
 

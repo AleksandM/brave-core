@@ -54,7 +54,6 @@ int GetResourceLimit(ResourcePoolLimiter::ResourceType resource_type) {
       return 250;
   }
   NOTREACHED();
-  return 0;
 }
 
 }  // namespace

@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "brave/components/brave_ads/core/ads_callback.h"
 #include "brave/components/brave_ads/core/internal/diagnostics/diagnostic_alias.h"
+#include "brave/components/brave_ads/core/public/ads_callback.h"
 
 namespace brave_ads {
 
@@ -19,9 +19,6 @@ class DiagnosticManager final {
 
   DiagnosticManager(const DiagnosticManager&) = delete;
   DiagnosticManager& operator=(const DiagnosticManager&) = delete;
-
-  DiagnosticManager(DiagnosticManager&&) noexcept = delete;
-  DiagnosticManager& operator=(DiagnosticManager&&) noexcept = delete;
 
   ~DiagnosticManager();
 

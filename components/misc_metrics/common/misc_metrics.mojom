@@ -1,0 +1,34 @@
+// Copyright (c) 2023 The Brave Authors. All rights reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this file,
+// You can obtain one at https://mozilla.org/MPL/2.0/.
+
+module misc_metrics.mojom;
+
+import "mojo/public/mojom/base/time.mojom";
+
+// Handler for Android misc metric events from UI.
+interface MiscAndroidMetrics {
+  // Records view of Privacy Hub report.
+  RecordPrivacyHubView();
+
+  // Records enabled status of Privacy Hub report.
+  RecordPrivacyHubEnabledStatus(bool isEnabled);
+
+  // Records browser usage duration, for measuring usage time per day.
+  RecordBrowserUsageDuration(mojo_base.mojom.TimeDelta duration);
+
+  // Records a location bar change (search query or direct URL entry), and
+  // whether the change was made on a new tab.
+  RecordLocationBarChange(bool isNewTab, bool isSearchQuery);
+
+  // Records the creation of a new tab via the tab app menu.
+  RecordAppMenuNewTab();
+
+  // Records the creation of a new tab via the bottom toolbar button
+  // in the tab switcher.
+  RecordTabSwitcherNewTab();
+
+  // Records if Brave set as default.
+  RecordSetAsDefault(bool isDefault);
+};

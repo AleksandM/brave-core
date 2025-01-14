@@ -8,8 +8,6 @@
 
 #include <memory>
 
-#include "brave/browser/brave_ads/tooltips/ads_tooltips_delegate_impl.h"
-#include "brave/components/brave_ads/browser/ads_service.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 
 class Profile;
@@ -21,14 +19,14 @@ class NoDestructor;
 
 namespace brave_ads {
 
+class AdsService;
+class AdsTooltipsDelegateImpl;
+
 // Singleton that owns all AdsService and associates them with Profiles.
 class AdsServiceFactory : public BrowserContextKeyedServiceFactory {
  public:
   AdsServiceFactory(const AdsServiceFactory&) = delete;
   AdsServiceFactory& operator=(const AdsServiceFactory&) = delete;
-
-  AdsServiceFactory(AdsServiceFactory&&) noexcept = delete;
-  AdsServiceFactory& operator=(AdsServiceFactory&&) noexcept = delete;
 
   static AdsService* GetForProfile(Profile* profile);
 
@@ -41,11 +39,10 @@ class AdsServiceFactory : public BrowserContextKeyedServiceFactory {
 
   ~AdsServiceFactory() override;
 
-  std::unique_ptr<AdsTooltipsDelegateImpl> CreateAdsTooltipsDelegate(
-      Profile* profile) const;
+  std::unique_ptr<AdsTooltipsDelegateImpl> CreateAdsTooltipsDelegate() const;
 
   // BrowserContextKeyedServiceFactory:
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsNULLWhileTesting() const override;
 };

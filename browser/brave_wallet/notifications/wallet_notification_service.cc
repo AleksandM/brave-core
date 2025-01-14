@@ -9,6 +9,7 @@
 #include <string>
 
 #include "base/strings/utf_string_conversions.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/tx_service.h"
 #include "chrome/browser/notifications/notification_display_service.h"
 #include "chrome/browser/notifications/notification_display_service_factory.h"
@@ -72,8 +73,14 @@ void PushNotification(content::BrowserContext* context,
 namespace brave_wallet {
 
 WalletNotificationService::WalletNotificationService(
+    BraveWalletService* brave_wallet_service,
     content::BrowserContext* context)
-    : context_(context) {}
+    : context_(context) {
+  if (brave_wallet_service) {
+    brave_wallet_service->tx_service()->AddObserver(
+        tx_observer_receiver_.BindNewPipeAndPassRemote());
+  }
+}
 
 WalletNotificationService::~WalletNotificationService() = default;
 
@@ -98,8 +105,9 @@ void WalletNotificationService::DisplayUserNotification(
 void WalletNotificationService::OnTransactionStatusChanged(
     mojom::TransactionInfoPtr tx_info) {
   if (ShouldDisplayUserNotification(tx_info->tx_status)) {
-    DisplayUserNotification(tx_info->tx_status, tx_info->from_address,
-                            tx_info->id);
+    // TODO(apaymyshev): handle address for bitcoin notificaion
+    DisplayUserNotification(tx_info->tx_status,
+                            tx_info->from_address.value_or(""), tx_info->id);
   }
 }
 

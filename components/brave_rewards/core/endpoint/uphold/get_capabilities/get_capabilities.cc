@@ -8,35 +8,41 @@
 #include <utility>
 
 #include "base/json/json_reader.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
-#include "brave/components/brave_rewards/core/uphold/uphold_util.h"
+#include "brave/components/brave_rewards/core/common/environment_config.h"
+#include "brave/components/brave_rewards/core/common/url_loader.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "net/http/http_status_code.h"
 
 namespace brave_rewards::internal {
 
 using uphold::Capabilities;
 
-namespace endpoint {
-namespace uphold {
+namespace endpoint::uphold {
 
-GetCapabilities::GetCapabilities(LedgerImpl& ledger) : ledger_(ledger) {}
+GetCapabilities::GetCapabilities(RewardsEngine& engine) : engine_(engine) {}
 
 GetCapabilities::~GetCapabilities() = default;
 
 void GetCapabilities::Request(const std::string& token,
-                              GetCapabilitiesCallback callback) {
+                              GetCapabilitiesCallback callback) const {
   auto request = mojom::UrlRequest::New();
-  request->url = GetServerUrl("/v0/me/capabilities");
-  request->headers = RequestAuthorization(token);
-  ledger_->LoadURL(std::move(request),
-                   base::BindOnce(&GetCapabilities::OnRequest,
-                                  base::Unretained(this), std::move(callback)));
+
+  request->url = engine_->Get<EnvironmentConfig>()
+                     .uphold_api_url()
+                     .Resolve("/v0/me/capabilities")
+                     .spec();
+
+  request->headers = {"Authorization: Bearer " + token};
+
+  engine_->Get<URLLoader>().Load(
+      std::move(request), URLLoader::LogLevel::kDetailed,
+      base::BindOnce(&GetCapabilities::OnRequest, base::Unretained(this),
+                     std::move(callback)));
 }
 
 void GetCapabilities::OnRequest(GetCapabilitiesCallback callback,
-                                mojom::UrlResponsePtr response) {
+                                mojom::UrlResponsePtr response) const {
   DCHECK(response);
-  LogUrlResponse(__func__, *response);
 
   auto [result, capability_map] = ProcessResponse(*response);
 
@@ -53,30 +59,30 @@ void GetCapabilities::OnRequest(GetCapabilitiesCallback callback,
 }
 
 std::pair<mojom::Result, GetCapabilities::CapabilityMap>
-GetCapabilities::ProcessResponse(const mojom::UrlResponse& response) {
+GetCapabilities::ProcessResponse(const mojom::UrlResponse& response) const {
   const auto status_code = response.status_code;
 
   if (status_code == net::HTTP_UNAUTHORIZED) {
-    BLOG(1, "Unauthorized access, HTTP status: " << status_code);
+    engine_->Log(FROM_HERE)
+        << "Unauthorized access, HTTP status: " << status_code;
     return {mojom::Result::EXPIRED_TOKEN, {}};
   }
 
-  if (status_code != net::HTTP_OK) {
-    BLOG(0, "Unexpected HTTP status: " << status_code);
-    return {mojom::Result::LEDGER_ERROR, {}};
+  if (!URLLoader::IsSuccessCode(status_code)) {
+    engine_->LogError(FROM_HERE) << "Unexpected HTTP status: " << status_code;
+    return {mojom::Result::FAILED, {}};
   }
 
   auto capability_map = ParseBody(response.body);
-  return {!capability_map.empty() ? mojom::Result::LEDGER_OK
-                                  : mojom::Result::LEDGER_ERROR,
+  return {!capability_map.empty() ? mojom::Result::OK : mojom::Result::FAILED,
           std::move(capability_map)};
 }
 
 GetCapabilities::CapabilityMap GetCapabilities::ParseBody(
-    const std::string& body) {
+    const std::string& body) const {
   const auto value = base::JSONReader::Read(body);
   if (!value || !value->is_list()) {
-    BLOG(0, "Invalid body format!");
+    engine_->LogError(FROM_HERE) << "Invalid body format";
     return {};
   }
 
@@ -97,12 +103,12 @@ GetCapabilities::CapabilityMap GetCapabilities::ParseBody(
   }
 
   if (capability_map.empty()) {
-    BLOG(0, "Invalid body format!");
+    engine_->LogError(FROM_HERE) << "Invalid body format";
   }
 
   return capability_map;
 }
 
-}  // namespace uphold
-}  // namespace endpoint
+}  // namespace endpoint::uphold
+
 }  // namespace brave_rewards::internal

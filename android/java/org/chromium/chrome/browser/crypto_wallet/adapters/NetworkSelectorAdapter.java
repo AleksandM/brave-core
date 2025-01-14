@@ -5,434 +5,263 @@
 
 package org.chromium.chrome.browser.crypto_wallet.adapters;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
-import android.util.Pair;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.chromium.brave_wallet.mojom.NetworkInfo;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.crypto_wallet.presenters.NetworkInfoPresenter;
-import org.chromium.chrome.browser.crypto_wallet.util.AndroidUtils;
+import org.chromium.chrome.browser.app.domain.NetworkModel;
+import org.chromium.chrome.browser.crypto_wallet.activities.NetworkSelectorActivity;
+import org.chromium.chrome.browser.crypto_wallet.util.NetworkUtils;
 import org.chromium.chrome.browser.crypto_wallet.util.Utils;
-import org.chromium.mojo.bindings.Callbacks;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-public class NetworkSelectorAdapter
-        extends RecyclerView.Adapter<NetworkSelectorAdapter.ViewHolder> {
-    private final ExecutorService mExecutor;
-    private final Handler mHandler;
-    private final LayoutInflater inflater;
-    private Context mContext;
-    private NetworkClickListener networkClickListener;
-    private List<NetworkSelectorItem> mNetworkInfos;
-    private String mSelectedNetwork;
-    private int mSelectedParentItemPos;
-    private Pair<Integer, Integer> mSelectedNestedItemPos;
-    private final Callbacks.Callback2<Integer, Integer> nestedCallback = (parentPos, childPos) -> {
-        removePrevParentSelection();
-        // Nested items are mark as selected first and then the position of nested item is retrieved
-        // So do not remove the selection from the same click position
-        Pair<Integer, Integer> pair = Pair.create(parentPos, childPos);
-        if (!mSelectedNestedItemPos.equals(pair)) {
-            removePrevNestedSelection();
+/**
+ * Network selector adapter used by {@link NetworkSelectorActivity} that shows networks supporting
+ * DApps. The adapter also contains three labels for primary, secondary and test networks. Labels
+ * are shown only if there is at least one network. Tapping on a network will switch the selected
+ * network and will finish the activity by calling {@link
+ * NetworkClickListener#onNetworkItemSelected}.
+ */
+public class NetworkSelectorAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+    /** Item types. */
+    private static final int NETWORK_ITEM = 0;
+
+    private static final int LABEL_PRIMARY_ITEM = 1;
+    private static final int LABEL_SECONDARY_ITEM = 2;
+    private static final int LABEL_TEST_ITEM = 3;
+
+    private final LayoutInflater mInflater;
+    private final NetworkClickListener mNetworkClickListener;
+    private final List<NetworkSelectorItem> mNetworkSelectorItems;
+
+    private int mSelectedNetworkIndex = -1;
+
+    public NetworkSelectorAdapter(
+            @NonNull final Context context,
+            @NonNull final NetworkModel.NetworkLists networks,
+            @NonNull final NetworkInfo selectedNetwork,
+            @NonNull final NetworkClickListener networkClickListener) {
+        mInflater = LayoutInflater.from(context);
+        mNetworkClickListener = networkClickListener;
+
+        int count = 0;
+        mNetworkSelectorItems = new ArrayList<>();
+        if (networks.mPrimaryNetworkList.size() > 0) {
+            mNetworkSelectorItems.add(new NetworkSelectorItem(LABEL_PRIMARY_ITEM));
+            count++;
+            for (NetworkInfo networkInfo : networks.mPrimaryNetworkList) {
+                mNetworkSelectorItems.add(new NetworkSelectorItem(networkInfo));
+                if (mSelectedNetworkIndex == -1
+                        && NetworkUtils.areEqual(selectedNetwork, networkInfo)) {
+                    mSelectedNetworkIndex = count;
+                }
+                count++;
+            }
         }
-        mSelectedNestedItemPos = pair;
-    };
 
-    public NetworkSelectorAdapter(Context context, List<NetworkSelectorItem> networkInfos) {
-        mNetworkInfos = networkInfos;
-        this.mContext = context;
-        inflater = (LayoutInflater.from(context));
-        mExecutor = Executors.newSingleThreadExecutor();
-        mHandler = new Handler(Looper.getMainLooper());
-        mSelectedNestedItemPos = Pair.create(0, 0);
+        if (networks.mSecondaryNetworkList.size() > 0) {
+            mNetworkSelectorItems.add(new NetworkSelectorItem(LABEL_SECONDARY_ITEM));
+            count++;
+            for (NetworkInfo networkInfo : networks.mSecondaryNetworkList) {
+                mNetworkSelectorItems.add(new NetworkSelectorItem(networkInfo));
+                if (mSelectedNetworkIndex == -1
+                        && NetworkUtils.areEqual(selectedNetwork, networkInfo)) {
+                    mSelectedNetworkIndex = count;
+                }
+                count++;
+            }
+        }
+
+        if (networks.mTestNetworkList.size() > 0) {
+            mNetworkSelectorItems.add(new NetworkSelectorItem(LABEL_TEST_ITEM));
+            count++;
+            for (NetworkInfo networkInfo : networks.mTestNetworkList) {
+                mNetworkSelectorItems.add(new NetworkSelectorItem(networkInfo));
+                if (mSelectedNetworkIndex == -1
+                        && NetworkUtils.areEqual(selectedNetwork, networkInfo)) {
+                    mSelectedNetworkIndex = count;
+                }
+                count++;
+            }
+        }
     }
 
     @Override
     public int getItemViewType(int position) {
-        return mNetworkInfos.get(position).getType().ordinal();
+        return mNetworkSelectorItems.get(position).getType();
     }
 
     @Override
-    public @NonNull ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        mContext = parent.getContext();
-        View view = inflater.inflate(R.layout.item_network_selector, parent, false);
-        return new ViewHolder(view);
+    public @NonNull RecyclerView.ViewHolder onCreateViewHolder(
+            @NonNull ViewGroup parent, int viewType) {
+        if (viewType == NETWORK_ITEM) {
+            View view = mInflater.inflate(R.layout.item_network_selector, parent, false);
+            return new NetworkViewHolder(
+                    view,
+                    position -> {
+                        final int oldPosition = mSelectedNetworkIndex;
+                        mSelectedNetworkIndex = position;
+                        notifyItemChanged(oldPosition);
+                        notifyItemChanged(mSelectedNetworkIndex);
+                        final NetworkSelectorItem networkSelectorItem =
+                                mNetworkSelectorItems.get(mSelectedNetworkIndex);
+                        mNetworkClickListener.onNetworkItemSelected(
+                                networkSelectorItem.getNetworkInfo());
+                    });
+        } else {
+            // Label item.
+            View view = mInflater.inflate(R.layout.label_network_selector, parent, false);
+            return new LabelViewHolder(view);
+        }
     }
 
-    @SuppressLint("NotifyDataSetChanged")
     @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        final NetworkSelectorItem network = mNetworkInfos.get(position);
-        holder.tvName.setText(network.getNetworkName());
-        AndroidUtils.gone(holder.labelTv);
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        final int type = holder.getItemViewType();
+        final NetworkSelectorItem networkSelectorItem = mNetworkSelectorItems.get(position);
 
-        switch (network.mType) {
-            case PRIMARY: {
-                View.OnClickListener listener = v -> {
-                    removePrevNestedSelection();
-                    removePrevParentSelection();
-                    mSelectedParentItemPos = holder.getLayoutPosition();
-                    AndroidUtils.show(holder.ivSelected);
-                    network.setIsSelected(true);
-                    if (networkClickListener != null) {
-                        networkClickListener.onNetworkItemSelected(
-                                mNetworkInfos.get(mSelectedParentItemPos).mNetworkInfo);
-                    }
-                };
+        if (type == NETWORK_ITEM) {
+            final NetworkInfo network = networkSelectorItem.getNetworkInfo();
+            final NetworkViewHolder networkViewHolder = (NetworkViewHolder) holder;
 
-                if (!network.getSubNetworksItems().isEmpty()) {
-                    AndroidUtils.show(holder.ivSublistIcon);
-                }
+            networkViewHolder.mName.setText(network.chainName);
+            networkViewHolder.mSelectedIcon.setVisibility(
+                    mSelectedNetworkIndex == position ? View.VISIBLE : View.INVISIBLE);
 
-                if (network.isSelected()) {
-                    AndroidUtils.show(holder.ivSelected);
+            @DrawableRes int logo = Utils.getNetworkIconDrawable(network.chainId, network.coin);
+            if (logo != -1) {
+                networkViewHolder.mNetworkLogo.setVisibility(View.VISIBLE);
+                networkViewHolder.mNetworkLogo.setImageResource(logo);
+                if (NetworkUtils.isTestNetwork(network.chainId)) {
+                    // Grey style test net image.
+                    ColorMatrix matrix = new ColorMatrix();
+                    matrix.setSaturation(0);
+
+                    ColorMatrixColorFilter filter = new ColorMatrixColorFilter(matrix);
+                    networkViewHolder.mNetworkLogo.setColorFilter(filter);
                 } else {
-                    AndroidUtils.invisible(holder.ivSelected);
+                    networkViewHolder.mNetworkLogo.setColorFilter(null);
                 }
-
-                if (network.isShowingSublist) {
-                    holder.ivSublistIcon.setImageResource(R.drawable.ic_up_icon);
-                    NestedNetworkSelectorAdapter nestedAdapter =
-                            network.mNestedNetworkSelectorAdapter;
-                    if (nestedAdapter == null) {
-                        nestedAdapter = new NestedNetworkSelectorAdapter(mContext,
-                                network.mSubNetworksItems, nestedCallback,
-                                holder.getLayoutPosition());
-                        nestedAdapter.setOnNetworkItemSelected(this.networkClickListener);
-                    }
-                    holder.subNetworksRv.setAdapter(nestedAdapter);
-                    network.mNestedNetworkSelectorAdapter = nestedAdapter;
-                    AndroidUtils.show(holder.subNetworksRv);
-                } else {
-                    holder.ivSublistIcon.setImageResource(R.drawable.ic_down_icon);
-                    AndroidUtils.gone(holder.subNetworksRv);
-                }
-                Utils.setBlockiesBitmapResource(mExecutor, mHandler, holder.ivNetworkPicture,
-                        network.getNetworkName(), false);
-                holder.ivSelected.setVisibility(
-                        network.isSelected() ? View.VISIBLE : View.INVISIBLE);
-                holder.ivNetworkPicture.setOnClickListener(listener);
-                holder.tvName.setOnClickListener(listener);
-                holder.ivSublistIcon.setOnClickListener(v -> {
-                    network.isShowingSublist = !network.isShowingSublist;
-                    notifyItemChanged(holder.getLayoutPosition());
-                });
-                break;
+            } else {
+                networkViewHolder.mNetworkLogo.setVisibility(View.INVISIBLE);
+                networkViewHolder.mNetworkLogo.setColorFilter(null);
             }
-            case SECONDARY:
-            case ITEM: {
-                Utils.setBlockiesBitmapResource(mExecutor, mHandler, holder.ivNetworkPicture,
-                        network.getNetworkName(), false);
-                holder.ivSelected.setVisibility(
-                        network.isSelected() ? View.VISIBLE : View.INVISIBLE);
-                holder.itemView.setOnClickListener(v -> {
-                    removePrevParentSelection();
-                    removePrevNestedSelection();
-                    AndroidUtils.show(holder.ivSelected);
-                    mSelectedParentItemPos = holder.getLayoutPosition();
-                    network.setIsSelected(true);
-                    if (networkClickListener != null) {
-                        networkClickListener.onNetworkItemSelected(
-                                mNetworkInfos.get(mSelectedParentItemPos).mNetworkInfo);
-                    }
-                });
-                if (network.isSelected()) {
-                    AndroidUtils.show(holder.ivSelected);
-                } else {
-                    AndroidUtils.invisible(holder.ivSelected);
-                }
-                break;
-            }
-            case LABEL: {
-                AndroidUtils.gone(holder.ivNetworkPicture, holder.tvName, holder.ivNetworkPicture,
-                        holder.ivSelected);
-                AndroidUtils.show(holder.labelTv);
-                holder.labelTv.setText(network.getNetworkName());
-                break;
-            }
+        } else {
+            final LabelViewHolder labelViewHolder = (LabelViewHolder) holder;
+            labelViewHolder.mLabel.setText(networkSelectorItem.getNetworkNameRes());
         }
     }
 
     @Override
     public int getItemCount() {
-        return mNetworkInfos.size();
+        return mNetworkSelectorItems.size();
     }
-
-    @SuppressLint("NotifyDataSetChanged")
-    public void addPrimaryNetwork(List<NetworkInfoPresenter> networkInfos) {
-        Utils.removeIf(mNetworkInfos, network -> network.getType() == Type.PRIMARY);
-        List<NetworkSelectorItem> primaryItems = new ArrayList<>();
-        for (NetworkInfoPresenter networkInfo : networkInfos) {
-            primaryItems.add(new NetworkSelectorItem(networkInfo.mNetworkInfo.chainName,
-                    networkInfo.mNetworkInfo.symbolName, networkInfo.mNetworkInfo, Type.PRIMARY,
-                    networkInfo.mSubNetworks));
-        }
-        // Add items at top
-        mNetworkInfos.addAll(0, primaryItems);
-        notifyDataSetChanged();
-        if (mSelectedNetwork != null) {
-            setSelectedNetwork(mSelectedNetwork);
-        }
-    }
-
-    @SuppressLint("NotifyDataSetChanged")
-    public void addSecondaryNetwork(List<NetworkInfoPresenter> networkInfos) {
-        Utils.removeIf(mNetworkInfos,
-                network -> network.getType() != Type.PRIMARY || network.getType() == Type.LABEL);
-        mNetworkInfos.add(new NetworkSelectorItem(
-                mContext.getString(R.string.brave_wallet_network_filter_secondary), "", null,
-                Type.LABEL, Collections.emptyList()));
-        for (NetworkInfoPresenter networkInfo : networkInfos) {
-            mNetworkInfos.add(new NetworkSelectorItem(networkInfo.mNetworkInfo.chainName,
-                    networkInfo.mNetworkInfo.symbolName, networkInfo.mNetworkInfo, Type.SECONDARY,
-                    Collections.emptyList()));
-        }
-        notifyDataSetChanged();
-        if (mSelectedNetwork != null) {
-            setSelectedNetwork(mSelectedNetwork);
-        }
-    }
-
-    public void setSelectedNetwork(String networkName) {
-        mSelectedNetwork = networkName;
-        for (int i = 0; i < mNetworkInfos.size(); i++) {
-            NetworkSelectorItem networkSelectorItem = mNetworkInfos.get(i);
-            if (networkSelectorItem.getNetworkName().equalsIgnoreCase(networkName)) {
-                removePrevParentSelection();
-                removePrevNestedSelection();
-                networkSelectorItem.setIsSelected(true);
-                mSelectedParentItemPos = i;
-                notifyItemChanged(mSelectedParentItemPos);
-                break;
-            }
-            if (!networkSelectorItem.getSubNetworksItems().isEmpty()) {
-                List<NetworkSelectorItem> nestedItems = networkSelectorItem.getSubNetworksItems();
-                for (int j = 0; j < nestedItems.size(); j++) {
-                    NetworkSelectorItem nestedItem = nestedItems.get(j);
-                    if (networkName.equals(nestedItem.getNetworkName())) {
-                        nestedItem.setIsSelected(true);
-                        if (networkSelectorItem.mNestedNetworkSelectorAdapter != null) {
-                            networkSelectorItem.mNestedNetworkSelectorAdapter.notifyItemChanged(j);
-                        } else {
-                            notifyItemChanged(i);
-                        }
-                        mSelectedNestedItemPos = Pair.create(i, j);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    public void setOnNetworkItemSelected(NetworkClickListener networkClickListener) {
-        this.networkClickListener = networkClickListener;
-    }
-
-    private void removePrevNestedSelection() {
-        int parent = mSelectedNestedItemPos.first;
-        int child = mSelectedNestedItemPos.second;
-        NetworkSelectorItem parentItem = mNetworkInfos.get(parent);
-        if (parentItem != null && !parentItem.getSubNetworksItems().isEmpty()) {
-            NetworkSelectorItem childItem = parentItem.getSubNetworksItems().get(child);
-            if (childItem.isSelected()) {
-                childItem.setIsSelected(false);
-                if (parentItem.mNestedNetworkSelectorAdapter != null) {
-                    parentItem.mNestedNetworkSelectorAdapter.notifyItemChanged(child);
-                }
-            }
-        }
-    }
-
-    private void removePrevParentSelection() {
-        if (mNetworkInfos.get(mSelectedParentItemPos).isSelected()) {
-            mNetworkInfos.get(mSelectedParentItemPos).setIsSelected(false);
-            notifyItemChanged(mSelectedParentItemPos);
-        }
-    }
-
-    enum Type { ITEM, PRIMARY, SECONDARY, LABEL }
 
     public interface NetworkClickListener {
-        void onNetworkItemSelected(NetworkInfo networkInfo);
+        void onNetworkItemSelected(@NonNull final NetworkInfo networkInfo);
     }
 
-    static class ViewHolder extends RecyclerView.ViewHolder {
-        ImageView ivNetworkPicture;
-        TextView tvName;
-        ImageView ivSelected;
-        ImageView ivSublistIcon;
-        RecyclerView subNetworksRv;
-        TextView labelTv;
+    public static class NetworkViewHolder extends RecyclerView.ViewHolder {
+        interface OnClickListener {
+            void onClick(final int position);
+        }
 
-        ViewHolder(View itemView) {
+        final ImageView mNetworkLogo;
+        final TextView mName;
+        final ImageView mSelectedIcon;
+
+        public NetworkViewHolder(
+                @NonNull final View itemView, @NonNull final OnClickListener listener) {
             super(itemView);
-            tvName = itemView.findViewById(R.id.tv_item_network_name);
-            ivNetworkPicture = itemView.findViewById(R.id.iv_item_network_picture);
-            ivSelected = itemView.findViewById(R.id.iv_item_network_selector_selected);
-            ivSublistIcon = itemView.findViewById(R.id.iv_item_network_selector_sublist_icon);
-            subNetworksRv = itemView.findViewById(R.id.iv_item_sublist);
-            labelTv = itemView.findViewById(R.id.iv_item_network_label);
+            itemView.setClickable(true);
+            mName = itemView.findViewById(R.id.tv_item_network_name);
+            mNetworkLogo = itemView.findViewById(R.id.iv_item_network_picture);
+            mSelectedIcon = itemView.findViewById(R.id.iv_item_network_selector_selected);
+
+            itemView.setOnClickListener(
+                    view -> {
+                        if (getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+                            listener.onClick(getBindingAdapterPosition());
+                        }
+                    });
+        }
+    }
+
+    public static class LabelViewHolder extends RecyclerView.ViewHolder {
+        final TextView mLabel;
+
+        public LabelViewHolder(View itemView) {
+            super(itemView);
+            mLabel = itemView.findViewById(R.id.iv_item_network_label);
         }
     }
 
     public static class NetworkSelectorItem {
-        private NetworkInfo mNetworkInfo;
-        private boolean isShowingSublist;
-        private NestedNetworkSelectorAdapter mNestedNetworkSelectorAdapter;
-        private String mNetworkName;
-        private String mNetworkShortName;
-        private boolean mIsSelected;
-        private Type mType;
-        private List<NetworkSelectorItem> mSubNetworksItems;
+        private final int mType;
 
-        public NetworkSelectorItem(
-                String networkName, String networkShortName, NetworkInfo networkInfo) {
-            this.mNetworkName = networkName;
-            this.mNetworkShortName = networkShortName;
-            this.mNetworkInfo = networkInfo;
-        }
+        /** Network info is available only when type is {@code NETWORK_ITEM}. */
+        @Nullable private final NetworkInfo mNetworkInfo;
 
-        public NetworkSelectorItem(String networkName, String networkShortName,
-                NetworkInfo networkInfo, Type type, List<NetworkInfo> subNetworks) {
-            this(networkName, networkShortName, networkInfo);
-            this.mType = type;
-            if (mType == null) {
-                mType = Type.ITEM;
+        /** Network name resource is available only when type is not {@code NETWORK_ITEM} */
+        private final int mNetworkNameRes;
+
+        public NetworkSelectorItem(final int type) {
+            mType = type;
+            mNetworkInfo = null;
+            if (mType == LABEL_PRIMARY_ITEM) {
+                mNetworkNameRes = R.string.brave_wallet_network_filter_primary;
+            } else if (mType == LABEL_SECONDARY_ITEM) {
+                mNetworkNameRes = R.string.brave_wallet_network_filter_secondary;
+            } else if (mType == LABEL_TEST_ITEM) {
+                mNetworkNameRes = R.string.brave_wallet_network_filter_test;
+            } else {
+                throw new IllegalStateException(
+                        String.format("Network name not found for label type %d.", mType));
             }
-            mSubNetworksItems = initSubItems(subNetworks);
         }
 
-        private List<NetworkSelectorItem> initSubItems(List<NetworkInfo> networkInfos) {
-            List<NetworkSelectorItem> items = new ArrayList<>();
-            for (NetworkInfo networkInfo : networkInfos) {
-                items.add(new NetworkSelectorItem(
-                        networkInfo.chainName, networkInfo.symbolName, networkInfo));
-            }
-            return items;
+        public NetworkSelectorItem(@NonNull final NetworkInfo networkInfo) {
+            mType = NETWORK_ITEM;
+            mNetworkInfo = networkInfo;
+            mNetworkNameRes = 0;
         }
 
-        public List<NetworkSelectorItem> getSubNetworksItems() {
-            return mSubNetworksItems;
-        }
-
-        public Type getType() {
+        public int getType() {
             return mType;
         }
 
-        public String getNetworkName() {
-            return mNetworkName;
-        }
-
-        public void setNetworkName(String mNetworkName) {
-            this.mNetworkName = mNetworkName;
-        }
-
-        public String getNetworkShortName() {
-            return mNetworkShortName;
-        }
-
-        public void setNetworkShortName(String mNetworkShortName) {
-            this.mNetworkShortName = mNetworkShortName;
-        }
-
-        public boolean isSelected() {
-            return mIsSelected;
-        }
-
-        public void setIsSelected(boolean mIsSelected) {
-            this.mIsSelected = mIsSelected;
-        }
-    }
-
-    static class NestedNetworkSelectorAdapter
-            extends RecyclerView.Adapter<NestedNetworkSelectorAdapter.NestedViewHolder> {
-        private final ExecutorService mExecutor;
-        private final Handler mHandler;
-        private final LayoutInflater inflater;
-        private Context mContext;
-        private Callbacks.Callback2<Integer, Integer> mOnNestedSelectedClick;
-        private int mParentPos;
-        private int previousSelectedPos;
-        private NetworkClickListener networkClickListener;
-        private List<NetworkSelectorItem> mNestedNetworkInfos;
-
-        public NestedNetworkSelectorAdapter(Context context, List<NetworkSelectorItem> networkInfos,
-                Callbacks.Callback2<Integer, Integer> onNestedSelectedClick, int parentPos) {
-            this.mContext = context;
-            inflater = (LayoutInflater.from(context));
-            mOnNestedSelectedClick = onNestedSelectedClick;
-            mParentPos = parentPos;
-            mExecutor = Executors.newSingleThreadExecutor();
-            mHandler = new Handler(Looper.getMainLooper());
-            mNestedNetworkInfos = networkInfos;
-        }
-
-        @Override
-        public @NonNull NestedViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            mContext = parent.getContext();
-            View view = inflater.inflate(R.layout.item_network_selector, parent, false);
-            return new NestedViewHolder(view);
-        }
-
-        @SuppressLint("NotifyDataSetChanged")
-        @Override
-        public void onBindViewHolder(@NonNull NestedViewHolder holder, int position) {
-            final NetworkSelectorItem network = mNestedNetworkInfos.get(position);
-
-            holder.tvName.setText(network.getNetworkName());
-            Utils.setBlockiesBitmapResource(
-                    mExecutor, mHandler, holder.ivNetworkPicture, network.getNetworkName(), false);
-            holder.ivSelected.setVisibility(network.isSelected() ? View.VISIBLE : View.INVISIBLE);
-
-            holder.itemView.setOnClickListener(v -> {
-                network.setIsSelected(true);
-                AndroidUtils.show(holder.ivSelected);
-                if (mOnNestedSelectedClick != null) {
-                    mOnNestedSelectedClick.call(mParentPos, position);
-                }
-                if (networkClickListener != null) {
-                    networkClickListener.onNetworkItemSelected(
-                            mNestedNetworkInfos.get(position).mNetworkInfo);
-                }
-            });
-        }
-
-        @Override
-        public int getItemCount() {
-            return mNestedNetworkInfos.size();
-        }
-
-        public void setOnNetworkItemSelected(NetworkClickListener networkClickListener) {
-            this.networkClickListener = networkClickListener;
-        }
-
-        class NestedViewHolder extends RecyclerView.ViewHolder {
-            ImageView ivNetworkPicture;
-            TextView tvName;
-            ImageView ivSelected;
-
-            NestedViewHolder(View itemView) {
-                super(itemView);
-                tvName = itemView.findViewById(R.id.tv_item_network_name);
-                ivNetworkPicture = itemView.findViewById(R.id.iv_item_network_picture);
-                ivSelected = itemView.findViewById(R.id.iv_item_network_selector_selected);
+        @NonNull
+        public NetworkInfo getNetworkInfo() {
+            if (mType != NETWORK_ITEM || mNetworkInfo == null) {
+                throw new IllegalStateException(
+                        "Network info can be retrieved only for network items.");
             }
+            return mNetworkInfo;
+        }
+
+        @StringRes
+        public int getNetworkNameRes() {
+            if (mType == NETWORK_ITEM || mNetworkNameRes == 0) {
+                throw new IllegalStateException(
+                        "Network name can be retrieved only for label items.");
+            }
+            return mNetworkNameRes;
         }
     }
 }

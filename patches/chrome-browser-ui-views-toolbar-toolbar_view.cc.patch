@@ -1,12 +1,12 @@
 diff --git a/chrome/browser/ui/views/toolbar/toolbar_view.cc b/chrome/browser/ui/views/toolbar/toolbar_view.cc
-index f650013dafc5607ecc8ab455dab5b39204080648..404ded0a3eba8ebbcfe8fd636086125d57312b6c 100644
+index b85883d5057b2cfc753b681b46c2d0d88f3c9758..2af622ce1dbaf20bafce7e98bd5a95e24fc75519 100644
 --- a/chrome/browser/ui/views/toolbar/toolbar_view.cc
 +++ b/chrome/browser/ui/views/toolbar/toolbar_view.cc
-@@ -383,6 +383,7 @@ void ToolbarView::Init() {
-     side_panel_button_ = AddChildView(std::move(side_panel_button));
-   }
+@@ -464,6 +464,7 @@ void ToolbarView::Init() {
+     send_tab_to_self_button_ =
+         container_view_->AddChildView(std::move(send_tab_to_self_button));
  
 +  BRAVE_TOOLBAR_VIEW_INIT
-   avatar_ = AddChildView(std::make_unique<AvatarToolbarButton>(browser_view_));
+   avatar_ = container_view_->AddChildView(
+       std::make_unique<AvatarToolbarButton>(browser_view_));
    bool show_avatar_toolbar_button = true;
- #if BUILDFLAG(IS_CHROMEOS_ASH)

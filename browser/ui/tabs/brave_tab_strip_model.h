@@ -6,9 +6,13 @@
 #ifndef BRAVE_BROWSER_UI_TABS_BRAVE_TAB_STRIP_MODEL_H_
 #define BRAVE_BROWSER_UI_TABS_BRAVE_TAB_STRIP_MODEL_H_
 
+#include <cstdint>
 #include <vector>
 
+#include "base/containers/span.h"
+#include "chrome/browser/ui/tabs/tab_enums.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/ui/tabs/tab_strip_model_observer.h"
 
 class BraveTabStripModel : public TabStripModel {
  public:
@@ -21,9 +25,6 @@ class BraveTabStripModel : public TabStripModel {
   BraveTabStripModel(const BraveTabStripModel&) = delete;
   BraveTabStripModel operator=(const BraveTabStripModel&) = delete;
 
-  void SelectRelativeTab(TabRelativeDirection direction,
-                         TabStripUserGestureDetails detail) override;
-
   // Set the next tab when doing a MRU cycling with Ctrl-tab
   void SelectMRUTab(
       TabRelativeDirection direction,
@@ -35,6 +36,15 @@ class BraveTabStripModel : public TabStripModel {
 
   // Exposes a |TabStripModel| api to |BraveTabMenuModel|.
   std::vector<int> GetTabIndicesForCommandAt(int tab_index);
+
+  // Closes the tabs at the specified indices.
+  void CloseTabs(
+      base::span<int> indices,
+      uint32_t close_flags = TabCloseTypes::CLOSE_CREATE_HISTORICAL_TAB);
+
+  // TabStripModel:
+  void SelectRelativeTab(TabRelativeDirection direction,
+                         TabStripUserGestureDetails detail) override;
 
  private:
   // List of tab indexes sorted by most recently used

@@ -8,28 +8,23 @@
 #include <memory>
 #include <string>
 
-#include "base/logging.h"
 #include "base/files/file_path.h"
 #include "base/files/file_util.h"
+#include "base/logging.h"
+#include "base/trace_event/trace_event.h"
 
 namespace {
 
 void GetDATFileData(const base::FilePath& file_path,
                     brave_component_updater::DATFileDataBuffer* buffer) {
-  int64_t size = 0;
-  if (!base::PathExists(file_path) ||
-      !base::GetFileSize(file_path, &size) ||
-      0 == size) {
-    LOG(ERROR) << "GetDATFileData: "
-               << "the dat file is not found or corrupted "
-               << file_path;
+  if (!base::PathExists(file_path)) {
+    LOG(ERROR) << "GetDATFileData: the dat file is not found. " << file_path;
     return;
   }
 
-  buffer->resize(size);
-  if (size != base::ReadFile(file_path,
-                             reinterpret_cast<char*>(&buffer->front()),
-                             size)) {
+  if (auto bytes = base::ReadFileToBytes(file_path)) {
+    *buffer = std::move(*bytes);
+  } else {
     LOG(ERROR) << "GetDATFileData: cannot "
                << "read dat file " << file_path;
   }
@@ -40,8 +35,11 @@ void GetDATFileData(const base::FilePath& file_path,
 namespace brave_component_updater {
 
 DATFileDataBuffer ReadDATFileData(const base::FilePath& dat_file_path) {
+  TRACE_EVENT_BEGIN1("brave.adblock", "ReadDATFileData", "path",
+                     dat_file_path.MaybeAsASCII());
   DATFileDataBuffer buffer;
   GetDATFileData(dat_file_path, &buffer);
+  TRACE_EVENT_END1("brave.adblock", "ReadDATFileData", "size", buffer.size());
   return buffer;
 }
 

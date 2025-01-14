@@ -6,25 +6,18 @@
 import * as React from 'react'
 
 // Redux
-import { useDispatch } from 'react-redux'
-import { WalletActions } from '../../../common/actions'
-import { PanelActions } from '../../../panel/actions'
-import {
-  useSafeWalletSelector,
-  useUnsafeWalletSelector
-} from '../../../common/hooks/use-safe-selector'
+import { useSafeWalletSelector } from '../../../common/hooks/use-safe-selector'
 import { WalletSelectors } from '../../../common/selectors'
 import {
-  useGetSelectedChainQuery,
-  useSetNetworkMutation
+  useAddAccountMutation,
+  useGetNetworkQuery
 } from '../../../common/slices/api.slice'
 
 // Types
 import { BraveWallet } from '../../../constants/types'
 
 // Components
-import { NavButton } from '../../extension'
-import { LockPanel } from '../../extension/lock-panel'
+import { NavButton } from '../../extension/buttons/nav-button/index'
 
 // Utils
 import { getLocale } from '../../../../common/locale'
@@ -32,114 +25,71 @@ import { suggestNewAccountName } from '../../../utils/address-utils'
 import { keyringIdForNewAccount } from '../../../utils/account-utils'
 
 // Styled Components
-import {
-  StyledWrapper,
-  Description,
-  ButtonRow
-} from './style'
+import { StyledWrapper, Description, ButtonRow } from './style'
+import { useAccountsQuery } from '../../../common/slices/api.slice.extra'
 
 export interface Props {
-  isPanel?: boolean
-  network?: BraveWallet.NetworkInfo
-  prevNetwork?: BraveWallet.NetworkInfo | undefined
-  onCancel?: () => void
+  network: Pick<BraveWallet.NetworkInfo, 'chainId' | 'coin'>
+  onCreated?: (account: BraveWallet.AccountInfo) => void
+  onCancel: () => void
 }
 
 export const CreateAccountTab = ({
-  isPanel,
-  prevNetwork,
-  network,
+  network: accountNetwork,
+  onCreated,
   onCancel
 }: Props) => {
   // redux
-  const dispatch = useDispatch()
-  const accounts = useUnsafeWalletSelector(WalletSelectors.accounts)
   const isWalletLocked = useSafeWalletSelector(WalletSelectors.isWalletLocked)
 
   // queries
-  const { data: selectedNetwork } = useGetSelectedChainQuery()
-  const [setNetwork] = useSetNetworkMutation()
+  const { accounts } = useAccountsQuery()
+  const { data: network } = useGetNetworkQuery({
+    chainId: accountNetwork.chainId,
+    coin: accountNetwork.coin
+  })
+
+  // mutations
+  const [addAccount] = useAddAccountMutation()
 
   // state
   const [showUnlock, setShowUnlock] = React.useState<boolean>(false)
 
-  // memos
-  const accountNetwork = React.useMemo(() => {
-    return network || selectedNetwork
-  }, [network, selectedNetwork])
+  const suggestedAccountName = network
+    ? suggestNewAccountName(accounts, network)
+    : ''
 
-  const suggestedAccountName = React.useMemo((): string => {
-    return accountNetwork
-      ? suggestNewAccountName(accounts, accountNetwork)
-      : ''
-  }, [accounts, accountNetwork])
-
-  // methods
-  const onCancelCreateAccount = React.useCallback(async () => {
-    if (onCancel) {
-      return onCancel()
-    }
-    if (prevNetwork) {
-      await setNetwork({
-        chainId: prevNetwork.chainId,
-        coin: prevNetwork.coin
-      })
-    }
-
-    // prevNetwork can become undefined if the 
-    // user closes and then reopens
-    // the wallet, we need to have a fallback network
-    // when the user clicks No or else the user will get
-    // stuck on the createAccount screen.
-    if (!prevNetwork) {
-      await setNetwork({
-        chainId: BraveWallet.MAINNET_CHAIN_ID,
-        coin: BraveWallet.CoinType.ETH
-      })
-    }
-
-    if (isPanel) {
-      dispatch(PanelActions.navigateTo('main'))
-    }
-  }, [onCancel, prevNetwork, isPanel, setNetwork])
-
-  const onCreateAccount = React.useCallback(() => {
+  const onCreateAccount = React.useCallback(async () => {
     // unlock needed to create accounts
     if (isWalletLocked && !showUnlock) {
       return setShowUnlock(true)
     }
 
-    // Do nothing if accountNetwork is undefined
-    if (!accountNetwork) {
-      return
-    }
-
-    dispatch(
-      WalletActions.addAccount({
+    try {
+      const account = await addAccount({
         coin: accountNetwork.coin,
         keyringId: keyringIdForNewAccount(
           accountNetwork.coin,
           accountNetwork.chainId
         ),
         accountName: suggestedAccountName
-      })
-    )
+      }).unwrap()
 
-    if (isPanel) {
-      dispatch(PanelActions.navigateTo('main'))
+      if (account && onCreated) {
+        onCreated(account)
+      }
+    } catch (error) {
+      console.log(error)
     }
   }, [
     isWalletLocked,
     showUnlock,
-    accountNetwork,
+    addAccount,
+    accountNetwork.coin,
+    accountNetwork.chainId,
     suggestedAccountName,
-    isPanel
+    onCreated
   ])
-
-  const handleUnlockAttempt = React.useCallback((password: string): void => {
-    dispatch(WalletActions.unlockWallet({ password }))
-    onCreateAccount()
-  }, [onCreateAccount])
 
   // effects
   React.useEffect(() => {
@@ -150,31 +100,21 @@ export const CreateAccountTab = ({
   }, [isWalletLocked, showUnlock])
 
   // render
-  if (isWalletLocked && showUnlock) {
-    return <StyledWrapper>
-      <Description style={{ fontSize: 16 }}>
-        {getLocale('braveWalletUnlockNeededToCreateAccount')}
-      </Description>
-      <LockPanel
-        hideBackground
-        onSubmit={handleUnlockAttempt}
-      />
-    </StyledWrapper>
-  }
-
   return (
     <StyledWrapper>
       <Description>
-        {accountNetwork
-          ? getLocale('braveWalletCreateAccountDescription').replace('$1', accountNetwork.symbolName)
-          : ''
-        }
+        {network
+          ? getLocale('braveWalletCreateAccountDescription').replace(
+              '$1',
+              network.symbolName
+            )
+          : ''}
       </Description>
 
       <ButtonRow>
         <NavButton
           buttonType='secondary'
-          onSubmit={onCancelCreateAccount}
+          onSubmit={onCancel}
           text={getLocale('braveWalletCreateAccountNo')}
         />
         <NavButton

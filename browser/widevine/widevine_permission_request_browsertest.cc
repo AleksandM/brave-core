@@ -3,16 +3,19 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "brave/browser/widevine/widevine_permission_request.h"
+
 #include <memory>
 
 #include "base/path_service.h"
 #include "brave/browser/brave_drm_tab_helper.h"
-#include "brave/browser/widevine/constants.h"
-#include "brave/browser/widevine/widevine_permission_request.h"
 #include "brave/browser/widevine/widevine_utils.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
+#include "brave/components/permissions/permission_widevine_utils.h"
+#include "brave/components/widevine/constants.h"
 #include "build/build_config.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ssl/cert_verifier_browser_test.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -22,6 +25,7 @@
 #include "chrome/test/base/ui_test_utils.h"
 #include "chrome/test/permissions/permission_request_manager_test_api.h"
 #include "components/prefs/pref_service.h"
+#include "components/update_client/crx_update_item.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
@@ -107,7 +111,9 @@ IN_PROC_BROWSER_TEST_F(WidevinePermissionRequestBrowserTest, VisibilityTest) {
 
   // Check permission bubble is not visible when user turns it off.
   observer.bubble_added_ = false;
-  DontAskWidevineInstall(GetActiveWebContents(), true);
+  static_cast<Profile*>(GetActiveWebContents()->GetBrowserContext())
+      ->GetPrefs()
+      ->SetBoolean(kAskEnableWidvine, false);
   EXPECT_TRUE(content::NavigateToURL(GetActiveWebContents(),
                                      GURL("chrome://newtab/")));
   drm_tab_helper->OnWidevineKeySystemAccessRequest();
@@ -116,7 +122,9 @@ IN_PROC_BROWSER_TEST_F(WidevinePermissionRequestBrowserTest, VisibilityTest) {
 
   // Check permission bubble is visible when user turns it on.
   observer.bubble_added_ = false;
-  DontAskWidevineInstall(GetActiveWebContents(), false);
+  static_cast<Profile*>(GetActiveWebContents()->GetBrowserContext())
+      ->GetPrefs()
+      ->SetBoolean(kAskEnableWidvine, true);
   EXPECT_TRUE(content::NavigateToURL(GetActiveWebContents(),
                                      GURL("chrome://newtab/")));
   drm_tab_helper->OnWidevineKeySystemAccessRequest();
@@ -150,7 +158,7 @@ IN_PROC_BROWSER_TEST_F(WidevinePermissionRequestBrowserTest, BubbleTest) {
 IN_PROC_BROWSER_TEST_F(WidevinePermissionRequestBrowserTest,
                        CheckOptedInPrefStateForComponent) {
   // Before we allow, opted in should be false
-  EXPECT_FALSE(IsWidevineOptedIn());
+  EXPECT_FALSE(IsWidevineEnabled());
 
   GetPermissionRequestManager()->set_auto_response_for_test(
       permissions::PermissionRequestManager::ACCEPT_ALL);
@@ -159,7 +167,7 @@ IN_PROC_BROWSER_TEST_F(WidevinePermissionRequestBrowserTest,
   content::RunAllTasksUntilIdle();
 
   // After we allow, opted in pref should be true
-  EXPECT_TRUE(IsWidevineOptedIn());
+  EXPECT_TRUE(IsWidevineEnabled());
   EXPECT_TRUE(observer.bubble_added_);
 
   // Reset observer and check permission bubble isn't created again.
@@ -183,9 +191,10 @@ IN_PROC_BROWSER_TEST_F(WidevinePermissionRequestBrowserTest,
   content::RunAllTasksUntilIdle();
 
   WidevinePermissionRequest::is_test_ = true;
-  GetBraveDrmTabHelper()->OnEvent(component_updater::ComponentUpdateService::
-                                      Observer ::Events::COMPONENT_UPDATED,
-                                  kWidevineComponentId);
+  update_client::CrxUpdateItem item;
+  item.id = kWidevineComponentId;
+  item.state = update_client::ComponentState::kUpdated;
+  GetBraveDrmTabHelper()->OnEvent(item);
   content::RunAllTasksUntilIdle();
 
   // Check two permission bubble are created.
@@ -256,13 +265,17 @@ IN_PROC_BROWSER_TEST_F(ScriptTriggerWidevinePermissionRequestBrowserTest,
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   EXPECT_FALSE(IsPermissionBubbleShown());
 
+  const std::string js_error =
+      "a JavaScript error: \"NotSupportedError: Unsupported keySystem or "
+      "supportedConfigurations.\"\n";
+
   const std::string drm_js =
       "var config = [{initDataTypes: ['cenc']}];"
       "navigator.requestMediaKeySystemAccess($1, config);";
   const std::string widevine_js = content::JsReplace(drm_js,
                                                      "com.widevine.alpha");
 
-  EXPECT_TRUE(content::ExecuteScript(active_contents(), widevine_js));
+  EXPECT_EQ(js_error, content::EvalJs(active_contents(), widevine_js).error);
   content::RunAllTasksUntilIdle();
   EXPECT_TRUE(IsPermissionBubbleShown());
   ResetBubbleState();
@@ -283,15 +296,16 @@ IN_PROC_BROWSER_TEST_F(ScriptTriggerWidevinePermissionRequestBrowserTest,
   ResetBubbleState();
 
   // Check that non-widevine DRM is ignored.
-  EXPECT_TRUE(
-      content::ExecuteScript(active_contents(),
-                             content::JsReplace(drm_js, "org.w3.clearkey")));
+  EXPECT_EQ(js_error,
+            content::EvalJs(active_contents(),
+                            content::JsReplace(drm_js, "org.w3.clearkey"))
+                .error);
   content::RunAllTasksUntilIdle();
   EXPECT_FALSE(IsPermissionBubbleShown());
   ResetBubbleState();
 
   // Finally check the widevine request.
-  EXPECT_TRUE(content::ExecuteScript(active_contents(), widevine_js));
+  EXPECT_EQ(js_error, content::EvalJs(active_contents(), widevine_js).error);
   content::RunAllTasksUntilIdle();
   EXPECT_TRUE(IsPermissionBubbleShown());
 }

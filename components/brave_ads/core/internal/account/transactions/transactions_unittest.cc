@@ -5,110 +5,88 @@
 
 #include "brave/components/brave_ads/core/internal/account/transactions/transactions.h"
 
-#include <utility>
-
-#include "base/functional/bind.h"
+#include "base/run_loop.h"
+#include "base/test/gmock_callback_support.h"
+#include "base/test/mock_callback.h"
 #include "brave/components/brave_ads/core/internal/account/transactions/transaction_info.h"
-#include "brave/components/brave_ads/core/internal/account/transactions/transactions_unittest_util.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_time_util.h"
+#include "brave/components/brave_ads/core/internal/account/transactions/transactions_database_table.h"
+#include "brave/components/brave_ads/core/internal/account/transactions/transactions_database_table_util.h"
+#include "brave/components/brave_ads/core/internal/account/transactions/transactions_test_util.h"
+#include "brave/components/brave_ads/core/internal/ad_units/ad_test_constants.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
+#include "brave/components/brave_ads/core/internal/common/test/time_test_util.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads {
 
-class BraveAdsTransactionsTest : public UnitTestBase {};
+class BraveAdsTransactionsTest : public test::TestBase {};
 
 TEST_F(BraveAdsTransactionsTest, Add) {
   // Arrange
+  base::MockCallback<AddTransactionCallback> add_transaction_callback;
+  EXPECT_CALL(add_transaction_callback,
+              Run(/*success=*/true, /*transaction=*/::testing::_));
 
   // Act
   const TransactionInfo transaction =
-      AddTransaction("42a33833-0a08-4cbb-ab3e-458e020221ab", "segment", 0.01,
-                     AdType::kNotificationAd, ConfirmationType::kViewed,
-                     base::BindOnce([](const bool success,
-                                       const TransactionInfo& /*transaction*/) {
-                       ASSERT_TRUE(success);
-                     }));
+      AddTransaction(test::kCreativeInstanceId, test::kSegment, /*value=*/0.01,
+                     mojom::AdType::kNotificationAd,
+                     mojom::ConfirmationType::kViewedImpression,
+                     add_transaction_callback.Get());
 
   // Assert
-  TransactionList expected_transactions = {transaction};
-
-  GetTransactionsForDateRange(
-      DistantPast(), DistantFuture(),
-      base::BindOnce(
-          [](const TransactionList& expected_transactions, const bool success,
-             const TransactionList& transactions) {
-            ASSERT_TRUE(success);
-            EXPECT_EQ(expected_transactions, transactions);
-          },
-          std::move(expected_transactions)));
+  base::MockCallback<database::table::GetTransactionsCallback> callback;
+  base::RunLoop run_loop;
+  EXPECT_CALL(callback, Run(/*success=*/true, TransactionList{transaction}))
+      .WillOnce(base::test::RunOnceClosure(run_loop.QuitClosure()));
+  const database::table::Transactions database_table;
+  database_table.GetForDateRange(/*from_time=*/test::DistantPast(),
+                                 /*to_time=*/test::DistantFuture(),
+                                 callback.Get());
+  run_loop.Run();
 }
 
 TEST_F(BraveAdsTransactionsTest, GetForDateRange) {
   // Arrange
   TransactionList transactions;
 
-  AdvanceClockTo(TimeFromString("31 October 2020", /*is_local*/ true));
+  AdvanceClockTo(test::TimeFromString("31 August 2019"));
 
-  const TransactionInfo transaction_1 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
+  const TransactionInfo transaction_1 = test::BuildUnreconciledTransaction(
+      /*value=*/0.01, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kViewedImpression,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_1);
 
-  AdvanceClockTo(TimeFromString("18 November 2020", /*is_local*/ true));
+  AdvanceClockTo(
+      test::TimeFromUTCString("11 September 2019"));  // A legendary moment.
 
-  const TransactionInfo transaction_2 =
-      BuildUnreconciledTransaction(/*value*/ 0.0, ConfirmationType::kDismissed);
+  const TransactionInfo transaction_2 = test::BuildUnreconciledTransaction(
+      /*value=*/0.0, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kDismissed,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_2);
 
-  const TransactionInfo transaction_3 =
-      BuildUnreconciledTransaction(/*value*/ 0.0, ConfirmationType::kClicked);
+  const TransactionInfo transaction_3 = test::BuildUnreconciledTransaction(
+      /*value=*/0.0, mojom::AdType::kNotificationAd,
+      mojom::ConfirmationType::kClicked,
+      /*should_generate_random_uuids=*/true);
   transactions.push_back(transaction_3);
 
-  SaveTransactions(transactions);
+  database::SaveTransactions(transactions);
 
-  // Act
-  TransactionList expected_transactions = {transaction_2, transaction_3};
-
-  GetTransactionsForDateRange(
-      Now(), DistantFuture(),
-      base::BindOnce(
-          [](const TransactionList& expected_transactions, const bool success,
-             const TransactionList& transactions) {
-            ASSERT_TRUE(success);
-            EXPECT_EQ(expected_transactions, transactions);
-          },
-          std::move(expected_transactions)));
-
-  // Assert
-}
-
-TEST_F(BraveAdsTransactionsTest, RemoveAll) {
-  // Arrange
-  TransactionList transactions;
-
-  const TransactionInfo transaction_1 =
-      BuildUnreconciledTransaction(/*value*/ 0.01, ConfirmationType::kViewed);
-  transactions.push_back(transaction_1);
-
-  const TransactionInfo transaction_2 =
-      BuildUnreconciledTransaction(/*value*/ 0.0, ConfirmationType::kDismissed);
-  transactions.push_back(transaction_2);
-
-  SaveTransactions(transactions);
-
-  // Act
-  RemoveAllTransactions(
-      base::BindOnce([](const bool success) { ASSERT_TRUE(success); }));
-
-  // Assert
-  GetTransactionsForDateRange(
-      DistantPast(), DistantFuture(),
-      base::BindOnce(
-          [](const bool success, const TransactionList& transactions) {
-            ASSERT_TRUE(success);
-            EXPECT_TRUE(transactions.empty());
-          }));
+  // Act & Assert
+  base::MockCallback<GetTransactionsCallback> callback;
+  base::RunLoop run_loop;
+  EXPECT_CALL(callback, Run(/*success=*/true,
+                            TransactionList{transaction_2, transaction_3}))
+      .WillOnce(base::test::RunOnceClosure(run_loop.QuitClosure()));
+  GetTransactionsForDateRange(/*from_time=*/test::Now(),
+                              /*to_time=*/test::DistantFuture(),
+                              callback.Get());
+  run_loop.Run();
 }
 
 }  // namespace brave_ads

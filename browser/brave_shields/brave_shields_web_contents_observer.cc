@@ -8,17 +8,20 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
-#include "base/containers/cxx20_erase_vector.h"
 #include "base/feature_list.h"
 #include "base/strings/utf_string_conversions.h"
 #include "brave/components/brave_perf_predictor/browser/perf_predictor_tab_helper.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
-#include "brave/components/brave_shields/common/brave_shield_constants.h"
-#include "brave/components/brave_shields/common/pref_names.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/core/common/brave_shield_constants.h"
+#include "brave/components/brave_shields/core/common/pref_names.h"
+#include "brave/components/brave_shields/core/common/shields_settings.mojom.h"
 #include "brave/components/constants/pref_names.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/renderer_configuration.mojom.h"
+#include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/user_prefs/user_prefs.h"
@@ -32,9 +35,10 @@
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 
 #if !BUILDFLAG(IS_ANDROID)
-#include "brave/browser/ui/brave_shields_data_controller.h"
+#include "brave/browser/brave_shields/brave_shields_tab_helper.h"
 #endif
 
+using content::NavigationHandle;
 using content::RenderFrameHost;
 using content::WebContents;
 
@@ -46,9 +50,7 @@ BraveShieldsWebContentsObserver* g_receiver_impl_for_testing = nullptr;
 
 }  // namespace
 
-BraveShieldsWebContentsObserver::~BraveShieldsWebContentsObserver() {
-  brave_shields_remotes_.clear();
-}
+BraveShieldsWebContentsObserver::~BraveShieldsWebContentsObserver() = default;
 
 BraveShieldsWebContentsObserver::BraveShieldsWebContentsObserver(
     WebContents* web_contents)
@@ -56,36 +58,6 @@ BraveShieldsWebContentsObserver::BraveShieldsWebContentsObserver(
       content::WebContentsUserData<BraveShieldsWebContentsObserver>(
           *web_contents),
       receivers_(web_contents, this) {}
-
-void BraveShieldsWebContentsObserver::RenderFrameCreated(RenderFrameHost* rfh) {
-  if (rfh && allowed_scripts_.size()) {
-    GetBraveShieldsRemote(rfh)->SetAllowScriptsFromOriginsOnce(
-        allowed_scripts_);
-  }
-  if (rfh) {
-    if (content::BrowserContext* context = rfh->GetBrowserContext()) {
-      if (PrefService* pref_service = user_prefs::UserPrefs::Get(context)) {
-        GetBraveShieldsRemote(rfh)->SetReduceLanguageEnabled(
-            brave_shields::IsReduceLanguageEnabledForProfile(pref_service));
-      }
-    }
-  }
-}
-
-void BraveShieldsWebContentsObserver::RenderFrameDeleted(RenderFrameHost* rfh) {
-  brave_shields_remotes_.erase(rfh);
-}
-
-void BraveShieldsWebContentsObserver::RenderFrameHostChanged(
-    RenderFrameHost* old_host,
-    RenderFrameHost* new_host) {
-  if (old_host) {
-    RenderFrameDeleted(old_host);
-  }
-  if (new_host) {
-    RenderFrameCreated(new_host);
-  }
-}
 
 bool BraveShieldsWebContentsObserver::IsBlockedSubresource(
     const std::string& subresource) {
@@ -108,20 +80,22 @@ void BraveShieldsWebContentsObserver::BindBraveShieldsHost(
   }
 
   auto* web_contents = content::WebContents::FromRenderFrameHost(rfh);
-  if (!web_contents)
+  if (!web_contents) {
     return;
+  }
 
   auto* shields_host =
       BraveShieldsWebContentsObserver::FromWebContents(web_contents);
-  if (!shields_host)
+  if (!shields_host) {
     return;
+  }
   shields_host->BindReceiver(std::move(receiver), rfh);
 }
 
 // static
 void BraveShieldsWebContentsObserver::DispatchBlockedEvent(
     const GURL& request_url,
-    int frame_tree_node_id,
+    content::FrameTreeNodeId frame_tree_node_id,
     const std::string& block_type) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
@@ -163,14 +137,16 @@ void BraveShieldsWebContentsObserver::DispatchBlockedEventForWebContents(
     const std::string& block_type,
     const std::string& subresource,
     WebContents* web_contents) {
-  if (!web_contents)
+  if (!web_contents) {
     return;
+  }
   auto* shields_data_ctrlr =
-      brave_shields::BraveShieldsDataController::FromWebContents(web_contents);
+      brave_shields::BraveShieldsTabHelper::FromWebContents(web_contents);
   // |shields_data_ctrlr| can be null if the |web_contents| is generated in
   // component layer - We don't attach any tab helpers in this case.
-  if (!shields_data_ctrlr)
+  if (!shields_data_ctrlr) {
     return;
+  }
   shields_data_ctrlr->HandleItemBlocked(block_type, subresource);
 }
 // static
@@ -182,13 +158,30 @@ void BraveShieldsWebContentsObserver::DispatchAllowedOnceEventForWebContents(
     return;
   }
   auto* shields_data_ctrlr =
-      brave_shields::BraveShieldsDataController::FromWebContents(web_contents);
+      brave_shields::BraveShieldsTabHelper::FromWebContents(web_contents);
   // |shields_data_ctrlr| can be null if the |web_contents| is generated in
   // component layer - We don't attach any tab helpers in this case.
   if (!shields_data_ctrlr) {
     return;
   }
   shields_data_ctrlr->HandleItemAllowedOnce(block_type, subresource);
+}
+// static
+void BraveShieldsWebContentsObserver::
+    DispatchWebcompatFeatureInvokedForWebContents(
+        ContentSettingsType webcompat_content_settings,
+        WebContents* web_contents) {
+  if (!web_contents) {
+    return;
+  }
+  auto* shields_data_ctrlr =
+      brave_shields::BraveShieldsTabHelper::FromWebContents(web_contents);
+  // |shields_data_ctrlr| can be null if the |web_contents| is generated in
+  // component layer - We don't attach any tab helpers in this case.
+  if (!shields_data_ctrlr) {
+    return;
+  }
+  shields_data_ctrlr->HandleWebcompatFeatureInvoked(webcompat_content_settings);
 }
 #endif
 
@@ -197,10 +190,24 @@ void BraveShieldsWebContentsObserver::OnJavaScriptAllowedOnce(
 #if !BUILDFLAG(IS_ANDROID)
   WebContents* web_contents =
       WebContents::FromRenderFrameHost(receivers_.GetCurrentTargetFrame());
-  if (!web_contents)
+  if (!web_contents) {
     return;
+  }
   DispatchAllowedOnceEventForWebContents(
       brave_shields::kJavaScript, base::UTF16ToUTF8(details), web_contents);
+#endif
+}
+
+void BraveShieldsWebContentsObserver::OnWebcompatFeatureInvoked(
+    ContentSettingsType webcompat_settings_type) {
+#if !BUILDFLAG(IS_ANDROID)
+  WebContents* web_contents =
+      WebContents::FromRenderFrameHost(receivers_.GetCurrentTargetFrame());
+  if (!web_contents) {
+    return;
+  }
+  DispatchWebcompatFeatureInvokedForWebContents(webcompat_settings_type,
+                                                web_contents);
 #endif
 }
 
@@ -226,11 +233,15 @@ void BraveShieldsWebContentsObserver::RegisterProfilePrefs(
 }
 
 void BraveShieldsWebContentsObserver::ReadyToCommitNavigation(
-    content::NavigationHandle* navigation_handle) {
-  // when the main frame navigate away
+    NavigationHandle* navigation_handle) {
+  // Ignore same document navigations.
+  if (navigation_handle->IsSameDocument()) {
+    return;
+  }
+
+  // When the main frame navigates away.
   content::ReloadType reload_type = navigation_handle->GetReloadType();
-  if (navigation_handle->IsInMainFrame() &&
-      !navigation_handle->IsSameDocument()) {
+  if (navigation_handle->IsInMainFrame()) {
     if (reload_type == content::ReloadType::NONE) {
       // For new loads, we reset the counters for both blocked scripts and URLs.
       allowed_scripts_.clear();
@@ -243,17 +254,7 @@ void BraveShieldsWebContentsObserver::ReadyToCommitNavigation(
     }
   }
 
-  navigation_handle->GetWebContents()->ForEachRenderFrameHost(
-      [this](content::RenderFrameHost* rfh) {
-        GetBraveShieldsRemote(rfh)->SetAllowScriptsFromOriginsOnce(
-            allowed_scripts_);
-        if (content::BrowserContext* context = rfh->GetBrowserContext()) {
-          if (PrefService* pref_service = user_prefs::UserPrefs::Get(context)) {
-            GetBraveShieldsRemote(rfh)->SetReduceLanguageEnabled(
-                brave_shields::IsReduceLanguageEnabledForProfile(pref_service));
-          }
-        }
-      });
+  SendShieldsSettings(navigation_handle);
 }
 
 void BraveShieldsWebContentsObserver::BlockAllowedScripts(
@@ -261,7 +262,7 @@ void BraveShieldsWebContentsObserver::BlockAllowedScripts(
   for (const auto& script : scripts) {
     auto origin = url::Origin::Create(GURL(script));
     bool is_origin = origin.Serialize() == script;
-    base::EraseIf(allowed_scripts_, [is_origin, script,
+    std::erase_if(allowed_scripts_, [is_origin, script,
                                      origin](const std::string& value) {
       // scripts array may have both origins or full scripts paths.
       return is_origin ? url::Origin::Create(GURL(value)) == origin
@@ -282,23 +283,43 @@ void BraveShieldsWebContentsObserver::SetReceiverImplForTesting(
   g_receiver_impl_for_testing = impl;
 }
 
+void BraveShieldsWebContentsObserver::SendShieldsSettings(
+    NavigationHandle* navigation_handle) {
+  DCHECK(navigation_handle);
+  RenderFrameHost* rfh = navigation_handle->GetRenderFrameHost();
+
+  const GURL& primary_url =
+      navigation_handle->GetParentFrameOrOuterDocument()
+          ? navigation_handle->GetParentFrameOrOuterDocument()
+                ->GetOutermostMainFrame()
+                ->GetLastCommittedURL()
+          : navigation_handle->GetURL();
+
+  HostContentSettingsMap* host_content_settings_map =
+      HostContentSettingsMapFactory::GetForProfile(rfh->GetBrowserContext());
+  const brave_shields::mojom::FarblingLevel farbling_level =
+      brave_shields::GetFarblingLevel(host_content_settings_map, primary_url);
+  const base::Token farbling_token =
+      farbling_level != brave_shields::mojom::FarblingLevel::OFF
+          ? brave_shields::GetFarblingToken(host_content_settings_map,
+                                            primary_url)
+          : base::Token();
+
+  PrefService* pref_service =
+      user_prefs::UserPrefs::Get(rfh->GetBrowserContext());
+
+  mojo::AssociatedRemote<brave_shields::mojom::BraveShields> agent;
+  rfh->GetRemoteAssociatedInterfaces()->GetInterface(&agent);
+  agent->SetShieldsSettings(brave_shields::mojom::ShieldsSettings::New(
+      farbling_level, farbling_token, allowed_scripts_,
+      brave_shields::IsReduceLanguageEnabledForProfile(pref_service)));
+}
+
 void BraveShieldsWebContentsObserver::BindReceiver(
     mojo::PendingAssociatedReceiver<brave_shields::mojom::BraveShieldsHost>
         receiver,
     content::RenderFrameHost* rfh) {
   receivers_.Bind(rfh, std::move(receiver));
-}
-
-mojo::AssociatedRemote<brave_shields::mojom::BraveShields>&
-BraveShieldsWebContentsObserver::GetBraveShieldsRemote(
-    content::RenderFrameHost* rfh) {
-  if (!brave_shields_remotes_.contains(rfh)) {
-    rfh->GetRemoteAssociatedInterfaces()->GetInterface(
-        &brave_shields_remotes_[rfh]);
-  }
-
-  DCHECK(brave_shields_remotes_[rfh].is_bound());
-  return brave_shields_remotes_[rfh];
 }
 
 WEB_CONTENTS_USER_DATA_KEY_IMPL(BraveShieldsWebContentsObserver);

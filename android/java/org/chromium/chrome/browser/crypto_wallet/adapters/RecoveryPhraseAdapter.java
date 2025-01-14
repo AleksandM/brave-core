@@ -5,6 +5,11 @@
 
 package org.chromium.chrome.browser.crypto_wallet.adapters;
 
+import android.graphics.BlurMaskFilter;
+import android.graphics.MaskFilter;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.MaskFilterSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,21 +19,40 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.crypto_wallet.fragments.onboarding_fragments.VerifyRecoveryPhraseFragment;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class RecoveryPhraseAdapter extends RecyclerView.Adapter<RecoveryPhraseAdapter.ViewHolder> {
-    List<String> recoveryPhraseList = new ArrayList<>();
-    List<String> selectedRecoveryPhraseList = new ArrayList<>();
-    List<Integer> selectedPositions = new ArrayList<>();
-    private VerifyRecoveryPhraseFragment.OnRecoveryPhraseSelected onRecoveryPhraseSelected;
-    private boolean isSelectedRecoveryPhrase;
+    private static final String BLANK_SPACES = "   ";
+    private static final String MASKED_WORD = "XXXXXXX";
+    private List<String> mRecoveryPhraseList = new ArrayList<>();
+    private boolean mBlurPhrase;
+    private final MaskFilterSpan mMaskFilterSpan;
+
+    public RecoveryPhraseAdapter() {
+        mBlurPhrase = true;
+
+        MaskFilter blurMask = new BlurMaskFilter(28f, BlurMaskFilter.Blur.NORMAL);
+        mMaskFilterSpan = new MaskFilterSpan(blurMask);
+    }
+
+    public boolean isBlurred() {
+        return mBlurPhrase;
+    }
+
+    public void blurPhrase(final boolean blur) {
+        if (mBlurPhrase == blur) {
+            return;
+        }
+
+        mBlurPhrase = blur;
+        notifyItemRangeChanged(0, getItemCount());
+    }
 
     @NonNull
     @Override
-    public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         LayoutInflater layoutInflater = LayoutInflater.from(parent.getContext());
         View listItem = layoutInflater.inflate(R.layout.recovery_phrase_item_layout, parent, false);
         return new ViewHolder(listItem);
@@ -36,78 +60,41 @@ public class RecoveryPhraseAdapter extends RecyclerView.Adapter<RecoveryPhraseAd
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        final String recoveryPhrase = recoveryPhraseList.get(position);
-        holder.recoveryPhraseText.setText(
-                String.format(holder.recoveryPhraseText.getContext().getResources().getString(
-                                      R.string.recovery_phrase_item_text),
-                        (position + 1), recoveryPhrase));
-        if (onRecoveryPhraseSelected != null) {
-            holder.itemView.setOnClickListener(v -> {
-                if (isSelectedRecoveryPhrase) {
-                    recoveryPhraseList.remove(recoveryPhrase);
-                } else {
-                    selectedRecoveryPhraseList.add(recoveryPhrase);
-                    selectedPositions.add(position);
-                }
-                onRecoveryPhraseSelected.onSelectedRecoveryPhrase(recoveryPhrase);
-            });
-            if (!isSelectedRecoveryPhrase) {
-                if (selectedRecoveryPhraseList.contains(recoveryPhrase)
-                        && selectedPositions.contains(position)) {
-                    holder.recoveryPhraseText.setEnabled(false);
-                    holder.recoveryPhraseText.setAlpha(0.5f);
-                    holder.recoveryPhraseText.setText("");
-                } else {
-                    holder.recoveryPhraseText.setEnabled(true);
-                    holder.recoveryPhraseText.setAlpha(1f);
-                    holder.recoveryPhraseText.setText(String.format(
-                            holder.recoveryPhraseText.getContext().getResources().getString(
-                                    R.string.recovery_phrase_item_text),
-                            (position + 1), recoveryPhrase));
-                }
-            }
+        final String recoveryPhrase =
+                String.format(
+                        holder.recoveryPhraseText
+                                .getContext()
+                                .getResources()
+                                .getString(R.string.recovery_phrase_item_text),
+                        (position + 1),
+                        mRecoveryPhraseList.get(position));
+        // When blurring a word, add blank spaces at the beginning to improve the overall effect,
+        // otherwise the blur will be rendered with an ugly cut at the beginning.
+        // SECURITY: Blurring the word XXXXXXX and not the real words.
+        // ALWAYS USE A PLACEHOLDER TO PREVENT TEXT EXTRACTION WHEN BLURRED!
+        final SpannableString recoveryPhraseSpannable =
+                mBlurPhrase
+                        ? new SpannableString(BLANK_SPACES + MASKED_WORD)
+                        : new SpannableString(recoveryPhrase);
+        if (mBlurPhrase) {
+            recoveryPhraseSpannable.setSpan(
+                    mMaskFilterSpan,
+                    BLANK_SPACES.length(),
+                    recoveryPhraseSpannable.length(),
+                    Spanned.SPAN_INCLUSIVE_EXCLUSIVE);
+        } else {
+            recoveryPhraseSpannable.removeSpan(mMaskFilterSpan);
         }
-    }
-
-    public void setSelectedRecoveryPhrase(boolean isSelectedRecoveryPhrase) {
-        this.isSelectedRecoveryPhrase = isSelectedRecoveryPhrase;
-    }
-
-    public void addPhraseAtPosition(int position, String phrase) {
-        this.recoveryPhraseList.set(position, phrase);
-    }
-
-    public void removeSelectedPhrase(String phrase) {
-        this.selectedRecoveryPhraseList.remove(phrase);
-        // We have to iterate as words sometimes can be duplicated in the recovery phrase
-        for (int i = 0; i < recoveryPhraseList.size(); i++) {
-            if (recoveryPhraseList.get(i).contains(phrase) && selectedPositions.contains(i)) {
-                selectedPositions.remove((Integer) i);
-                break;
-            }
-        }
+        holder.recoveryPhraseText.setText(recoveryPhraseSpannable);
     }
 
     public void setRecoveryPhraseList(List<String> recoveryPhraseList) {
-        this.recoveryPhraseList = recoveryPhraseList;
-    }
-
-    public void setOnRecoveryPhraseSelectedListener(
-            VerifyRecoveryPhraseFragment.OnRecoveryPhraseSelected onRecoveryPhraseSelected) {
-        this.onRecoveryPhraseSelected = onRecoveryPhraseSelected;
-    }
-
-    public List<String> getSelectedRecoveryPhraseList() {
-        return selectedRecoveryPhraseList;
-    }
-
-    public List<String> getRecoveryPhraseList() {
-        return recoveryPhraseList;
+        mRecoveryPhraseList = recoveryPhraseList;
     }
 
     @Override
     public int getItemCount() {
-        return recoveryPhraseList.size();
+        return mRecoveryPhraseList.size();
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

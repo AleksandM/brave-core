@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/check.h"
@@ -37,7 +38,7 @@ constexpr char kRMenu[] = "AltGr";
 
 struct ModifierName {
   const ui::KeyEventFlags modifier;
-  const base::StringPiece name;
+  const std::string_view name;
 };
 
 const std::vector<ModifierName>& GetAllModifierNames() {
@@ -175,6 +176,11 @@ std::string KeyCodeToString(ui::KeyboardCode key_code) {
 
 }  // namespace
 
+std::string CodeStringToKeyString(const std::string& code_string) {
+  auto code = DomCodeStringToKeyboardCode(code_string);
+  return KeyCodeToString(code);
+}
+
 std::string ToKeysString(const ui::Accelerator& accelerator) {
   std::vector<std::string> parts = GetModifierNames(accelerator.modifiers());
   parts.push_back(KeyCodeToString(accelerator.key_code()));
@@ -191,6 +197,14 @@ ui::Accelerator FromCodesString(const std::string& value) {
   DCHECK(!value.empty());
   std::vector<std::string> parts = base::SplitString(
       value, "+", base::TRIM_WHITESPACE, base::SPLIT_WANT_ALL);
+
+  // Not sure why, but some clients are encountering empty accelerators. If we
+  // encounter one in the wild, just return an empty accelerator instead of
+  // crashing:
+  // https://github.com/brave/brave-browser/issues/31419
+  if (parts.empty()) {
+    return ui::Accelerator();
+  }
 
   auto keyname = parts[parts.size() - 1];
   auto keycode = DomCodeStringToKeyboardCode(keyname);

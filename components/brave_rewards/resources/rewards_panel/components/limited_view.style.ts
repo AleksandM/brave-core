@@ -53,32 +53,8 @@ export const headerText = styled.div`
   font-size: 12px;
   line-height: 18px;
   color: #868E96;
-
   .brave-theme-dark & {
     color: #84889C;
-  }
-`
-
-export const rewardsSwitch = styled.div`
-  --toggle-button-height: 30px;
-  --toggle-button-width: 57px;
-`
-
-export const disabledText = styled.div`
-  ${shadowBox}
-  margin-top: 16px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-weight: 400;
-  font-size: 14px;
-  line-height: 20px;
-
-  .icon {
-    display: block;
-    margin-top: 2px;
-    height: 32px;
-    width: auto;
   }
 `
 
@@ -123,17 +99,6 @@ export const connectAction = styled.div`
       margin-left: 8px;
       margin-top: -2px;
     }
-  }
-`
-
-export const connectLearnMore = styled.div`
-  margin-top: -2px;
-
-  a {
-    font-weight: 600;
-    font-size: 13px;
-    line-height: 20px;
-    color: #fff;
   }
 `
 

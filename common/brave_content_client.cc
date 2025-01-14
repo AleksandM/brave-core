@@ -1,18 +1,20 @@
-/* Copyright 2019 The Brave Authors. All rights reserved.
+/* Copyright (c) 2019 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "brave/common/brave_content_client.h"
 
+#include <optional>
 #include <string>
 
 #include "base/memory/ref_counted_memory.h"
+#include "base/version.h"
 #include "components/grit/brave_components_resources.h"
-#include "components/grit/components_resources.h"
+#include "components/grit/flags_ui_resources.h"
 #include "content/public/common/url_constants.h"
-#include "ui/base/resource/resource_bundle.h"
 #include "third_party/widevine/cdm/buildflags.h"
+#include "ui/base/resource/resource_bundle.h"
 
 #if BUILDFLAG(ENABLE_WIDEVINE) && BUILDFLAG(IS_LINUX)
 #include "base/files/file_path.h"
@@ -53,7 +55,8 @@ void CreateDefaultWidevineCdmHintFile() {
     return;
   }
 
-  DCHECK(UpdateWidevineCdmHintFile(widevine_root_dir_path));
+  DCHECK(UpdateWidevineCdmHintFile(widevine_root_dir_path,
+                                   /*bundled_version=*/std::nullopt));
 }
 #endif
 
@@ -65,7 +68,7 @@ BraveContentClient::~BraveContentClient() = default;
 
 base::RefCountedMemory* BraveContentClient::GetDataResourceBytes(
     int resource_id) {
-  if (resource_id == IDR_FLAGS_UI_FLAGS_JS) {
+  if (resource_id == IDR_FLAGS_UI_APP_JS) {
     const ui::ResourceBundle& resource_bundle =
         ui::ResourceBundle::GetSharedInstance();
     const std::string flags_js =
@@ -73,7 +76,7 @@ base::RefCountedMemory* BraveContentClient::GetDataResourceBytes(
         resource_bundle.LoadDataResourceString(
             IDR_FLAGS_UI_BRAVE_FLAGS_OVERRIDES_JS);
     base::RefCountedString* bytes = new base::RefCountedString();
-    bytes->data().assign(flags_js.data(), flags_js.length());
+    bytes->as_string().assign(flags_js.data(), flags_js.length());
     return bytes;
   }
   return ChromeContentClient::GetDataResourceBytes(resource_id);

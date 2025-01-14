@@ -1,76 +1,132 @@
-/* Copyright (c) 2021 The Brave Authors. All rights reserved.
+/* Copyright (c) 2024 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "brave/browser/ui/views/frame/brave_contents_layout_manager.h"
 
-#include <vector>
-
+#include "base/feature_list.h"
+#include "brave/browser/ui/tabs/features.h"
+#include "brave/browser/ui/views/frame/brave_browser_view.h"
+#include "chrome/browser/ui/browser_navigator_params.h"
 #include "ui/views/view.h"
 
-BraveContentsLayoutManager::BraveContentsLayoutManager(
-    views::View* devtools_view,
-    views::View* contents_view,
-    views::View* sidebar_container_view)
-    : ContentsLayoutManager(devtools_view, contents_view),
-      sidebar_container_view_(sidebar_container_view) {
-  DCHECK(sidebar_container_view_);
+namespace {
+
+int ClampSplitViewSizeDelta(views::View* contents_view, int size_delta) {
+  constexpr int kMinWidth = 144;  // From 144p resolution.
+  const auto half_size =
+      (contents_view->width() -
+       BraveContentsLayoutManager::kSpacingBetweenContentsWebViews) /
+      2;
+
+  return std::clamp(size_delta, /*min*/ kMinWidth - half_size,
+                    /*max*/ half_size - kMinWidth);
 }
+
+}  // namespace
 
 BraveContentsLayoutManager::~BraveContentsLayoutManager() = default;
 
-void BraveContentsLayoutManager::Layout(views::View* contents_container) {
-  DCHECK(host_ == contents_container);
+void BraveContentsLayoutManager::SetSplitViewSeparator(
+    SplitViewSeparator* split_view_separator) {
+  split_view_separator_ = split_view_separator;
+  split_view_separator_->set_delegate(this);
+}
 
-  int contents_height = contents_container->height();
-  int contents_width = contents_container->width();
+void BraveContentsLayoutManager::SetSecondaryContentsResizingStrategy(
+    const DevToolsContentsResizingStrategy& strategy) {
+  if (secondary_strategy_.Equals(strategy)) {
+    return;
+  }
 
-  std::vector<views::View*> left_side_candidate_views;
-  std::vector<views::View*> right_side_candidate_views;
-  if (sidebar_on_left_) {
-    left_side_candidate_views.push_back(sidebar_container_view_);
+  secondary_strategy_.CopyFrom(strategy);
+  if (host_view()) {
+    host_view()->InvalidateLayout();
+  }
+}
+
+void BraveContentsLayoutManager::OnDoubleClicked() {
+  split_view_size_delta_ = ongoing_split_view_size_delta_ = 0;
+  LayoutImpl();
+}
+
+void BraveContentsLayoutManager::OnResize(int resize_amount,
+                                          bool done_resizing) {
+  ongoing_split_view_size_delta_ = resize_amount;
+  if (done_resizing) {
+    split_view_size_delta_ += ongoing_split_view_size_delta_;
+    split_view_size_delta_ =
+        ClampSplitViewSizeDelta(host_view(), split_view_size_delta_);
+    ongoing_split_view_size_delta_ = 0;
+  }
+
+  LayoutImpl();
+}
+
+void BraveContentsLayoutManager::LayoutImpl() {
+  if (!base::FeatureList::IsEnabled(tabs::features::kBraveSplitView) ||
+      !secondary_contents_view_ || !secondary_devtools_view_ ||
+      !secondary_contents_view_->GetVisible()) {
+    ContentsLayoutManager::LayoutImpl();
+    return;
+  }
+
+  const bool is_host_empty = !host_view()->width();
+  if (is_host_empty) {
+    // When minimizing window, this can happen
+    return;
+  }
+
+  auto layout_web_contents_and_devtools =
+      [](gfx::Rect bounds, views::View* contents_view,
+         views::View* devtools_view,
+         const DevToolsContentsResizingStrategy& strategy) {
+        gfx::Rect new_contents_bounds;
+        gfx::Rect new_devtools_bounds;
+        ApplyDevToolsContentsResizingStrategy(strategy, bounds.size(),
+                                              &new_devtools_bounds,
+                                              &new_contents_bounds);
+        new_contents_bounds.set_x(bounds.x() + new_contents_bounds.x());
+        new_devtools_bounds.set_x(bounds.x() + new_devtools_bounds.x());
+
+        // TODO(sko) We're ignoring dev tools specific position. Maybe we need
+        // to revisit this. On the other hand, I think we shouldn't let devtools
+        // on the side of split view as it's too confusing.
+        contents_view->SetBoundsRect(new_contents_bounds);
+        devtools_view->SetBoundsRect(new_devtools_bounds);
+      };
+
+  gfx::Rect bounds = host_view()->GetLocalBounds();
+  const auto size_delta = ClampSplitViewSizeDelta(
+      host_view(), split_view_size_delta_ + ongoing_split_view_size_delta_);
+  bounds.set_width((bounds.width() - kSpacingBetweenContentsWebViews) / 2 +
+                   size_delta);
+  if (show_main_web_contents_at_tail_) {
+    layout_web_contents_and_devtools(bounds, secondary_contents_view_,
+                                     secondary_devtools_view_,
+                                     secondary_strategy_);
   } else {
-    right_side_candidate_views.push_back(sidebar_container_view_);
+    layout_web_contents_and_devtools(bounds, contents_view_, devtools_view_,
+                                     strategy_);
   }
 
-  int taken_left_width = 0;
-  for (auto* view : left_side_candidate_views) {
-    if (!view || !view->GetVisible())
-      continue;
+  bounds.set_x(bounds.right());
+  bounds.set_width(kSpacingBetweenContentsWebViews);
+  split_view_separator_->SetBoundsRect(bounds);
 
-    auto width = view->GetPreferredSize().width();
-    const gfx::Rect bounds(taken_left_width, 0, width, contents_height);
-    view->SetBoundsRect(host_->GetMirroredRect(bounds));
-    taken_left_width += width;
+  bounds.set_x(bounds.right());
+  bounds.set_width(host_view()->width() - bounds.x());
+  if (show_main_web_contents_at_tail_) {
+    layout_web_contents_and_devtools(bounds, contents_view_, devtools_view_,
+                                     strategy_);
+  } else {
+    layout_web_contents_and_devtools(bounds, secondary_contents_view_,
+                                     secondary_devtools_view_,
+                                     secondary_strategy_);
   }
-  contents_width -= taken_left_width;
 
-  int taken_right_width = 0;
-  int right_side_x = contents_container->GetLocalBounds().right();
-  for (auto* view : right_side_candidate_views) {
-    if (!view || !view->GetVisible())
-      continue;
-
-    auto width = view->GetPreferredSize().width();
-    right_side_x -= width;
-    taken_right_width += width;
-    const gfx::Rect bounds(right_side_x, 0, width, contents_height);
-    view->SetBoundsRect(host_->GetMirroredRect(bounds));
+  if (browser_view_) {
+    browser_view_->NotifyDialogPositionRequiresUpdate();
   }
-  contents_width -= taken_right_width;
-
-  gfx::Size container_size(contents_width, contents_height);
-  gfx::Rect new_devtools_bounds;
-  gfx::Rect new_contents_bounds;
-
-  ApplyDevToolsContentsResizingStrategy(
-      strategy_, container_size, &new_devtools_bounds, &new_contents_bounds);
-
-  new_devtools_bounds.Offset(taken_left_width, 0);
-  new_contents_bounds.Offset(taken_left_width, 0);
-  // DevTools cares about the specific position, so we have to compensate RTL
-  // layout here.
-  devtools_view_->SetBoundsRect(host_->GetMirroredRect(new_devtools_bounds));
-  contents_view_->SetBoundsRect(host_->GetMirroredRect(new_contents_bounds));
 }

@@ -3,131 +3,56 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
+// types
 import { BraveWallet } from '../constants/types'
-import Amount from './amount'
 
-interface EVMStateChanges {
-  erc20Approvals: BraveWallet.BlowfishERC20ApprovalData[]
-  erc721Approvals: BraveWallet.BlowfishERC721ApprovalData[]
-  erc721ApprovalsForAll: BraveWallet.BlowfishERC721ApprovalForAllData[]
-  erc1155ApprovalsForAll: BraveWallet.BlowfishERC1155ApprovalForAllData[]
+// constants
+import { BLOWFISH_URL_WARNING_KINDS } from '../common/constants/blowfish'
 
-  inboundErc1155Transfers: BraveWallet.BlowfishERC1155TransferData[]
-  inboundErc20Transfers: BraveWallet.BlowfishERC20TransferData[]
-  inboundErc721Transfers: BraveWallet.BlowfishERC721TransferData[]
-  inboundNativeAssetTransfers: BraveWallet.BlowfishNativeAssetTransferData[]
+// utils
+import { getLocale } from '../../common/locale'
 
-  outboundErc1155Transfers: BraveWallet.BlowfishERC1155TransferData[]
-  outboundErc20Transfers: BraveWallet.BlowfishERC20TransferData[]
-  outboundErc721Transfers: BraveWallet.BlowfishERC721TransferData[]
-  outboundNativeAssetTransfers: BraveWallet.BlowfishNativeAssetTransferData[]
+interface GroupedEVMStateChanges {
+  evmApprovals: BraveWallet.BlowfishEVMStateChange[]
+  evmTransfers: BraveWallet.BlowfishEVMStateChange[]
 }
 
-interface SVMStateChanges {
-  solStakeAuthorityChanges: BraveWallet.BlowfishSOLStakeAuthorityChangeData[]
-  splApprovals: BraveWallet.BlowfishSPLApprovalData[]
-  inboundNativeAssetTransfers: BraveWallet.BlowfishSOLTransferData[]
-  outboundNativeAssetTransfers: BraveWallet.BlowfishSOLTransferData[]
-  inboundSplTransfers: BraveWallet.BlowfishSPLTransferData[]
-  outboundSplTransfers: BraveWallet.BlowfishSPLTransferData[]
+interface GroupedSVMStateChanges {
+  solStakeAuthorityChanges: BraveWallet.BlowfishSolanaStateChange[]
+  splApprovals: BraveWallet.BlowfishSolanaStateChange[]
+  svmTransfers: BraveWallet.BlowfishSolanaStateChange[]
+  accountOwnerChangeData: BraveWallet.BlowfishSolanaStateChange[]
 }
 
-type DiffSign = 'PLUS' | 'MINUS'
-
-const isInboundEVMTransfer = (transferData: {
-  amount: BraveWallet.BlowfishEVMAmount
-}) => {
-  const { amount } = transferData
-  if (new Amount(amount.after).gt(amount.before)) {
-    return true
-  }
-
-  // outbound
-  return false
-}
-
-const isInboundSVMTransfer = (transferData: {
-  diff: BraveWallet.BlowfishSolanaDiff
-}) => {
-  const { diff } = transferData
-
-  return diff.sign as DiffSign === 'PLUS'
-}
-
-export const decodeSimulatedEVMStateChanges = (
+export const groupSimulatedEVMStateChanges = (
   evmStateChanges: BraveWallet.BlowfishEVMStateChange[]
-): EVMStateChanges => {
-  const changes: EVMStateChanges = {
-    erc1155ApprovalsForAll: [],
-    erc20Approvals: [],
-    erc721Approvals: [],
-    erc721ApprovalsForAll: [],
-    inboundErc1155Transfers: [],
-    inboundErc20Transfers: [],
-    inboundErc721Transfers: [],
-    inboundNativeAssetTransfers: [],
-    outboundErc1155Transfers: [],
-    outboundErc20Transfers: [],
-    outboundErc721Transfers: [],
-    outboundNativeAssetTransfers: []
+): GroupedEVMStateChanges => {
+  const changes: GroupedEVMStateChanges = {
+    evmApprovals: [],
+    evmTransfers: []
   }
 
-  for (const { rawInfo } of evmStateChanges) {
-    const { data } = rawInfo
+  for (const stateChange of evmStateChanges) {
+    const { data } = stateChange.rawInfo
 
-    // approvals
-    if (data.erc20ApprovalData) {
-      changes.erc20Approvals.push(data.erc20ApprovalData)
-    }
-
-    if (data.erc721ApprovalData) {
-      changes.erc721Approvals.push(data.erc721ApprovalData)
-    }
-
-    // approvals for all
-    if (data.erc721ApprovalForAllData) {
-      changes.erc721ApprovalsForAll.push(data.erc721ApprovalForAllData)
-    }
-
-    if (data.erc1155ApprovalForAllData) {
-      changes.erc1155ApprovalsForAll.push(data.erc1155ApprovalForAllData)
+    // approvals & approvals for all
+    if (
+      data.erc20ApprovalData ||
+      data.erc721ApprovalData ||
+      data.erc721ApprovalForAllData ||
+      data.erc1155ApprovalForAllData
+    ) {
+      changes.evmApprovals.push(stateChange)
     }
 
     // transfers
-    if (data.erc20TransferData) {
-      if (isInboundEVMTransfer(data.erc20TransferData)) {
-        changes.inboundErc20Transfers.push(data.erc20TransferData)
-      }
-
-      // outbound
-      changes.outboundErc20Transfers.push(data.erc20TransferData)
-    }
-
-    if (data.erc721TransferData) {
-      if (data.erc721TransferData) {
-        changes.inboundErc721Transfers.push(data.erc721TransferData)
-      }
-
-      // outbound
-      changes.outboundErc721Transfers.push(data.erc721TransferData)
-    }
-
-    if (data.erc1155TransferData) {
-      if (isInboundEVMTransfer(data.erc1155TransferData)) {
-        changes.inboundErc1155Transfers.push(data.erc1155TransferData)
-      }
-
-      // outbound
-      changes.outboundErc1155Transfers.push(data.erc1155TransferData)
-    }
-
-    if (data.nativeAssetTransferData) {
-      if (isInboundEVMTransfer(data.nativeAssetTransferData)) {
-        changes.inboundNativeAssetTransfers.push(data.nativeAssetTransferData)
-      }
-
-      // outbound
-      changes.outboundNativeAssetTransfers.push(data.nativeAssetTransferData)
+    if (
+      data.erc20TransferData ||
+      data.erc721TransferData ||
+      data.erc1155TransferData ||
+      data.nativeAssetTransferData
+    ) {
+      changes.evmTransfers.push(stateChange)
     }
   }
 
@@ -136,45 +61,156 @@ export const decodeSimulatedEVMStateChanges = (
 
 export const decodeSimulatedSVMStateChanges = (
   stateChanges: BraveWallet.BlowfishSolanaStateChange[]
-): SVMStateChanges => {
-
-  const changes: SVMStateChanges = {
+): GroupedSVMStateChanges => {
+  const changes: GroupedSVMStateChanges = {
     solStakeAuthorityChanges: [],
     splApprovals: [],
-    inboundNativeAssetTransfers: [],
-    inboundSplTransfers: [],
-    outboundNativeAssetTransfers: [],
-    outboundSplTransfers: []
+    svmTransfers: [],
+    accountOwnerChangeData: []
   }
 
-  for (const { rawInfo } of stateChanges) {
-    const { data } = rawInfo
+  for (const stateChange of stateChanges) {
+    const { data } = stateChange.rawInfo
 
     // staking auth changes
     if (data.solStakeAuthorityChangeData) {
-      changes.solStakeAuthorityChanges.push(data.solStakeAuthorityChangeData)
+      changes.solStakeAuthorityChanges.push(stateChange)
     }
 
     // approvals
     if (data.splApprovalData) {
-      changes.splApprovals.push(data.splApprovalData)
+      changes.splApprovals.push(stateChange)
     }
 
     // transfers
-    if (data.solTransferData) {
-      if (isInboundSVMTransfer(data.solTransferData)) {
-        changes.inboundNativeAssetTransfers.push(data.solTransferData)
-      }
-      changes.outboundNativeAssetTransfers.push(data.solTransferData)
+    if (data.solTransferData || data.splTransferData) {
+      changes.svmTransfers.push(stateChange)
     }
 
-    if (data.splTransferData) {
-      if (isInboundSVMTransfer(data.splTransferData)) {
-        changes.inboundSplTransfers.push(data.splTransferData)
-      }
-      changes.outboundSplTransfers.push(data.splTransferData)
+    // account ownership changes
+    if (data.userAccountOwnerChangeData) {
+      changes.accountOwnerChangeData.push(stateChange)
     }
   }
 
   return changes
+}
+
+export const isUrlWarning = (warningKind: BraveWallet.BlowfishWarningKind) => {
+  return BLOWFISH_URL_WARNING_KINDS.includes(warningKind)
+}
+
+const { BlowfishEVMErrorKind, BlowfishSolanaErrorKind: SolErrorKind } =
+  BraveWallet
+
+export const translateSimulationWarning = (
+  warning: BraveWallet.BlowfishWarning | undefined
+) => {
+  if (!warning) {
+    return ''
+  }
+
+  switch (warning.kind) {
+    case BraveWallet.BlowfishWarningKind.kApprovalToEOA:
+      return getLocale('braveWalletSimulationWarningApprovalToEoa')
+
+    case BraveWallet.BlowfishWarningKind.kBulkApprovalsRequest:
+      return getLocale('braveWalletSimulationWarningBulkApprovalsRequest')
+
+    case BraveWallet.BlowfishWarningKind.kCopyCatDomain:
+    case BraveWallet.BlowfishWarningKind.kMultiCopyCatDomain:
+      return getLocale('braveWalletSimulationWarningCopyCatDomain')
+
+    case BraveWallet.BlowfishWarningKind.kDanglingApproval:
+      return getLocale('braveWalletSimulationWarningDanglingApproval')
+
+    case BraveWallet.BlowfishWarningKind.kKnownMalicious:
+      return getLocale('braveWalletSimulationWarningKnownMalicious')
+
+    case BraveWallet.BlowfishWarningKind.kNewDomain:
+      return getLocale('braveWalletSimulationWarningNewDomain')
+
+    case BraveWallet.BlowfishWarningKind.kPoisonedAddress:
+      return getLocale('braveWalletSimulationWarningPoisonedAddress')
+
+    case BraveWallet.BlowfishWarningKind.kSetOwnerAuthority:
+      return getLocale('braveWalletSimulationWarningSetOwnerAuthority')
+
+    case BraveWallet.BlowfishWarningKind.kSuspectedMalicious:
+      return getLocale('braveWalletSimulationWarningSuspectedMalicious')
+
+    case BraveWallet.BlowfishWarningKind.kTooManyTransactions:
+      return warning.severity === BraveWallet.BlowfishWarningSeverity.kCritical
+        ? getLocale('braveWalletSimulationWarningTooManyTransactionsCritical')
+        : getLocale('braveWalletSimulationWarningTooManyTransactions')
+
+    case BraveWallet.BlowfishWarningKind.kTradeForNothing:
+      return getLocale('braveWalletSimulationWarningTradeForNothing')
+
+    case BraveWallet.BlowfishWarningKind.kTransferringErc20ToOwnContract:
+      return getLocale(
+        'braveWalletSimulationWarningTransferringErc20ToOwnContract'
+      )
+
+    case BraveWallet.BlowfishWarningKind.kUserAccountOwnerChange:
+      return getLocale('braveWalletSimulationWarningUserAccountOwnerChange')
+
+    default:
+      return warning.message
+  }
+}
+
+export const translateSimulationResultError = (
+  error:
+    | BraveWallet.BlowfishEVMError
+    | BraveWallet.BlowfishSolanaError
+    | undefined,
+  /** prevents collisions between error enums */
+  coinType: BraveWallet.CoinType
+) => {
+  if (!error) {
+    return ''
+  }
+
+  // SVM
+  if (coinType === BraveWallet.CoinType.SOL) {
+    switch (error.kind) {
+      case SolErrorKind.kAccountDoesNotHaveEnoughSolToPerformTheOperation: //
+      case SolErrorKind.kInsufficientFunds:
+        return getLocale('braveWalletSimulationErrorInsufficientFunds')
+
+      case SolErrorKind.kInsufficientFundsForFee:
+        return getLocale('braveWalletSimulationErrorInsufficientFundsForFee')
+
+      case SolErrorKind.kTooManyTransactions:
+        return getLocale(
+          'braveWalletSimulationWarningTooManyTransactionsCritical'
+        )
+
+      default:
+        return (
+          error.humanReadableError ||
+          getLocale('braveWalletSimulationUnexpectedError')
+        )
+    }
+  }
+
+  // EVM
+  switch (error.kind) {
+    case BlowfishEVMErrorKind.kTransactionReverted:
+      return getLocale('braveWalletSimulationErrorTransactionReverted')
+
+    // Known Unknowns
+    case BlowfishEVMErrorKind.kTransactionError:
+    case BlowfishEVMErrorKind.kSimulationFailed:
+    case BlowfishEVMErrorKind.kUnknownError:
+      return getLocale('braveWalletSimulationUnexpectedError')
+
+    // Unknown error type
+    default:
+      return (
+        error.humanReadableError ||
+        getLocale('braveWalletSimulationUnexpectedError')
+      )
+  }
 }

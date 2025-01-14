@@ -20,9 +20,13 @@ LowercaseTransformation::LowercaseTransformation()
 
 std::unique_ptr<Data> LowercaseTransformation::Apply(
     const std::unique_ptr<Data>& input_data) const {
-  CHECK(input_data->GetType() == DataType::kText);
+  CHECK(input_data);
 
-  auto* text_data = static_cast<TextData*>(input_data.get());
+  if (input_data->GetType() != DataType::kText) {
+    return {};
+  }
+
+  const auto* const text_data = static_cast<TextData*>(input_data.get());
 
   std::string lowercase_text = base::ToLowerASCII(text_data->GetText());
 

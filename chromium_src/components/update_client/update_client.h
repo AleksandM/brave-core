@@ -6,12 +6,17 @@
 #ifndef BRAVE_CHROMIUM_SRC_COMPONENTS_UPDATE_CLIENT_UPDATE_CLIENT_H_
 #define BRAVE_CHROMIUM_SRC_COMPONENTS_UPDATE_CLIENT_UPDATE_CLIENT_H_
 
+#define Uninstall(...)      \
+  IsBraveComponent() const; \
+  virtual bool Uninstall(__VA_ARGS__)
+
 #define UpdateClientFactory                                             \
   UpdateClientFactory_ChromiumImpl(scoped_refptr<Configurator> config); \
   scoped_refptr<UpdateClient> UpdateClientFactory
 
 #include "src/components/update_client/update_client.h"  // IWYU pragma: export
 
+#undef Uninstall
 #undef UpdateClientFactory
 
 #endif  // BRAVE_CHROMIUM_SRC_COMPONENTS_UPDATE_CLIENT_UPDATE_CLIENT_H_

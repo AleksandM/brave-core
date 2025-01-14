@@ -7,14 +7,14 @@
 
 #include <vector>
 
-#include "brave/app/vector_icons/vector_icons.h"
 #include "brave/browser/brave_wallet/brave_wallet_tab_helper.h"
 #include "brave/browser/ui/brave_icon_with_badge_image_source.h"
-#include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
+#include "brave/browser/ui/color/brave_color_id.h"
 #include "brave/components/brave_wallet/browser/pref_names.h"
-#include "brave/components/brave_wallet/common/features.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/constants/webui_url_constants.h"
 #include "brave/components/l10n/common/localization_util.h"
+#include "brave/components/vector_icons/vector_icons.h"
 #include "brave/grit/brave_generated_resources.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -27,10 +27,11 @@
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_contents.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
-#include "ui/base/models/simple_menu_model.h"
+#include "ui/color/color_provider_manager.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "ui/gfx/geometry/rrect_f.h"
 #include "ui/gfx/paint_vector_icon.h"
+#include "ui/menus/simple_menu_model.h"
 #include "ui/views/controls/highlight_path_generator.h"
 #include "ui/views/layout/fill_layout.h"
 
@@ -48,24 +49,30 @@ content::WebContents* GetActiveWebContents() {
 class BraveWalletButtonHighlightPathGenerator
     : public views::HighlightPathGenerator {
  public:
+  explicit BraveWalletButtonHighlightPathGenerator(bool use_extra_left_margin)
+      : use_extra_left_margin_(use_extra_left_margin) {}
+
   // HighlightPathGenerator:
   SkPath GetHighlightPath(const views::View* view) override {
     DCHECK(view);
 
     gfx::Rect rect(view->size());
     rect.Inset(GetToolbarInkDropInsets(view));
-    rect.Inset(gfx::Insets::TLBR(0, 0, 0, -1 * kBraveWalletLeftMarginExtra));
+    rect.Outset(gfx::Outsets::TLBR(
+        0, 0, 0, use_extra_left_margin_ ? kBraveWalletLeftMarginExtra : 0));
 
     auto* layout_provider = ChromeLayoutProvider::Get();
     DCHECK(layout_provider);
 
-    int radius = layout_provider->GetCornerRadiusMetric(
-        views::Emphasis::kMaximum, rect.size());
-
+    const int radius =
+        layout_provider->GetCornerRadiusMetric(views::Emphasis::kMaximum, {});
     SkPath path;
     path.addRoundRect(gfx::RectToSkRect(rect), radius, radius);
     return path;
   }
+
+ private:
+  bool use_extra_left_margin_ = false;
 };
 
 class WalletButtonMenuModel : public ui::SimpleMenuModel,
@@ -87,8 +94,9 @@ class WalletButtonMenuModel : public ui::SimpleMenuModel,
 
   // ui::SimpleMenuModel::Delegate override:
   void ExecuteCommand(int command_id, int event_flags) override {
-    if (command_id == HideBraveWalletIcon)
+    if (command_id == HideBraveWalletIcon) {
       prefs_->SetBoolean(kShowWalletIconOnToolbar, false);
+    }
   }
 
   void Build() {
@@ -121,11 +129,8 @@ WalletButton::WalletButton(View* backup_anchor_view, Profile* profile)
                    // already shows a panel on click
       prefs_(profile->GetPrefs()),
       backup_anchor_view_(backup_anchor_view) {
-  pref_change_registrar_.Init(prefs_);
-  pref_change_registrar_.Add(
-      kShowWalletIconOnToolbar,
-      base::BindRepeating(&WalletButton::OnPreferenceChanged,
-                          base::Unretained(this)));
+  SetTooltipText(
+      brave_l10n::GetLocalizedResourceUTF16String(IDS_TOOLTIP_WALLET));
 
   // The MenuButtonController makes sure the panel closes when clicked if the
   // panel is already open.
@@ -137,17 +142,10 @@ WalletButton::WalletButton(View* backup_anchor_view, Profile* profile)
   menu_button_controller_ = menu_button_controller.get();
   SetButtonController(std::move(menu_button_controller));
 
-  UpdateVisibility();
-
-  if (brave_wallet::ShouldShowTxStatusInToolbar()) {
-    notification_source_ =
-        std::make_unique<brave::WalletButtonNotificationSource>(
-            profile, base::BindRepeating(&WalletButton::OnNotificationUpdate,
-                                         weak_ptr_factory_.GetWeakPtr()));
-  }
-
-  views::HighlightPathGenerator::Install(
-      this, std::make_unique<BraveWalletButtonHighlightPathGenerator>());
+  notification_source_ =
+      std::make_unique<brave::WalletButtonNotificationSource>(
+          profile, base::BindRepeating(&WalletButton::OnNotificationUpdate,
+                                       weak_ptr_factory_.GetWeakPtr()));
 }
 
 WalletButton::~WalletButton() = default;
@@ -175,6 +173,19 @@ void WalletButton::OnNotificationUpdate(bool show_suggest_badge,
   UpdateImageAndText();
 }
 
+void WalletButton::InkDropRippleAnimationEnded(views::InkDropState state) {
+  const bool activated = state == views::InkDropState::ACTIVATED;
+  UpdateImageAndText(activated);
+}
+
+void WalletButton::OnThemeChanged() {
+  ToolbarButton::OnThemeChanged();
+
+  views::HighlightPathGenerator::Install(
+      this, std::make_unique<BraveWalletButtonHighlightPathGenerator>(
+                (counter_ > 0)));
+}
+
 std::string WalletButton::GetBadgeText() {
   if (counter_ > 0) {
     std::string text = counter_ > 99 ? "99+" : base::NumberToString(counter_);
@@ -183,10 +194,28 @@ std::string WalletButton::GetBadgeText() {
   return "";
 }
 
-void WalletButton::UpdateImageAndText() {
+void WalletButton::UpdateImageAndText(bool activated) {
+  views::HighlightPathGenerator::Install(
+      this, std::make_unique<BraveWalletButtonHighlightPathGenerator>(
+                (counter_ > 0)));
+
   const ui::ColorProvider* color_provider = GetColorProvider();
-  SkColor icon_color = color_provider->GetColor(kColorToolbarButtonIcon);
-  auto icon = gfx::CreateVectorIcon(kLeoProductBraveWalletIcon, 16, icon_color);
+
+  ui::ColorId color_id = kColorToolbarButtonIcon;
+  if (activated) {
+    color_id = kColorToolbarButtonActivated;
+  }
+
+  if (counter_ == 0) {
+    SetImageModel(views::Button::STATE_NORMAL,
+                  ui::ImageModel::FromVectorIcon(
+                      kLeoProductBraveWalletIcon,
+                      color_provider->GetColor(color_id), GetIconSize()));
+    return;
+  }
+
+  auto icon = gfx::CreateVectorIcon(kLeoProductBraveWalletIcon, GetIconSize(),
+                                    color_provider->GetColor(color_id));
 
   size_t icon_size = std::max(icon.width(), icon.height());
   auto badge_size = brave::BraveIconWithBadgeImageSource::GetMaxBadgeSize();
@@ -204,18 +233,9 @@ void WalletButton::UpdateImageAndText() {
   auto text = GetBadgeText();
   image_source->SetBadge(std::make_unique<IconWithBadgeImageSource::Badge>(
       text, brave::kBadgeTextColor, brave::kBadgeNotificationBG));
-  SetImage(views::Button::STATE_NORMAL,
-           gfx::ImageSkia(std::move(image_source), preferred_size));
-  SetTooltipText(
-      brave_l10n::GetLocalizedResourceUTF16String(IDS_TOOLTIP_WALLET));
-}
-
-void WalletButton::UpdateVisibility() {
-  SetVisible(prefs_->GetBoolean(kShowWalletIconOnToolbar));
-}
-
-void WalletButton ::OnPreferenceChanged() {
-  UpdateVisibility();
+  SetImageModel(views::Button::STATE_NORMAL,
+                ui::ImageModel::FromImageSkia(
+                    gfx::ImageSkia(std::move(image_source), preferred_size)));
 }
 
 void WalletButton::ShowWalletBubble() {
@@ -247,10 +267,11 @@ bool WalletButton::IsBubbleClosedForTesting() {
 
 views::View* WalletButton::GetAsAnchorView() {
   View* anchor_view = this;
-  if (!prefs_->GetBoolean(kShowWalletIconOnToolbar))
+  if (!prefs_->GetBoolean(kShowWalletIconOnToolbar)) {
     anchor_view = backup_anchor_view_;
+  }
   return anchor_view;
 }
 
-BEGIN_METADATA(WalletButton, ToolbarButton)
+BEGIN_METADATA(WalletButton)
 END_METADATA

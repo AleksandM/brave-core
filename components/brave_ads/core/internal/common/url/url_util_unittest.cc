@@ -5,8 +5,6 @@
 
 #include "brave/components/brave_ads/core/internal/common/url/url_util.h"
 
-#include <string>
-
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
 
@@ -14,375 +12,331 @@
 
 namespace brave_ads {
 
-TEST(BraveAdsUrlUtilTest, GetUrlWithEmptyQuery) {
-  // Arrange
-
-  // Act
-
-  // Assert
+TEST(BraveAdsUrlUtilTest, GetUrlExcludingQuery) {
+  // Act & Assert
   EXPECT_EQ(GURL("https://foo.com/bar"),
-            GetUrlWithEmptyQuery(GURL("https://foo.com/bar?baz=qux")));
+            GetUrlExcludingQuery(GURL("https://foo.com/bar?baz=qux")));
 }
 
-TEST(BraveAdsUrlUtilTest, DoesNotSupportInvalidUrl) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("INVALID")));
+TEST(BraveAdsUrlUtilTest, GetUrlExcludingQueryWhenNoQueryNameAndValue) {
+  // Act & Assert
+  EXPECT_EQ(GURL("https://foo.com/bar"),
+            GetUrlExcludingQuery(GURL("https://foo.com/bar?")));
 }
 
-TEST(BraveAdsUrlUtilTest, DoesSupportUrlWithHttpsScheme) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("https://foobar.com")));
+TEST(BraveAdsUrlUtilTest, GetUrlExcludingQueryWhenNoQuery) {
+  // Act & Assert
+  EXPECT_EQ(GURL("https://foo.com/bar"),
+            GetUrlExcludingQuery(GURL("https://foo.com/bar")));
 }
 
-TEST(BraveAdsUrlUtilTest, DoesNotSupportUrlWithHttpScheme) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("http://foobar.com")));
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportInvalidUrl) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("some random string")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("//*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("://*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("*://*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("*****")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://?.com")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://?.google.com")));
 }
 
-TEST(BraveAdsUrlUtilTest, DoesNotSupportUrlWithFooBarScheme) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("foobar://baz")));
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportUrlWithNonHttpsScheme) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("*://www.example.com/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("http://www.example.com/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("ftp://www.example.com/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL(
+      "ipfs://bafybeigi77rim3p5tw3upw2ca4ep5ng7uaarvrz46zidd2ai6cjh46yxoy/")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL(
+      "ipfs://bafybeigi77rim3p5tw3upw2ca4ep5ng7uaarvrz46zidd2ai6cjh46yxoy/")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("javascript:alert(1)")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("data:text/html,<h1>hello</h1>")));
 }
 
-TEST(BraveAdsUrlUtilTest, DoesNotSupportBraveSchemeWithFooBarHostName) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("brave://foobar")));
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportUrlWithPortNumber) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://www.brave.com:1234/thank-you*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://www.brave.com:1234*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://brave.com:*/x")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://brave.com:*")));
 }
 
-TEST(BraveAdsUrlUtilTest, DoesSupportBraveSchemeWithWalletHostName) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://wallet")));
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportIpAddress) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://1.2.3.4/thank-you*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://192.168.0.0/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://192.*.*.*/x")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://[::1]/thankyou")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://030000001017/")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://0xc000020f/")));
 }
 
-TEST(BraveAdsUrlUtilTest, DoesSupportBraveSchemeWithWalletHostNameAndPath) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://wallet/foo")));
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportUrlWithUsernameOrPassword) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://user:pwd@brave.com/thank-you*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://user@brave.com:1234*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://*@brave.com/x")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://user:*@brave.com/y")));
 }
 
-TEST(BraveAdsUrlUtilTest, DoesSupportBraveSchemeWithSyncHostName) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://sync")));
-}
-
-TEST(BraveAdsUrlUtilTest, DoesSupportBraveSchemeWithSyncHostNameAndPath) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://sync/foo")));
-}
-
-TEST(BraveAdsUrlUtilTest, DoesSupportBraveSchemeWithRewardsHostName) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://rewards")));
-}
-
-TEST(BraveAdsUrlUtilTest, DoesSupportBraveSchemeWithRewardsHostNameAndPath) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://rewards/foo")));
-}
-
-TEST(BraveAdsUrlUtilTest, DoesNotSupportBraveSchemeWithSettingsHostName) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("brave://settings")));
-}
-
-TEST(BraveAdsUrlUtilTest,
-     DoesNotSupportBraveSchemeWithSettingsHostNameAndFooBarPath) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("brave://settings/foobar")));
-}
-
-TEST(BraveAdsUrlUtilTest,
-     DoesSupportBraveSchemeWithSettingsHostNameAndSearchEnginesPath) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://settings/searchEngines")));
-}
-
-TEST(
-    BraveAdsUrlUtilTest,
-    DoesSupportBraveSchemeWithSettingsHostNameSearchEnginesPathAndSearchQuery) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(
-      DoesSupportUrl(GURL("brave://settings/searchEngines?search=foobar")));
-}
-
-TEST(
-    BraveAdsUrlUtilTest,
-    DoesNotSupportBraveSchemeWithSettingsHostNameSearchEnginesPathAndMultipleSearchQueries) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(
-      GURL("brave://settings/searchEngines?search=foo&bar=baz")));
-}
-
-TEST(
-    BraveAdsUrlUtilTest,
-    DoesNotSupportBraveSchemeWithSettingsHostNameSearchEnginesPathAndInvalidQuery) {
-  // Arrange
-
-  // Act
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("brave://settings/searchEngines?search")));
-}
-
-TEST(BraveAdsUrlUtilTest,
-     DoesSupportBraveSchemeWithSettingsHostNameAndSearchPath) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://settings/search")));
-}
-
-TEST(BraveAdsUrlUtilTest,
-     DoesSupportBraveSchemeWithSettingsHostNameSearchPathAndSearchQuery) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_TRUE(DoesSupportUrl(GURL("brave://settings/search?search=foobar")));
-}
-
-TEST(
-    BraveAdsUrlUtilTest,
-    DoesNotSupportBraveSchemeWithSettingsHostNameSearchPathAndMultipleSearchQueries) {
-  // Arrange
-
-  // Act
-
-  // Assert
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportUrlWithWildcardInEtldPlus1) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://www.google.co.*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://www.google.*.uk")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://www.*.co.uk")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://www.google.co.uk*")));
   EXPECT_FALSE(
-      DoesSupportUrl(GURL("brave://settings/search?search=foo&bar=baz")));
+      ShouldSupportUrl(GURL("https://www.comparecredit.com*/secure*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://www.sophos.com*thank-you*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://*.security/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://*.appspot.com/*")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportLocalUrl) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://localhost/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://example.local/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://*.example.local/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://*.local/*")));
+  EXPECT_FALSE(ShouldSupportUrl(GURL("https://localhost*/")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldSupportUrl) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://*.google.co.uk")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://www.google.co.uk/*")));
+  EXPECT_TRUE(
+      ShouldSupportUrl(GURL("https://dashboard.0x.org/create-account/"
+                            "verification-sent?tx-relay-brave*")));
+  EXPECT_TRUE(
+      ShouldSupportUrl(GURL("https://www.app.apxlending.com/verify_email*")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://bonkmark.com/*/#send")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://account.brave.com/account/*")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://www.cube.exchange/*step=5*")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL(
+      "https://play.google.com/store/apps/details?id=com.musclewiki.macro*")));
+  EXPECT_TRUE(ShouldSupportUrl(
+      GURL("https://mail.proton.me/u/*/inbox?welcome=true&ref=*")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://sheets.new/*")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://*.hello.security/*")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://mysite.appspot.com/*")));
+  EXPECT_TRUE(ShouldSupportUrl(GURL("https://my.site.developer.app/*")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportBraveSchemeWithFooBarHostName) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("chrome://foobar")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldSupportBraveSchemeWithWalletHostName) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://wallet")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldSupportBraveSchemeWithWalletHostNameAndPath) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://wallet/foo")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldSupportBraveSchemeWithSyncHostName) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://sync")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldSupportBraveSchemeWithSyncHostNameAndPath) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://sync/foo")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldSupportBraveSchemeWithRewardsHostName) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://rewards")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldSupportBraveSchemeWithRewardsHostNameAndPath) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://rewards/foo")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportBraveSchemeWithSettingsHostName) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("chrome://settings")));
 }
 
 TEST(BraveAdsUrlUtilTest,
-     DoesNotSupportBraveSchemeWithSettingsHostNameSearchPathAndInvalidQuery) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("brave://settings/search?search")));
+     ShouldNotSupportBraveSchemeWithSettingsHostNameAndFooBarPath) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("chrome://settings/foobar")));
 }
 
 TEST(BraveAdsUrlUtilTest,
-     DoesNotSupportBraveSchemeWithSettingsHostNameAndQuery) {
-  // Arrange
+     ShouldSupportBraveSchemeWithSettingsHostNameAndSearchEnginesPath) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://settings/searchEngines")));
+}
 
-  // Act
+TEST(
+    BraveAdsUrlUtilTest,
+    ShouldSupportBraveSchemeWithSettingsHostNameSearchEnginesPathAndSearchQuery) {
+  // Act & Assert
+  EXPECT_TRUE(
+      ShouldSupportUrl(GURL("chrome://settings/searchEngines?search=foobar")));
+}
 
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("brave://settings/?search=foobar")));
+TEST(
+    BraveAdsUrlUtilTest,
+    ShouldNotSupportBraveSchemeWithSettingsHostNameSearchEnginesPathAndMultipleSearchQueries) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(
+      GURL("chrome://settings/searchEngines?search=foo&bar=baz")));
+}
+
+TEST(
+    BraveAdsUrlUtilTest,
+    ShouldNotSupportBraveSchemeWithSettingsHostNameSearchEnginesPathAndInvalidQuery) {
+  // Act & Assert
+  EXPECT_FALSE(
+      ShouldSupportUrl(GURL("chrome://settings/searchEngines?search")));
 }
 
 TEST(BraveAdsUrlUtilTest,
-     DoesNotSupportBraveSchemeWithSettingsHostNameAndInvalidQuery) {
-  // Arrange
-
-  // Act
-
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("brave://settings/?search")));
+     ShouldSupportBraveSchemeWithSettingsHostNameAndSearchPath) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://settings/search")));
 }
 
-TEST(BraveAdsUrlUtilTest, MalformedUrlIsNotSupported) {
-  // Arrange
+TEST(BraveAdsUrlUtilTest,
+     ShouldSupportBraveSchemeWithSettingsHostNameSearchPathAndSearchQuery) {
+  // Act & Assert
+  EXPECT_TRUE(ShouldSupportUrl(GURL("chrome://settings/search?search=foobar")));
+}
 
-  // Act
+TEST(
+    BraveAdsUrlUtilTest,
+    ShouldNotSupportBraveSchemeWithSettingsHostNameSearchPathAndMultipleSearchQueries) {
+  // Act & Assert
+  EXPECT_FALSE(
+      ShouldSupportUrl(GURL("chrome://settings/search?search=foo&bar=baz")));
+}
 
-  // Assert
-  EXPECT_FALSE(DoesSupportUrl(GURL("http://foobar.com/brave://wallet")));
+TEST(BraveAdsUrlUtilTest,
+     ShouldNotSupportBraveSchemeWithSettingsHostNameSearchPathAndInvalidQuery) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("chrome://settings/search?search")));
+}
+
+TEST(BraveAdsUrlUtilTest,
+     ShouldNotSupportBraveSchemeWithSettingsHostNameAndQuery) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("chrome://settings/?search=foobar")));
+}
+
+TEST(BraveAdsUrlUtilTest,
+     ShouldNotSupportBraveSchemeWithSettingsHostNameAndInvalidQuery) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("chrome://settings/?search")));
+}
+
+TEST(BraveAdsUrlUtilTest, ShouldNotSupportMalformedUrl) {
+  // Act & Assert
+  EXPECT_FALSE(ShouldSupportUrl(GURL("http://foobar.com/chrome://wallet")));
 }
 
 TEST(BraveAdsUrlUtilTest, UrlMatchesPatternWithNoWildcards) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(MatchUrlPattern(GURL("https://www.foo.com/"),
-                              /*pattern*/ "https://www.foo.com/"));
+                              /*pattern=*/"https://www.foo.com/"));
 }
 
 TEST(BraveAdsUrlUtilTest, UrlWithPathMatchesPatternWithNoWildcards) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(MatchUrlPattern(GURL("https://www.foo.com/bar"),
-                              /*pattern*/ "https://www.foo.com/bar"));
+                              /*pattern=*/"https://www.foo.com/bar"));
 }
 
 TEST(BraveAdsUrlUtilTest, UrlDoesNotMatchPattern) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_FALSE(
-      MatchUrlPattern(GURL("https://www.foo.com/"), /*pattern*/ "www.foo.com"));
+      MatchUrlPattern(GURL("https://www.foo.com/"), /*pattern=*/"www.foo.com"));
+}
+
+TEST(BraveAdsUrlUtilTest, UrlMatchesPatternWithQuery) {
+  // Act & Assert
+  EXPECT_TRUE(
+      MatchUrlPattern(GURL("https://dashboard.0x.org/create-account/"
+                           "verification-sent?tx-relay-brave-browser"),
+                      /*pattern=*/"https://dashboard.0x.org/create-account/"
+                                  "verification-sent?tx-relay-brave*"));
+}
+
+TEST(BraveAdsUrlUtilTest, UrlDoesNotMatchPatternWithQuery) {
+  // Act & Assert
+  EXPECT_FALSE(
+      MatchUrlPattern(GURL("https://dashboard.0x.org/create-account/"
+                           "verification-sent-tx-relay-brave-browser"),
+                      /*pattern=*/"https://dashboard.0x.org/create-account/"
+                                  "verification-sent?tx-relay-brave*"));
 }
 
 TEST(BraveAdsUrlUtilTest, UrlDoesNotMatchPatternWithMissingEmptyPath) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_FALSE(MatchUrlPattern(GURL("https://www.foo.com/"),
-                               /*pattern*/ "https://www.foo.com"));
+                               /*pattern=*/"https://www.foo.com"));
 }
 
 TEST(BraveAdsUrlUtilTest, UrlMatchesEndWildcardPattern) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(MatchUrlPattern(GURL("https://www.foo.com/bar?key=test"),
-                              /*pattern*/ "https://www.foo.com/bar*"));
+                              /*pattern=*/"https://www.foo.com/bar*"));
 }
 
 TEST(BraveAdsUrlUtilTest, UrlMatchesMidWildcardPattern) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(MatchUrlPattern(GURL("https://www.foo.com/woo-bar-hoo"),
-                              /*pattern*/ "https://www.foo.com/woo*hoo"));
+                              /*pattern=*/"https://www.foo.com/woo*hoo"));
 }
 
 TEST(BraveAdsUrlUtilTest, UrlDoesNotMatchMidWildcardPattern) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_FALSE(MatchUrlPattern(GURL("https://www.foo.com/woo"),
-                               /*pattern*/ "https://www.foo.com/woo*hoo"));
+                               /*pattern=*/"https://www.foo.com/woo*hoo"));
 }
 
 TEST(BraveAdsUrlUtilTest, SameDomainOrHost) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(SameDomainOrHost(GURL("https://foo.com?bar=test"),
                                GURL("https://subdomain.foo.com/bar")));
 }
 
 TEST(BraveAdsUrlUtilTest, NotSameDomainOrHost) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_FALSE(SameDomainOrHost(GURL("https://foo.com?bar=test"),
                                 GURL("https://subdomain.bar.com/foo")));
 }
 
 TEST(BraveAdsUrlUtilTest, SameDomainOrHostForUrlWithNoSubdomain) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(SameDomainOrHost(GURL("https://foo.com?bar=test"),
                                GURL("https://foo.com/bar")));
 }
 
 TEST(BraveAdsUrlUtilTest, NotSameDomainOrHostForUrlWithNoSubdomain) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_FALSE(SameDomainOrHost(GURL("https://foo.com?bar=test"),
                                 GURL("https://bar.com/foo")));
 }
 
 TEST(BraveAdsUrlUtilTest, SameDomainOrHostForUrlWithRef) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(SameDomainOrHost(GURL("https://foo.com?bar=test#ref"),
                                GURL("https://foo.com/bar")));
 }
 
 TEST(BraveAdsUrlUtilTest, NotSameDomainOrHostForUrlWithRef) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_FALSE(SameDomainOrHost(GURL("https://foo.com?bar=test#ref"),
                                 GURL("https://bar.com/foo")));
 }
@@ -392,9 +346,7 @@ TEST(BraveAdsUrlUtilTest, DomainOrHostExists) {
   const std::vector<GURL> urls = {GURL("https://foo.com"),
                                   GURL("https://bar.com")};
 
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_TRUE(DomainOrHostExists(urls, GURL("https://bar.com/foo")));
 }
 
@@ -403,9 +355,7 @@ TEST(BraveAdsUrlUtilTest, DomainOrHostDoesNotExist) {
   const std::vector<GURL> urls = {GURL("https://foo.com"),
                                   GURL("https://bar.com")};
 
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_FALSE(DomainOrHostExists(urls, GURL("https://baz.com/qux")));
 }
 

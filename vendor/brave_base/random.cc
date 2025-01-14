@@ -3,21 +3,19 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "brave_base/random.h"
+#include "brave/vendor/brave_base/random.h"
 
+#include <bit>
 #include <cmath>
 
 #include "base/bits.h"
 #include "crypto/random.h"
 
-namespace brave_base {
-namespace random {
+namespace brave_base::random {
 
 uint64_t Uniform64() {
   uint64_t x;
-
-  crypto::RandBytes(&x, sizeof x);
-
+  crypto::RandBytes(base::byte_span_from_ref(x));
   return x;
 }
 
@@ -51,10 +49,10 @@ double Uniform_01() {
   //
   // If we stopped at e >= 1088, this means our RNG is broken.  In
   // that case, we could just as well abort the process.  But it is
-  // also safe to call CountLeadingZeroBits at this point; it will
+  // also safe to call std::countl_zero at this point; it will
   // just return 64, and the exponent will be even more improbably
   // larger.
-  e += base::bits::CountLeadingZeroBits(x);
+  e += std::countl_zero(x);
 
   u = Uniform64();
 
@@ -121,5 +119,4 @@ double Uniform_01(uint64_t e, uint64_t u) {
 
 }  // namespace deterministic
 
-}  // namespace random
-}  // namespace brave_base
+}  // namespace brave_base::random

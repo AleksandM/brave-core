@@ -25,6 +25,7 @@
 #include "ui/native_theme/native_theme.h"
 #include "ui/views/background.h"
 #include "ui/views/border.h"
+#include "ui/views/controls/button/button.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/image_view.h"
 #include "ui/views/controls/label.h"
@@ -37,7 +38,7 @@ constexpr int kBodyMaximumLines = 4;
 
 constexpr gfx::Size kTooltipSize(434 + 15, 104 + 15);
 constexpr gfx::Size kTitleSize(200, 20);
-constexpr gfx::Size kBodySize(279, 58);
+constexpr gfx::Size kBodySize(279, 72);
 constexpr gfx::Size kButtonSize(82, 24);
 
 constexpr char kFontName[] = "Roboto";
@@ -181,6 +182,7 @@ void BraveTooltipView::CreateView() {
   views::View* container_view = new views::View();
   container_view->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical, gfx::Insets(), 4));
+  container_view->SetPreferredSize(kBodySize);
   AddChildView(container_view);
 
   // Header
@@ -204,7 +206,7 @@ void BraveTooltipView::Close() {
   is_closing_ = true;
 
   if (tooltip_popup_) {
-    tooltip_popup_->Close(/* by_user */ true);
+    tooltip_popup_->Close();
   }
 }
 
@@ -273,6 +275,7 @@ void BraveTooltipView::UpdateTitleLabelColors() {
 
 views::View* BraveTooltipView::CreateButtonView() {
   views::View* view = new views::View();
+  view->SetPreferredSize(kButtonSize);
 
   view->SetLayoutManager(std::make_unique<views::BoxLayout>(
       views::BoxLayout::Orientation::kVertical, gfx::Insets(), 7));
@@ -370,6 +373,10 @@ void BraveTooltipView::UpdateOkButtonColors() {
   const bool should_use_dark_colors = GetNativeTheme()->ShouldUseDarkColors();
   ok_button_->SetBackground(views::CreateRoundedRectBackground(
       kDefaultButtonColor, kButtonCornerRadius));
+  ok_button_->SetTextColor(views::Button::ButtonState::STATE_DISABLED,
+                           should_use_dark_colors
+                               ? kDarkModeDefaultButtonTextColor
+                               : kLightModeDefaultButtonTextColor);
   ok_button_->SetEnabledTextColors(should_use_dark_colors
                                        ? kDarkModeDefaultButtonTextColor
                                        : kLightModeDefaultButtonTextColor);
@@ -409,6 +416,10 @@ void BraveTooltipView::UpdateCancelButtonColors() {
   cancel_button_->SetBackground(views::CreateRoundedRectBackground(
       should_use_dark_colors ? kDarkModeButtonColor : kLightModeButtonColor,
       kButtonCornerRadius));
+  cancel_button_->SetTextColor(views::Button::ButtonState::STATE_DISABLED,
+                               should_use_dark_colors
+                                   ? kDarkModeButtonTextColor
+                                   : kLightModeButtonTextColor);
   cancel_button_->SetEnabledTextColors(should_use_dark_colors
                                            ? kDarkModeButtonTextColor
                                            : kLightModeButtonTextColor);
@@ -420,7 +431,7 @@ void BraveTooltipView::OnCancelButtonPressed() {
   }
 }
 
-BEGIN_METADATA(BraveTooltipView, views::View)
+BEGIN_METADATA(BraveTooltipView)
 END_METADATA
 
 }  // namespace brave_tooltips

@@ -5,30 +5,44 @@
 
 package org.chromium.chrome.browser.toolbar.top;
 
+import android.content.Context;
 import android.view.View;
-import android.view.ViewStub;
+import android.view.View.OnClickListener;
+import android.view.View.OnLongClickListener;
 
-import org.chromium.base.Callback;
+import androidx.annotation.ColorInt;
+import androidx.annotation.Nullable;
+
+import org.chromium.base.BraveReflectionUtil;
 import org.chromium.base.supplier.ObservableSupplier;
 import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.browser_controls.BrowserControlsVisibilityManager;
 import org.chromium.chrome.browser.browser_controls.BrowserStateBrowserControlsVisibilityDelegate;
+import org.chromium.chrome.browser.fullscreen.FullscreenManager;
+import org.chromium.chrome.browser.layouts.LayoutManager;
 import org.chromium.chrome.browser.layouts.LayoutStateProvider;
+import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tab.TabObscuringHandler;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.theme.ThemeColorProvider;
-import org.chromium.chrome.browser.toolbar.ButtonData;
+import org.chromium.chrome.browser.theme.TopUiThemeColorProvider;
 import org.chromium.chrome.browser.toolbar.ButtonDataProvider;
 import org.chromium.chrome.browser.toolbar.ToolbarDataProvider;
+import org.chromium.chrome.browser.toolbar.ToolbarProgressBar;
 import org.chromium.chrome.browser.toolbar.ToolbarTabController;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuButton;
 import org.chromium.chrome.browser.toolbar.menu_button.MenuButtonCoordinator;
 import org.chromium.chrome.browser.toolbar.top.NavigationPopup.HistoryDelegate;
 import org.chromium.chrome.browser.toolbar.top.ToolbarTablet.OfflineDownloader;
+import org.chromium.chrome.browser.toolbar.top.tab_strip.TabStripTransitionCoordinator.TabStripTransitionDelegate;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuButtonHelper;
 import org.chromium.chrome.browser.user_education.UserEducationHelper;
-import org.chromium.content_public.browser.LoadUrlParams;
+import org.chromium.components.browser_ui.desktop_windowing.DesktopWindowStateManager;
 import org.chromium.ui.resources.ResourceManager;
+import org.chromium.ui.util.ColorUtils;
 
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -36,66 +50,121 @@ import java.util.function.BooleanSupplier;
 public class BraveTopToolbarCoordinator extends TopToolbarCoordinator {
     // To delete in bytecode. Variables from the parent class will be used instead.
     private OptionalBrowsingModeButtonController mOptionalButtonController;
-    private TabSwitcherModeTTCoordinator mTabSwitcherModeCoordinator;
-    private ToolbarColorObserverManager mToolbarColorObserverManager;
 
     // Own members.
     private ToolbarLayout mBraveToolbarLayout;
     private MenuButtonCoordinator mBraveMenuButtonCoordinator;
     private boolean mIsBottomToolbarVisible;
     private ObservableSupplier<Integer> mConstraintsProxy;
+    private ObservableSupplier<TabModelSelector> mTabModelSelectorSupplier;
+    private ToolbarControlContainer mControlContainer;
+    private boolean mInTabSwitcherMode;
 
-    public BraveTopToolbarCoordinator(ToolbarControlContainer controlContainer,
-            ViewStub toolbarStub, ViewStub fullscreenToolbarStub, ToolbarLayout toolbarLayout,
-            ToolbarDataProvider toolbarDataProvider, ToolbarTabController tabController,
-            UserEducationHelper userEducationHelper, List<ButtonDataProvider> buttonDataProviders,
+    public BraveTopToolbarCoordinator(
+            ToolbarControlContainer controlContainer,
+            ToolbarLayout toolbarLayout,
+            ToolbarDataProvider toolbarDataProvider,
+            ToolbarTabController tabController,
+            UserEducationHelper userEducationHelper,
+            List<ButtonDataProvider> buttonDataProviders,
             OneshotSupplier<LayoutStateProvider> layoutStateProviderSupplier,
             ThemeColorProvider normalThemeColorProvider,
-            ThemeColorProvider overviewThemeColorProvider,
             MenuButtonCoordinator browsingModeMenuButtonCoordinator,
-            MenuButtonCoordinator overviewModeMenuButtonCoordinator,
             ObservableSupplier<AppMenuButtonHelper> appMenuButtonHelperSupplier,
+            ToggleTabStackButtonCoordinator tabSwitcerButtonCoordinator,
             ObservableSupplier<TabModelSelector> tabModelSelectorSupplier,
             ObservableSupplier<Boolean> homepageEnabledSupplier,
-            ButtonDataProvider identityDiscController, Callback<Runnable> invalidatorCallback,
-            Supplier<ButtonData> identityDiscButtonSupplier,
             Supplier<ResourceManager> resourceManagerSupplier,
-            BooleanSupplier isIncognitoModeEnabledSupplier, boolean isGridTabSwitcherEnabled,
-            boolean isTabToGtsAnimationEnabled, boolean isStartSurfaceEnabled,
-            boolean isTabGroupsAndroidContinuationEnabled, HistoryDelegate historyDelegate,
-            BooleanSupplier partnerHomepageEnabledSupplier, OfflineDownloader offlineDownloader,
+            HistoryDelegate historyDelegate,
+            BooleanSupplier partnerHomepageEnabledSupplier,
+            OfflineDownloader offlineDownloader,
             boolean initializeWithIncognitoColors,
-            Callback<LoadUrlParams> startSurfaceLogoClickedCallback,
-            boolean isStartSurfaceRefactorEnabled, ObservableSupplier<Integer> constraintsSupplier,
+            ObservableSupplier<Integer> constraintsSupplier,
             ObservableSupplier<Boolean> compositorInMotionSupplier,
             BrowserStateBrowserControlsVisibilityDelegate
                     browserStateBrowserControlsVisibilityDelegate,
-            boolean shouldCreateLogoInStartToolbar) {
-        super(controlContainer, toolbarStub, fullscreenToolbarStub, toolbarLayout,
-                toolbarDataProvider, tabController, userEducationHelper, buttonDataProviders,
-                layoutStateProviderSupplier, normalThemeColorProvider, overviewThemeColorProvider,
-                browsingModeMenuButtonCoordinator, overviewModeMenuButtonCoordinator,
-                appMenuButtonHelperSupplier, tabModelSelectorSupplier, homepageEnabledSupplier,
-                identityDiscController, invalidatorCallback, identityDiscButtonSupplier,
-                resourceManagerSupplier, isIncognitoModeEnabledSupplier, isGridTabSwitcherEnabled,
-                isTabToGtsAnimationEnabled, isStartSurfaceEnabled,
-                isTabGroupsAndroidContinuationEnabled, historyDelegate,
-                partnerHomepageEnabledSupplier, offlineDownloader, initializeWithIncognitoColors,
-                startSurfaceLogoClickedCallback, isStartSurfaceRefactorEnabled, constraintsSupplier,
-                compositorInMotionSupplier, browserStateBrowserControlsVisibilityDelegate,
-                shouldCreateLogoInStartToolbar);
+            FullscreenManager fullscreenManager,
+            TabObscuringHandler tabObscuringHandler,
+            @Nullable DesktopWindowStateManager desktopWindowStateManager,
+            OneshotSupplier<TabStripTransitionDelegate> tabStripTransitionDelegateSupplier,
+            @Nullable OnLongClickListener onLongClickListener,
+            ToolbarProgressBar progressBar) {
+        super(
+                controlContainer,
+                toolbarLayout,
+                toolbarDataProvider,
+                tabController,
+                userEducationHelper,
+                buttonDataProviders,
+                layoutStateProviderSupplier,
+                normalThemeColorProvider,
+                browsingModeMenuButtonCoordinator,
+                appMenuButtonHelperSupplier,
+                tabSwitcerButtonCoordinator,
+                tabModelSelectorSupplier,
+                homepageEnabledSupplier,
+                resourceManagerSupplier,
+                historyDelegate,
+                partnerHomepageEnabledSupplier,
+                offlineDownloader,
+                initializeWithIncognitoColors,
+                constraintsSupplier,
+                compositorInMotionSupplier,
+                browserStateBrowserControlsVisibilityDelegate,
+                fullscreenManager,
+                tabObscuringHandler,
+                desktopWindowStateManager,
+                tabStripTransitionDelegateSupplier,
+                onLongClickListener,
+                progressBar);
 
         mBraveToolbarLayout = toolbarLayout;
         mBraveMenuButtonCoordinator = browsingModeMenuButtonCoordinator;
         mConstraintsProxy = constraintsSupplier;
+        mTabModelSelectorSupplier = tabModelSelectorSupplier;
+        mControlContainer = controlContainer;
 
         if (isToolbarPhone()) {
-            if (!isStartSurfaceEnabled) {
-                mTabSwitcherModeCoordinator = new BraveTabSwitcherModeTTCoordinator(
-                        controlContainer.getRootView().findViewById(R.id.tab_switcher_toolbar_stub),
-                        fullscreenToolbarStub, overviewModeMenuButtonCoordinator,
-                        isGridTabSwitcherEnabled, isTabToGtsAnimationEnabled,
-                        isIncognitoModeEnabledSupplier, mToolbarColorObserverManager);
+            // We basically do here what we must do at ToolbarPhone.ctor
+            // mLocationBarBackgroundColorForNtp =
+            //      getContext().getColor(R.color.location_bar_background_color_for_ntp);
+            // But we can't use bytecode patching to overide constructor because ToolbarPhone object
+            // is created via reflection during inflate of layout/toolbar_phone.xml.
+            // So use reflection to set ToolbarPhone.mLocationBarBackgroundColorForNtp
+
+            // ContextUtils.getApplicationContext() does not respect Dark theme,
+            // we must get ToolbarPhone context.
+            Object toolbarContext =
+                    BraveReflectionUtil.invokeMethod(
+                            android.view.View.class, mBraveToolbarLayout, "getContext");
+
+            assert toolbarContext instanceof Context;
+
+            @ColorInt
+            int locationBarBackgroundColorForNtp =
+                    ((Context) toolbarContext)
+                            .getColor(R.color.location_bar_background_color_for_ntp);
+
+            BraveReflectionUtil.setField(
+                    ToolbarPhone.class,
+                    "mLocationBarBackgroundColorForNtp",
+                    mBraveToolbarLayout,
+                    locationBarBackgroundColorForNtp);
+
+            // We need to set toolbar background color which in upstream is calculated
+            // at ToolbarPhone.updateLocationBarLayoutForExpansionAnimation with
+            // ColorUtils.blendColorsMultiply(...), which otherwise will be a bit
+            // more gray than white and will have poor contrast with address bar area.
+            @ColorInt
+            int toolbarBackgroundColorForNtp =
+                    ((Context) toolbarContext).getColor(R.color.toolbar_background_color_for_ntp);
+
+            if (!ColorUtils.inNightMode((Context) toolbarContext)) {
+                BraveReflectionUtil.setField(
+                        ToolbarPhone.class,
+                        "mToolbarBackgroundColorForNtp",
+                        mBraveToolbarLayout,
+                        toolbarBackgroundColorForNtp);
             }
         }
     }
@@ -104,10 +173,6 @@ public class BraveTopToolbarCoordinator extends TopToolbarCoordinator {
         mIsBottomToolbarVisible = isVisible;
         if (mBraveToolbarLayout instanceof BraveToolbarLayout) {
             ((BraveToolbarLayoutImpl) mBraveToolbarLayout)
-                    .onBottomToolbarVisibilityChanged(isVisible);
-        }
-        if (mTabSwitcherModeCoordinator instanceof BraveTabSwitcherModeTTCoordinator) {
-            ((BraveTabSwitcherModeTTCoordinator) mTabSwitcherModeCoordinator)
                     .onBottomToolbarVisibilityChanged(isVisible);
         }
         mOptionalButtonController.updateButtonVisibility();
@@ -128,14 +193,49 @@ public class BraveTopToolbarCoordinator extends TopToolbarCoordinator {
     }
 
     @Override
-    public void setTabSwitcherMode(
-            boolean inTabSwitcherMode, boolean showToolbar, boolean delayAnimation) {
-        super.setTabSwitcherMode(inTabSwitcherMode, showToolbar, delayAnimation);
+    public void initializeWithNative(
+            Profile profile,
+            Runnable layoutUpdater,
+            OnClickListener bookmarkClickHandler,
+            OnClickListener customTabsBackClickHandler,
+            LayoutManager layoutManager,
+            ObservableSupplier<Tab> tabSupplier,
+            BrowserControlsVisibilityManager browserControlsVisibilityManager,
+            TopUiThemeColorProvider topUiThemeColorProvider,
+            Supplier<Integer> bottomToolbarControlsOffsetSupplier) {
+        super.initializeWithNative(
+                profile,
+                layoutUpdater,
+                bookmarkClickHandler,
+                customTabsBackClickHandler,
+                layoutManager,
+                tabSupplier,
+                browserControlsVisibilityManager,
+                topUiThemeColorProvider,
+                bottomToolbarControlsOffsetSupplier);
 
-        if (mBraveToolbarLayout instanceof ToolbarPhone) {
-            mBraveToolbarLayout.setVisibility(
-                    ((ToolbarPhone) mBraveToolbarLayout).isInTabSwitcherMode() ? View.INVISIBLE
-                                                                               : View.VISIBLE);
+        assert mBraveToolbarLayout instanceof BraveToolbarLayoutImpl
+                : "Something has changed in the upstream!";
+        if (mBraveToolbarLayout instanceof BraveToolbarLayoutImpl) {
+            ((BraveToolbarLayoutImpl) mBraveToolbarLayout)
+                    .setTabModelSelector(mTabModelSelectorSupplier.get());
+        }
+    }
+
+    @Override
+    public void setTabSwitcherMode(boolean inTabSwitcherMode) {
+        mInTabSwitcherMode = inTabSwitcherMode;
+
+        super.setTabSwitcherMode(inTabSwitcherMode);
+    }
+
+    @Override
+    public void onTabSwitcherTransitionFinished() {
+        super.onTabSwitcherTransitionFinished();
+
+        if (isToolbarPhone() && mInTabSwitcherMode) {
+            // Make sure we have proper state at the end of the tab switcher transition.
+            mControlContainer.setVisibility(View.VISIBLE);
         }
     }
 }

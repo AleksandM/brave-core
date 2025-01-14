@@ -14,8 +14,10 @@ export const LAMPORTS_PER_SOL = 1000000000
 export const SolanaTransactionTypes = [
   BraveWallet.TransactionType.SolanaSystemTransfer,
   BraveWallet.TransactionType.SolanaSPLTokenTransfer,
-  BraveWallet.TransactionType.SolanaSPLTokenTransferWithAssociatedTokenAccountCreation,
+  BraveWallet.TransactionType
+    .SolanaSPLTokenTransferWithAssociatedTokenAccountCreation,
   BraveWallet.TransactionType.SolanaDappSignTransaction,
   BraveWallet.TransactionType.SolanaDappSignAndSendTransaction,
-  BraveWallet.TransactionType.SolanaSwap
+  BraveWallet.TransactionType.SolanaSwap,
+  BraveWallet.TransactionType.SolanaCompressedNftTransfer
 ]

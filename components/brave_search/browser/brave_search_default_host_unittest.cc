@@ -5,12 +5,16 @@
 
 #include "brave/components/brave_search/browser/brave_search_default_host.h"
 
+#include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "base/feature_list.h"
 #include "base/functional/callback_forward.h"
 #include "base/functional/callback_helpers.h"
+#include "base/metrics/field_trial.h"
+#include "base/metrics/field_trial_param_associator.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
@@ -23,6 +27,7 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "components/prefs/testing_pref_service.h"
+#include "components/search_engines/search_engines_test_environment.h"
 #include "components/search_engines/template_url.h"
 #include "components/search_engines/template_url_data.h"
 #include "components/search_engines/template_url_service.h"
@@ -53,7 +58,7 @@ class BraveSearchDefaultHostTest : public ::testing::Test {
   using MockGetCanSetCallback = base::MockCallback<
       BraveSearchDefaultHost::GetCanSetDefaultSearchProviderCallback>;
 
-  BraveSearchDefaultHostTest() : template_url_service_(nullptr, 0) {
+  BraveSearchDefaultHostTest() {
     feature_list_.InitAndEnableFeatureWithParameters(
         brave_search::features::kBraveSearchDefaultAPIFeature,
         {{brave_search::features::kBraveSearchDefaultAPIDailyLimitName, "3"},
@@ -75,15 +80,17 @@ class BraveSearchDefaultHostTest : public ::testing::Test {
 
   std::unique_ptr<BraveSearchDefaultHost> GetAPIHost(const std::string& host) {
     return std::make_unique<BraveSearchDefaultHost>(
-        host, &template_url_service_, &pref_service_);
+        host, search_engines_test_environment_.template_url_service(),
+        &pref_service_);
   }
 
   TemplateURL* AddSearchProviderForHost(const std::string& host) {
-    return template_url_service_.Add(CreateSearchProvider(host));
+    return search_engines_test_environment_.template_url_service()->Add(
+        CreateSearchProvider(host));
   }
 
-  TemplateURLService template_url_service_;
   TestingPrefServiceSimple pref_service_;
+  search_engines::SearchEnginesTestEnvironment search_engines_test_environment_;
   base::test::ScopedFeatureList feature_list_;
 };
 
@@ -110,8 +117,11 @@ TEST_F(BraveSearchDefaultHostTest, DisallowsIfDefault) {
   auto host = GetAPIHost("search.test.com");
   // Add a search provider for the host
   auto* provider = AddSearchProviderForHost("search.test.com");
-  ASSERT_TRUE(template_url_service_.CanMakeDefault(provider));
-  template_url_service_.SetUserSelectedDefaultSearchProvider(provider);
+  ASSERT_TRUE(
+      search_engines_test_environment_.template_url_service()->CanMakeDefault(
+          provider));
+  search_engines_test_environment_.template_url_service()
+      ->SetUserSelectedDefaultSearchProvider(provider);
   // Verify can not ask to set default
   MockGetCanSetCallback first;
   EXPECT_CALL(first, Run(false));
@@ -124,8 +134,11 @@ TEST_F(BraveSearchDefaultHostTest, AllowsIfNotDefault) {
   AddSearchProviderForHost("search.test.com");
   // Make another search provider default
   auto* default_provider = AddSearchProviderForHost("search.test2.com");
-  ASSERT_TRUE(template_url_service_.CanMakeDefault(default_provider));
-  template_url_service_.SetUserSelectedDefaultSearchProvider(default_provider);
+  ASSERT_TRUE(
+      search_engines_test_environment_.template_url_service()->CanMakeDefault(
+          default_provider));
+  search_engines_test_environment_.template_url_service()
+      ->SetUserSelectedDefaultSearchProvider(default_provider);
   // Verify can set default since current host is not default
   MockGetCanSetCallback first;
   EXPECT_CALL(first, Run(true));
@@ -159,12 +172,14 @@ TEST_F(BraveSearchDefaultHostTest, CanSetDefaultAlwaysTestWithSearchPromotion) {
   AddSearchProviderForHost("search.test.com");
   // Make another search provider default
   auto* default_provider = AddSearchProviderForHost("search.test2.com");
-  ASSERT_TRUE(template_url_service_.CanMakeDefault(default_provider));
-  template_url_service_.SetUserSelectedDefaultSearchProvider(default_provider);
+  ASSERT_TRUE(
+      search_engines_test_environment_.template_url_service()->CanMakeDefault(
+          default_provider));
+  search_engines_test_environment_.template_url_service()
+      ->SetUserSelectedDefaultSearchProvider(default_provider);
 
   // Failed at fourth try by default.
-  MockGetCanSetCallback first, second, third, fourth, fifth, sixth, seventh,
-      eighth;
+  MockGetCanSetCallback first, second, third, fourth, fifth, sixth, seventh;
   EXPECT_CALL(first, Run(true));
   EXPECT_CALL(second, Run(true));
   EXPECT_CALL(third, Run(true));
@@ -175,8 +190,9 @@ TEST_F(BraveSearchDefaultHostTest, CanSetDefaultAlwaysTestWithSearchPromotion) {
   host->GetCanSetDefaultSearchProvider(third.Get());
   host->GetCanSetDefaultSearchProvider(fourth.Get());
 
-  feature_list.InitAndEnableFeature(
-      brave_search_conversion::features::kOmniboxBanner);
+  feature_list.InitAndEnableFeatureWithParameters(
+      brave_search_conversion::features::kOmniboxBanner,
+      {{brave_search_conversion::features::kBannerTypeParamName, "type_C"}});
   host->SetCanAlwaysSetDefault();
 
   // Can set after calling SetCanAlwaysSetDefault() with omnibox banner
@@ -191,22 +207,13 @@ TEST_F(BraveSearchDefaultHostTest, CanSetDefaultAlwaysTestWithSearchPromotion) {
   EXPECT_CALL(sixth, Run(false));
   host->GetCanSetDefaultSearchProvider(sixth.Get());
 
-  // Test with omnibox button type conversion.
-  feature_list.InitAndEnableFeature(
-      brave_search_conversion::features::kOmniboxButton);
-  host->SetCanAlwaysSetDefault();
-
-  // Can set if omnibox button promotion feature is enabled.
-  EXPECT_CALL(seventh, Run(true));
-  host->GetCanSetDefaultSearchProvider(seventh.Get());
-
   feature_list.Reset();
   feature_list.InitAndEnableFeature(brave_search_conversion::features::kNTP);
   host->SetCanAlwaysSetDefault();
 
   // Can set if ntp promotion feature is enabled.
-  EXPECT_CALL(eighth, Run(true));
-  host->GetCanSetDefaultSearchProvider(eighth.Get());
+  EXPECT_CALL(seventh, Run(true));
+  host->GetCanSetDefaultSearchProvider(seventh.Get());
 }
 
 }  // namespace

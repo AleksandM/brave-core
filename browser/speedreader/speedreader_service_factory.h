@@ -6,10 +6,14 @@
 #ifndef BRAVE_BROWSER_SPEEDREADER_SPEEDREADER_SERVICE_FACTORY_H_
 #define BRAVE_BROWSER_SPEEDREADER_SPEEDREADER_SERVICE_FACTORY_H_
 
+#include <memory>
+
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "components/keyed_service/core/keyed_service.h"
 
-class Profile;
+namespace content {
+class BrowserContext;
+}
 
 namespace base {
 template <typename T>
@@ -23,7 +27,8 @@ class SpeedreaderService;
 class SpeedreaderServiceFactory : public BrowserContextKeyedServiceFactory {
  public:
   static SpeedreaderServiceFactory* GetInstance();
-  static SpeedreaderService* GetForProfile(Profile* profile);
+  static SpeedreaderService* GetForBrowserContext(
+      content::BrowserContext* browser_context);
 
  private:
   friend base::NoDestructor<SpeedreaderServiceFactory>;
@@ -41,7 +46,7 @@ class SpeedreaderServiceFactory : public BrowserContextKeyedServiceFactory {
   // as-is.
   content::BrowserContext* GetBrowserContextToUse(
       content::BrowserContext* context) const override;
-  KeyedService* BuildServiceInstanceFor(
+  std::unique_ptr<KeyedService> BuildServiceInstanceForBrowserContext(
       content::BrowserContext* context) const override;
   bool ServiceIsCreatedWithBrowserContext() const override;
 };

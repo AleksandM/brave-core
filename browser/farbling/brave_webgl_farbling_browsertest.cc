@@ -8,17 +8,19 @@
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/thread_test_helper.h"
-#include "brave/browser/brave_content_browser_client.h"
 #include "brave/browser/extensions/brave_base_local_data_files_browsertest.h"
 #include "brave/components/brave_component_updater/browser/local_data_files_service.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
+#include "brave/components/webcompat/core/common/features.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/chrome_content_client.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/prefs/pref_service.h"
@@ -29,34 +31,32 @@
 
 using brave_shields::ControlType;
 
-const char kEmbeddedTestServerDirectory[] = "webgl";
-const char kTitleScript[] = "document.title";
+constexpr char kEmbeddedTestServerDirectory[] = "webgl";
+constexpr char kTitleScript[] = "document.title";
 
 class BraveWebGLFarblingBrowserTest : public InProcessBrowserTest {
  public:
+  BraveWebGLFarblingBrowserTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {
+            brave_shields::features::kBraveShowStrictFingerprintingMode,
+            webcompat::features::kBraveWebcompatExceptionsService,
+        },
+        {});
+  }
+
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
-
-    content_client_ = std::make_unique<ChromeContentClient>();
-    content::SetContentClient(content_client_.get());
-    browser_content_client_ = std::make_unique<BraveContentBrowserClient>();
-    content::SetBrowserClientForTesting(browser_content_client_.get());
 
     host_resolver()->AddRule("*", "127.0.0.1");
     content::SetupCrossSiteRedirector(embedded_test_server());
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     test_data_dir = test_data_dir.AppendASCII(kEmbeddedTestServerDirectory);
     embedded_test_server()->ServeFilesFromDirectory(test_data_dir);
 
     ASSERT_TRUE(embedded_test_server()->Start());
-  }
-
-  void TearDown() override {
-    browser_content_client_.reset();
-    content_client_.reset();
   }
 
   HostContentSettingsMap* content_settings() {
@@ -106,22 +106,20 @@ class BraveWebGLFarblingBrowserTest : public InProcessBrowserTest {
     return diffs;
   }
 
- private:
-  std::unique_ptr<ChromeContentClient> content_client_;
-  std::unique_ptr<BraveContentBrowserClient> browser_content_client_;
+ protected:
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 IN_PROC_BROWSER_TEST_F(BraveWebGLFarblingBrowserTest, FarbleGetParameterWebGL) {
   std::string domain = "a.com";
   GURL url = embedded_test_server()->GetURL(domain, "/getParameter.html");
-  const std::string kExpectedRandomString = "USRQv2Ep,t9e2jwYU";
+  constexpr char kExpectedRandomString[] = "uAfPPuXL,aseXyZzC";
   // Farbling level: maximum
   // WebGL getParameter of restricted values: pseudo-random data with no
   // relation to original data
   BlockFingerprinting(domain);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
-  EXPECT_EQ(EvalJs(contents(), kTitleScript).ExtractString(),
-            kExpectedRandomString);
+  EXPECT_EQ(EvalJs(contents(), kTitleScript), kExpectedRandomString);
   // second time, same as the first (tests that results are consistent for the
   // lifetime of a session, and that the PRNG properly resets itself at the
   // beginning of each calculation)
@@ -148,9 +146,9 @@ IN_PROC_BROWSER_TEST_F(BraveWebGLFarblingBrowserTest, FarbleGetParameterWebGL) {
 
 IN_PROC_BROWSER_TEST_F(BraveWebGLFarblingBrowserTest,
                        FarbleGetParameterWebGL2) {
-  const std::map<std::string, std::string> tests = {{"a.com", "101111111100"},
-                                                    {"b.com", "111110111100"},
-                                                    {"c.com", "000000100101"}};
+  const std::map<std::string, std::string> tests = {{"a.com", "101010000011"},
+                                                    {"b.com", "100101000101"},
+                                                    {"c.com", "010101100011"}};
   for (const auto& pair : tests) {
     std::string domain = pair.first;
     std::string expected_diff = pair.second;
@@ -173,7 +171,18 @@ IN_PROC_BROWSER_TEST_F(BraveWebGLFarblingBrowserTest,
     std::vector<int64_t> farbled_values =
         SplitStringAsInts(EvalJs(contents(), kTitleScript).ExtractString());
     ASSERT_EQ(farbled_values.size(), 12UL);
-    ASSERT_EQ(DiffsAsString(real_values, farbled_values), expected_diff);
+    EXPECT_EQ(DiffsAsString(real_values, farbled_values), expected_diff);
+
+    // Farbling level: default, but webcompat exception enabled
+    // Get the actual WebGL2 parameter values.
+    SetFingerprintingDefault(domain);
+    brave_shields::SetWebcompatEnabled(
+        content_settings(), ContentSettingsType::BRAVE_WEBCOMPAT_WEBGL, true,
+        url, nullptr);
+    ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+    std::vector<int64_t> real_values2 =
+        SplitStringAsInts(EvalJs(contents(), kTitleScript).ExtractString());
+    ASSERT_EQ(real_values2.size(), 12UL);
   }
 }
 
@@ -226,4 +235,16 @@ IN_PROC_BROWSER_TEST_F(BraveWebGLFarblingBrowserTest, GetExtension) {
   SetFingerprintingDefault(domain);
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   EXPECT_EQ(EvalJs(contents(), kTitleScript).ExtractString(), actual);
+}
+
+IN_PROC_BROWSER_TEST_F(BraveWebGLFarblingBrowserTest, GetAttachedShaders) {
+  std::string domain = "a.com";
+  GURL url = embedded_test_server()->GetURL(domain, "/getAttachedShaders.html");
+  // In default fingerprinting mode...
+  SetFingerprintingDefault(domain);
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+  //... getAttachedShaders() should not be null:
+  // https://github.com/brave/brave-browser/issues/37044
+  EXPECT_EQ(EvalJs(contents(), kTitleScript).ExtractString(),
+            "[object WebGLShader]");
 }

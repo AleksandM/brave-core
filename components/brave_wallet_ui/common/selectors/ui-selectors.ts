@@ -6,7 +6,12 @@
 import { UIState } from '../../constants/types'
 
 type State = { ui: UIState }
+
+// safe
 export const selectedPendingTransactionId = ({ ui }: State) =>
   ui.selectedPendingTransactionId
+export const isPanel = ({ ui }: State) => ui.isPanel
+
+// unsafe
 export const transactionProviderErrorRegistry = ({ ui }: State) =>
   ui.transactionProviderErrorRegistry

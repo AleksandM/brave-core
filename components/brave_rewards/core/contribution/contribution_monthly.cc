@@ -3,47 +3,47 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "brave/components/brave_rewards/core/contribution/contribution_monthly.h"
+
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
-#include "base/containers/cxx20_erase.h"
 #include "base/functional/bind.h"
 #include "base/uuid.h"
 #include "brave/components/brave_rewards/core/common/time_util.h"
 #include "brave/components/brave_rewards/core/contribution/contribution.h"
-#include "brave/components/brave_rewards/core/contribution/contribution_monthly.h"
 #include "brave/components/brave_rewards/core/database/database.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 
-namespace brave_rewards::internal {
-namespace contribution {
+namespace brave_rewards::internal::contribution {
 
-ContributionMonthly::ContributionMonthly(LedgerImpl& ledger)
-    : ledger_(ledger) {}
+ContributionMonthly::ContributionMonthly(RewardsEngine& engine)
+    : engine_(engine) {}
 
 ContributionMonthly::~ContributionMonthly() = default;
 
-void ContributionMonthly::Process(absl::optional<base::Time> cutoff_time,
-                                  LegacyResultCallback callback) {
-  ledger_->contribution()->GetRecurringTips(
-      [this, cutoff_time,
-       callback](std::vector<mojom::PublisherInfoPtr> publishers) {
-        AdvanceContributionDates(cutoff_time, callback, std::move(publishers));
-      });
+void ContributionMonthly::Process(std::optional<base::Time> cutoff_time,
+                                  ResultCallback callback) {
+  engine_->contribution()->GetRecurringTips(base::BindOnce(
+      &ContributionMonthly::AdvanceContributionDates,
+      weak_factory_.GetWeakPtr(), std::move(cutoff_time), std::move(callback)));
 }
 
 void ContributionMonthly::AdvanceContributionDates(
-    absl::optional<base::Time> cutoff_time,
-    LegacyResultCallback callback,
+    std::optional<base::Time> cutoff_time,
+    ResultCallback callback,
     std::vector<mojom::PublisherInfoPtr> publishers) {
   // Remove any contributions whose next contribution date is in the future.
-  base::EraseIf(publishers,
+  std::erase_if(publishers,
                 [cutoff_time](const mojom::PublisherInfoPtr& publisher) {
                   if (!publisher || publisher->id.empty()) {
                     return true;
                   }
-                  base::Time next_contribution = base::Time::FromDoubleT(
-                      static_cast<double>(publisher->reconcile_stamp));
+                  base::Time next_contribution =
+                      base::Time::FromSecondsSinceUnixEpoch(
+                          static_cast<double>(publisher->reconcile_stamp));
                   return cutoff_time && next_contribution > cutoff_time;
                 });
 
@@ -53,32 +53,35 @@ void ContributionMonthly::AdvanceContributionDates(
   }
 
   // Advance the next contribution dates before attempting to add contributions.
-  ledger_->database()->AdvanceMonthlyContributionDates(
+  engine_->database()->AdvanceMonthlyContributionDates(
       publisher_ids,
       base::BindOnce(&ContributionMonthly::OnNextContributionDateAdvanced,
-                     base::Unretained(this), std::move(publishers), callback));
+                     weak_factory_.GetWeakPtr(), std::move(publishers),
+                     std::move(callback)));
 }
 
 void ContributionMonthly::OnNextContributionDateAdvanced(
     std::vector<mojom::PublisherInfoPtr> publishers,
-    LegacyResultCallback callback,
+    ResultCallback callback,
     bool success) {
   if (!success) {
-    BLOG(0, "Unable to advance monthly contribution dates.");
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->LogError(FROM_HERE)
+        << "Unable to advance monthly contribution dates";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
   // Remove entries for zero contribution amounts or unverified creators. Note
   // that in previous versions, pending contributions would be created if the
   // creator was unverified.
-  base::EraseIf(publishers, [](const mojom::PublisherInfoPtr& publisher) {
+  std::erase_if(publishers, [](const mojom::PublisherInfoPtr& publisher) {
     DCHECK(publisher);
     return publisher->weight <= 0 ||
            publisher->status == mojom::PublisherStatus::NOT_VERIFIED;
   });
 
-  BLOG(1, "Sending " << publishers.size() << " monthly contributions");
+  engine_->Log(FROM_HERE) << "Sending " << publishers.size()
+                          << " monthly contributions";
 
   for (const auto& item : publishers) {
     auto publisher = mojom::ContributionQueuePublisher::New();
@@ -92,13 +95,12 @@ void ContributionMonthly::OnNextContributionDateAdvanced(
     queue->partial = false;
     queue->publishers.push_back(std::move(publisher));
 
-    ledger_->database()->SaveContributionQueue(std::move(queue),
-                                               [](mojom::Result) {});
+    engine_->database()->SaveContributionQueue(std::move(queue),
+                                               base::DoNothing());
   }
 
-  ledger_->contribution()->CheckContributionQueue();
-  callback(mojom::Result::LEDGER_OK);
+  engine_->contribution()->CheckContributionQueue();
+  std::move(callback).Run(mojom::Result::OK);
 }
 
-}  // namespace contribution
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::contribution

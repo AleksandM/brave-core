@@ -7,164 +7,119 @@
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_ACCOUNT_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 
-#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
-#include "brave/components/brave_ads/core/ads_callback.h"
-#include "brave/components/brave_ads/core/ads_client_notifier_observer.h"
+#include "base/values.h"
 #include "brave/components/brave_ads/core/internal/account/account_observer.h"
 #include "brave/components/brave_ads/core/internal/account/confirmations/confirmations_delegate.h"
-#include "brave/components/brave_ads/core/internal/account/confirmations/redeem_unblinded_payment_tokens/redeem_unblinded_payment_tokens_delegate.h"
-#include "brave/components/brave_ads/core/internal/account/confirmations/refill_unblinded_tokens/refill_unblinded_tokens_delegate.h"
-#include "brave/components/brave_ads/core/internal/account/issuers/issuers_url_request_delegate.h"
+#include "brave/components/brave_ads/core/internal/account/user_rewards/user_rewards.h"
 #include "brave/components/brave_ads/core/internal/account/wallet/wallet_info.h"
-#include "brave/components/brave_ads/core/internal/privacy/tokens/unblinded_payment_tokens/unblinded_payment_token_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom-forward.h"
+#include "brave/components/brave_ads/core/public/ads_callback.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client_notifier_observer.h"
 
 namespace brave_ads {
 
-namespace privacy {
-class TokenGeneratorInterface;
-}  // namespace privacy
-
-class AdType;
-class ConfirmationType;
 class Confirmations;
-class IssuersUrlRequest;
-class RedeemUnblindedPaymentTokens;
-class RefillUnblindedTokens;
-struct IssuersInfo;
 struct TransactionInfo;
 
 class Account final : public AdsClientNotifierObserver,
-                      public ConfirmationsDelegate,
-                      public IssuersUrlRequestDelegate,
-                      public RedeemUnblindedPaymentTokensDelegate,
-                      public RefillUnblindedTokensDelegate {
+                      public ConfirmationDelegate {
  public:
-  explicit Account(privacy::TokenGeneratorInterface* token_generator);
+  Account();
 
   Account(const Account&) = delete;
   Account& operator=(const Account&) = delete;
-
-  Account(Account&&) noexcept = delete;
-  Account& operator=(Account&&) noexcept = delete;
 
   ~Account() override;
 
   void AddObserver(AccountObserver* observer);
   void RemoveObserver(AccountObserver* observer);
 
+  bool IsUserRewardsSupported() const { return !!user_rewards_; }
+
   void SetWallet(const std::string& payment_id,
-                 const std::string& recovery_seed);
-  const absl::optional<WalletInfo>& GetWallet() const { return wallet_; }
+                 const std::string& recovery_seed_base64);
+
+  void GetStatement(GetStatementOfAccountsCallback callback);
 
   void Deposit(const std::string& creative_instance_id,
-               const AdType& ad_type,
                const std::string& segment,
-               const ConfirmationType& confirmation_type) const;
-
-  static void GetStatement(GetStatementOfAccountsCallback callback);
+               mojom::AdType mojom_ad_type,
+               mojom::ConfirmationType mojom_confirmation_type) const;
+  void DepositWithUserData(const std::string& creative_instance_id,
+                           const std::string& segment,
+                           mojom::AdType mojom_ad_type,
+                           mojom::ConfirmationType mojom_confirmation_type,
+                           base::Value::Dict user_data) const;
 
  private:
-  void Initialize();
-
-  void InitializeConfirmations();
-
-  void MaybeRewardUsers();
-  void InitializeRewards();
-  void ShutdownRewards();
-
-  void MaybeFetchIssuers() const;
-
   void DepositCallback(const std::string& creative_instance_id,
-                       const AdType& ad_type,
                        const std::string& segment,
-                       const ConfirmationType& confirmation_type,
+                       mojom::AdType mojom_ad_type,
+                       mojom::ConfirmationType mojom_confirmation_type,
+                       base::Value::Dict user_data,
                        bool success,
                        double value) const;
 
   void ProcessDeposit(const std::string& creative_instance_id,
-                      const AdType& ad_type,
                       const std::string& segment,
-                      const ConfirmationType& confirmation_type,
-                      double value) const;
+                      double value,
+                      mojom::AdType mojom_ad_type,
+                      mojom::ConfirmationType mojom_confirmation_type,
+                      base::Value::Dict user_data) const;
   void ProcessDepositCallback(const std::string& creative_instance_id,
-                              const AdType& ad_type,
-                              const ConfirmationType& confirmation_type,
+                              mojom::AdType mojom_ad_type,
+                              mojom::ConfirmationType mojom_confirmation_type,
+                              base::Value::Dict user_data,
                               bool success,
                               const TransactionInfo& transaction) const;
 
-  void SuccessfullyProcessedDeposit(const TransactionInfo& transaction) const;
-  void FailedToProcessDeposit(const std::string& creative_instance_id,
-                              const AdType& ad_type,
-                              const ConfirmationType& confirmation_type) const;
+  void SuccessfullyProcessedDeposit(const TransactionInfo& transaction,
+                                    base::Value::Dict user_data) const;
+  void FailedToProcessDeposit(
+      const std::string& creative_instance_id,
+      mojom::AdType mojom_ad_type,
+      mojom::ConfirmationType mojom_confirmation_type) const;
 
-  void ProcessClearingCycle() const;
-  bool ShouldProcessUnclearedTransactions() const;
-  void MaybeProcessUnclearedTransactions() const;
+  void Initialize();
 
-  void Reset() const;
-  void ResetCallback(bool success) const;
+  void InitializeConfirmations();
 
-  void MaybeResetConfirmationsAndIssuers();
+  void MaybeInitializeUserRewards();
 
-  bool ShouldTopUpUnblindedTokens() const;
-  void MaybeTopUpUnblindedTokens() const;
+  void MaybeRefillConfirmationTokens();
 
   void NotifyDidInitializeWallet(const WalletInfo& wallet) const;
   void NotifyFailedToInitializeWallet() const;
-  void NotifyWalletDidChange(const WalletInfo& wallet) const;
 
   void NotifyDidProcessDeposit(const TransactionInfo& transaction) const;
   void NotifyFailedToProcessDeposit(
       const std::string& creative_instance_id,
-      const AdType& ad_type,
-      const ConfirmationType& confirmation_type) const;
-
-  void NotifyStatementOfAccountsDidChange() const;
+      mojom::AdType mojom_ad_type,
+      mojom::ConfirmationType mojom_confirmation_type) const;
 
   // AdsClientNotifierObserver:
   void OnNotifyDidInitializeAds() override;
   void OnNotifyPrefDidChange(const std::string& path) override;
   void OnNotifyRewardsWalletDidUpdate(
       const std::string& payment_id,
-      const std::string& recovery_seed) override;
-  void OnNotifyDidSolveAdaptiveCaptcha() override;
+      const std::string& recovery_seed_base64) override;
 
-  // ConfirmationsDelegate:
-  void OnDidRedeemConfirmation(const ConfirmationInfo& confirmation) override;
-  void OnFailedToRedeemConfirmation(
-      const ConfirmationInfo& confirmation) override;
-
-  // IssuersUrlRequestDelegate:
-  void OnDidFetchIssuers(const IssuersInfo& issuers) override;
-
-  // RedeemUnblindedPaymentTokensDelegate:
-  void OnDidRedeemUnblindedPaymentTokens(
-      const privacy::UnblindedPaymentTokenList& unblinded_payment_tokens)
-      override;
-
-  // RefillUnblindedTokensDelegate:
-  void OnCaptchaRequiredToRefillUnblindedTokens(
-      const std::string& captcha_id) override;
+  // ConfirmationDelegate:
+  void OnDidConfirm(const ConfirmationInfo& confirmation) override;
+  void OnFailedToConfirm(const ConfirmationInfo& confirmation) override;
 
   base::ObserverList<AccountObserver> observers_;
 
-  const raw_ptr<privacy::TokenGeneratorInterface> token_generator_ =
-      nullptr;  // NOT OWNED
-
   std::unique_ptr<Confirmations> confirmations_;
 
-  std::unique_ptr<IssuersUrlRequest> issuers_url_request_;
+  std::optional<WalletInfo> wallet_;
 
-  std::unique_ptr<RefillUnblindedTokens> refill_unblinded_tokens_;
-  std::unique_ptr<RedeemUnblindedPaymentTokens>
-      redeem_unblinded_payment_tokens_;
-
-  absl::optional<WalletInfo> wallet_;
+  std::unique_ptr<UserRewards> user_rewards_;
 
   base::WeakPtrFactory<Account> weak_factory_{this};
 };

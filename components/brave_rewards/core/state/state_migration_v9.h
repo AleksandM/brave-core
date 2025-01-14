@@ -6,7 +6,7 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_REWARDS_CORE_STATE_STATE_MIGRATION_V9_H_
 #define BRAVE_COMPONENTS_BRAVE_REWARDS_CORE_STATE_STATE_MIGRATION_V9_H_
 
-#include "brave/components/brave_rewards/core/ledger_callbacks.h"
+#include "brave/components/brave_rewards/core/rewards_callbacks.h"
 
 namespace brave_rewards::internal::state {
 
@@ -15,7 +15,7 @@ class StateMigrationV9 {
   StateMigrationV9();
   ~StateMigrationV9();
 
-  void Migrate(LegacyResultCallback callback);
+  void Migrate(ResultCallback callback);
 };
 
 }  // namespace brave_rewards::internal::state

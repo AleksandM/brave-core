@@ -6,6 +6,7 @@
 #include "brave/components/brave_wallet/browser/solana_tx_meta.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -13,15 +14,70 @@
 #include "base/values.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/solana_instruction_data_decoder.h"
+#include "brave/components/brave_wallet/browser/solana_test_utils.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/brave_wallet_constants.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/origin.h"
 
 namespace brave_wallet {
 
+TEST(SolanaTxMetaUnitTest, IsRetriable) {
+  auto tx = std::make_unique<SolanaTransaction>(GetTestLegacyMessage());
+  auto sol_account =
+      MakeAccountId(mojom::CoinType::SOL, mojom::KeyringId::kSolana,
+                    mojom::AccountKind::kDerived, kFromAccount);
+  SolanaTxMeta meta(sol_account, std::move(tx));
+
+  meta.set_status(mojom::TransactionStatus::Error);
+  meta.tx()->set_tx_type(mojom::TransactionType::SolanaSystemTransfer);
+  auto param = mojom::SolanaSignTransactionParam::New(
+      "test", std::vector<mojom::SignaturePubkeyPairPtr>());
+  meta.tx()->set_sign_tx_param(param.Clone());
+
+  EXPECT_TRUE(meta.IsRetriable());
+
+  // Test non-retriable status.
+  meta.set_status(mojom::TransactionStatus::Confirmed);
+  EXPECT_FALSE(meta.IsRetriable());
+
+  // Reset transaction status.
+  meta.set_status(mojom::TransactionStatus::Error);
+  EXPECT_TRUE(meta.IsRetriable());
+
+  // Test non-retriable transaction type.
+  meta.tx()->set_tx_type(mojom::TransactionType::SolanaSwap);
+  EXPECT_FALSE(meta.IsRetriable());
+
+  // Reset transaction type.
+  meta.tx()->set_tx_type(mojom::TransactionType::SolanaSystemTransfer);
+  EXPECT_TRUE(meta.IsRetriable());
+
+  // Test partial signed transaction with normal blockhash.
+  auto partial_signed_param = param.Clone();
+  partial_signed_param->signatures.emplace_back(mojom::SignaturePubkeyPair::New(
+      mojom::SolanaSignature::New(
+          std::vector<uint8_t>(kSolanaSignatureSize, 1)),
+      kFromAccount));
+  meta.tx()->set_sign_tx_param(partial_signed_param.Clone());
+  EXPECT_FALSE(meta.IsRetriable());
+
+  // Test partial signed transaction with durable nonce.
+  SolanaInstruction instruction = GetAdvanceNonceAccountInstruction();
+  std::vector<SolanaInstruction> vec;
+  vec.emplace_back(instruction);
+  vec.emplace_back(meta.tx()->message()->instructions()[0]);
+  meta.tx()->message()->SetInstructionsForTesting(vec);
+  EXPECT_TRUE(meta.IsRetriable());
+}
+
 TEST(SolanaTxMetaUnitTest, ToTransactionInfo) {
   std::string from_account = "BrG44HdsEhzapvs8bEqzvkq4egwevS3fRE6ze2ENo6S8";
+  auto sol_account =
+      MakeAccountId(mojom::CoinType::SOL, mojom::KeyringId::kSolana,
+                    mojom::AccountKind::kDerived, from_account);
+
   std::string to_account = "JDqrvDz8d8tFCADashbUKQDKfJZFobNy13ugN65t1wvV";
   std::string recent_blockhash = "9sHcv6xwn9YkB8nxTUGKDwPwNnmqVp5oAXxU8Fdkm4J6";
   uint64_t last_valid_block_height = 3090;
@@ -31,8 +87,8 @@ TEST(SolanaTxMetaUnitTest, ToTransactionInfo) {
       // Program ID
       mojom::kSolanaSystemProgramId,
       // Accounts
-      {SolanaAccountMeta(from_account, absl::nullopt, true, true),
-       SolanaAccountMeta(to_account, absl::nullopt, false, true)},
+      {SolanaAccountMeta(from_account, std::nullopt, true, true),
+       SolanaAccountMeta(to_account, std::nullopt, false, true)},
       data);
 
   auto msg = SolanaMessage::CreateLegacyMessage(
@@ -44,13 +100,12 @@ TEST(SolanaTxMetaUnitTest, ToTransactionInfo) {
   tx->set_lamports(10000000u);
   tx->set_tx_type(mojom::TransactionType::SolanaSystemTransfer);
 
-  SolanaTxMeta meta(std::move(tx));
+  SolanaTxMeta meta(sol_account, std::move(tx));
   SolanaSignatureStatus status(82, 10, "", "confirmed");
   meta.set_signature_status(status);
 
   meta.set_id("meta_id");
   meta.set_status(mojom::TransactionStatus::Confirmed);
-  meta.set_from("BrG44HdsEhzapvs8bEqzvkq4egwevS3fRE6ze2ENo6S8");
   base::Time::Exploded x{1981, 3, 0, 1, 2};
   base::Time confirmed_time = meta.confirmed_time();
   EXPECT_TRUE(base::Time::FromUTCExploded(x, &confirmed_time));
@@ -61,23 +116,22 @@ TEST(SolanaTxMetaUnitTest, ToTransactionInfo) {
       "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzr"
       "FmBV6UjKdiSZkQUW");
   meta.set_origin(url::Origin::Create(GURL("https://test.brave.com/")));
-  meta.set_group_id("mockGroupId");
 
   mojom::TransactionInfoPtr ti = meta.ToTransactionInfo();
   EXPECT_EQ(ti->id, meta.id());
   EXPECT_EQ(ti->tx_status, meta.status());
-  EXPECT_EQ(ti->from_address, meta.from());
+  EXPECT_EQ(ti->from_address, from_account);
+  EXPECT_EQ(ti->from_account_id, meta.from());
   EXPECT_EQ(ti->tx_hash, meta.tx_hash());
   EXPECT_EQ(
       ti->origin_info,
       MakeOriginInfo(url::Origin::Create(GURL("https://test.brave.com/"))));
-  EXPECT_EQ(ti->group_id, meta.group_id());
 
-  EXPECT_EQ(meta.created_time().ToJavaTime(),
+  EXPECT_EQ(meta.created_time().InMillisecondsSinceUnixEpoch(),
             ti->created_time.InMilliseconds());
-  EXPECT_EQ(meta.submitted_time().ToJavaTime(),
+  EXPECT_EQ(meta.submitted_time().InMillisecondsSinceUnixEpoch(),
             ti->submitted_time.InMilliseconds());
-  EXPECT_EQ(meta.confirmed_time().ToJavaTime(),
+  EXPECT_EQ(meta.confirmed_time().InMillisecondsSinceUnixEpoch(),
             ti->confirmed_time.InMilliseconds());
 
   EXPECT_EQ(meta.tx()->tx_type(), ti->tx_type);
@@ -99,7 +153,7 @@ TEST(SolanaTxMetaUnitTest, ToTransactionInfo) {
   auto mojom_decoded_data = mojom::DecodedSolanaInstructionData::New(
       static_cast<uint32_t>(mojom::SolanaSystemInstruction::kTransfer),
       solana_ins_data_decoder::GetMojomAccountParamsForTesting(
-          mojom::SolanaSystemInstruction::kTransfer, absl::nullopt),
+          mojom::SolanaSystemInstruction::kTransfer, std::nullopt),
       std::move(mojom_params));
   auto mojom_instruction = mojom::SolanaInstruction::New(
       mojom::kSolanaSystemProgramId, std::move(account_metas), data,
@@ -119,11 +173,15 @@ TEST(SolanaTxMetaUnitTest, ToTransactionInfo) {
           std::vector<std::string>(
               {from_account, to_account, mojom::kSolanaSystemProgramId}),
           std::vector<mojom::SolanaMessageAddressTableLookupPtr>(), nullptr,
-          nullptr));
+          nullptr, nullptr));
 }
 
 TEST(SolanaTxMetaUnitTest, ToValue) {
   std::string from_account = "BrG44HdsEhzapvs8bEqzvkq4egwevS3fRE6ze2ENo6S8";
+  auto sol_account =
+      MakeAccountId(mojom::CoinType::SOL, mojom::KeyringId::kSolana,
+                    mojom::AccountKind::kDerived, from_account);
+
   std::string to_account = "JDqrvDz8d8tFCADashbUKQDKfJZFobNy13ugN65t1wvV";
   std::string recent_blockhash = "9sHcv6xwn9YkB8nxTUGKDwPwNnmqVp5oAXxU8Fdkm4J6";
   const std::vector<uint8_t> data = {2, 0, 0, 0, 128, 150, 152, 0, 0, 0, 0, 0};
@@ -133,8 +191,8 @@ TEST(SolanaTxMetaUnitTest, ToValue) {
       // Program ID
       mojom::kSolanaSystemProgramId,
       // Accounts
-      {SolanaAccountMeta(from_account, absl::nullopt, true, true),
-       SolanaAccountMeta(to_account, absl::nullopt, false, true)},
+      {SolanaAccountMeta(from_account, std::nullopt, true, true),
+       SolanaAccountMeta(to_account, std::nullopt, false, true)},
       data);
   auto msg = SolanaMessage::CreateLegacyMessage(
       recent_blockhash, last_valid_block_height, from_account,
@@ -145,13 +203,12 @@ TEST(SolanaTxMetaUnitTest, ToValue) {
   tx->set_lamports(10000000u);
   tx->set_tx_type(mojom::TransactionType::SolanaSystemTransfer);
 
-  SolanaTxMeta meta(std::move(tx));
+  SolanaTxMeta meta(sol_account, std::move(tx));
   SolanaSignatureStatus status(82, 10, "", "confirmed");
   meta.set_signature_status(status);
 
   meta.set_id("meta_id");
   meta.set_status(mojom::TransactionStatus::Confirmed);
-  meta.set_from("BrG44HdsEhzapvs8bEqzvkq4egwevS3fRE6ze2ENo6S8");
   base::Time::Exploded x{1981, 3, 0, 1, 2};
   base::Time confirmed_time = meta.confirmed_time();
   EXPECT_TRUE(base::Time::FromUTCExploded(x, &confirmed_time));
@@ -167,10 +224,11 @@ TEST(SolanaTxMetaUnitTest, ToValue) {
   base::Value::Dict value = meta.ToValue();
   auto expect_value = base::JSONReader::Read(R"(
     {
+      "coin": 501,
       "chain_id" : "0x66",
       "id": "meta_id",
       "status": 4,
-      "from": "BrG44HdsEhzapvs8bEqzvkq4egwevS3fRE6ze2ENo6S8",
+      "from_account_id": "501_1_0_BrG44HdsEhzapvs8bEqzvkq4egwevS3fRE6ze2ENo6S8",
       "tx_hash": "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW",
       "origin": "https://test.brave.com/",
       "confirmed_time": "11996733600000000",
@@ -237,6 +295,7 @@ TEST(SolanaTxMetaUnitTest, ToValue) {
         "spl_token_mint_address": "",
         "lamports": "10000000",
         "amount": "0",
+        "wired_tx": "",
         "tx_type": 6
       },
       "signature_status": {

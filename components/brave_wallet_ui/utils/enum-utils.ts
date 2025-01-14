@@ -14,12 +14,21 @@ export type CleanedFromMojoEnumKey<T extends string | number | symbol> =
       : Exclude<T, 'MIN_VALUE' | 'MAX_VALUE'>
     : never
 
+/** Gets all values from an enum (except min and max value) */
+export const getGetMojoEnumValues = <T extends object>(mojoEnum: T) => {
+  return (
+    Object.keys(mojoEnum)
+      // remove MIN/MAX_VALUE props
+      .filter((key) => key !== 'MIN_VALUE' && key !== 'MAX_VALUE')
+  )
+}
+
 export const getGetCleanedMojoEnumKeys = <T extends object>(mojoEnum: T) => {
-  return Object.keys(mojoEnum)
-    // remove MIN/MAX_VALUE props
-    .filter((type) => type !== 'MIN_VALUE' && type !== 'MAX_VALUE')
-    // remove leading 'k' from constant names
-    .map((type) =>
-      type.startsWith('k') ? type.replace('k', '') : type
-    ) as Array<CleanedFromMojoEnumKey<keyof typeof mojoEnum>>
+  return (
+    getGetMojoEnumValues(mojoEnum)
+      // remove leading 'k' from constant names
+      .map((type) =>
+        type.startsWith('k') ? type.replace('k', '') : type
+      ) as Array<CleanedFromMojoEnumKey<keyof typeof mojoEnum>>
+  )
 }

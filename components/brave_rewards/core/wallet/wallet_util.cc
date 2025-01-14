@@ -6,6 +6,7 @@
 #include "brave/components/brave_rewards/core/wallet/wallet_util.h"
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 #include "base/functional/overloaded.h"
@@ -14,20 +15,15 @@
 #include "base/notreached.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
-#include "brave/components/brave_rewards/core/bitflyer/bitflyer.h"
-#include "brave/components/brave_rewards/core/bitflyer/bitflyer_util.h"
-#include "brave/components/brave_rewards/core/common/random_util.h"
 #include "brave/components/brave_rewards/core/database/database.h"
-#include "brave/components/brave_rewards/core/gemini/gemini.h"
-#include "brave/components/brave_rewards/core/gemini/gemini_util.h"
 #include "brave/components/brave_rewards/core/global_constants.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/initialization_manager.h"
 #include "brave/components/brave_rewards/core/logging/event_log_keys.h"
 #include "brave/components/brave_rewards/core/notifications/notification_keys.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/state/state.h"
 #include "brave/components/brave_rewards/core/state/state_keys.h"
-#include "brave/components/brave_rewards/core/uphold/uphold.h"
-#include "brave/components/brave_rewards/core/uphold/uphold_util.h"
+#include "brave/components/brave_rewards/core/wallet_provider/wallet_provider.h"
 
 namespace brave_rewards::internal::wallet {
 
@@ -40,17 +36,20 @@ std::string WalletTypeToState(const std::string& wallet_type) {
     return state::kWalletGemini;
   } else if (wallet_type == constant::kWalletUphold) {
     return state::kWalletUphold;
+  } else if (wallet_type == constant::kWalletZebPay) {
+    return state::kWalletZebPay;
+  } else if (wallet_type == constant::kWalletSolana) {
+    return state::kWalletSolana;
   } else if (wallet_type == "test") {
     return "wallets." + wallet_type;
   } else {
-    NOTREACHED() << "Unexpected wallet type " << wallet_type << '!';
-    return "";
+    NOTREACHED();
   }
 }
 
-void OnWalletStatusChange(LedgerImpl& ledger,
+void OnWalletStatusChange(RewardsEngine& engine,
                           const std::string& wallet_type,
-                          absl::optional<mojom::WalletStatus> from,
+                          std::optional<mojom::WalletStatus> from,
                           mojom::WalletStatus to) {
   std::ostringstream oss{};
   if (from) {
@@ -58,17 +57,28 @@ void OnWalletStatusChange(LedgerImpl& ledger,
   }
   oss << "==> " << to;
 
-  ledger.database()->SaveEventLog(log::kWalletStatusChange,
+  engine.database()->SaveEventLog(log::kWalletStatusChange,
                                   oss.str() + " (" + wallet_type + ')');
+}
+
+void MaybeAssignWalletLinks(RewardsEngine& engine,
+                            mojom::ExternalWallet& wallet) {
+  if (wallet.status != mojom::WalletStatus::kNotConnected) {
+    if (auto* provider = engine.GetExternalWalletProvider(wallet.type)) {
+      provider->AssignWalletLinks(wallet);
+    }
+  }
 }
 
 }  // namespace
 
-mojom::ExternalWalletPtr ExternalWalletPtrFromJSON(std::string wallet_string,
+mojom::ExternalWalletPtr ExternalWalletPtrFromJSON(RewardsEngine& engine,
+                                                   std::string wallet_string,
                                                    std::string wallet_type) {
-  absl::optional<base::Value> value = base::JSONReader::Read(wallet_string);
+  std::optional<base::Value> value = base::JSONReader::Read(wallet_string);
   if (!value || !value->is_dict()) {
-    BLOG(0, "Parsing of " + wallet_type + " wallet failed");
+    engine.LogError(FROM_HERE)
+        << "Parsing of " + wallet_type + " wallet failed";
     return nullptr;
   }
 
@@ -86,18 +96,11 @@ mojom::ExternalWalletPtr ExternalWalletPtrFromJSON(std::string wallet_string,
     wallet->address = *address;
   }
 
-  const auto* one_time_string = dict.FindString("one_time_string");
-  if (one_time_string) {
-    wallet->one_time_string = *one_time_string;
-  }
-
-  const auto* code_verifier = dict.FindString("code_verifier");
-  if (code_verifier) {
-    wallet->code_verifier = *code_verifier;
-  }
-
   auto status = dict.FindInt("status");
   if (status) {
+    // It is assumed that a preference migration will convert any invalid
+    // wallet status values to a valid enum value. However, we should make this
+    // more robust and handle validation errors on read.
     wallet->status = static_cast<mojom::WalletStatus>(*status);
   }
 
@@ -109,21 +112,6 @@ mojom::ExternalWalletPtr ExternalWalletPtrFromJSON(std::string wallet_string,
   const auto* member_id = dict.FindString("member_id");
   if (member_id) {
     wallet->member_id = *member_id;
-  }
-
-  const auto* account_url = dict.FindString("account_url");
-  if (account_url) {
-    wallet->account_url = *account_url;
-  }
-
-  auto* login_url = dict.FindString("login_url");
-  if (login_url) {
-    wallet->login_url = *login_url;
-  }
-
-  const auto* activity_url = dict.FindString("activity_url");
-  if (activity_url) {
-    wallet->activity_url = *activity_url;
   }
 
   if (const auto* fees = dict.FindDict("fees")) {
@@ -139,32 +127,36 @@ mojom::ExternalWalletPtr ExternalWalletPtrFromJSON(std::string wallet_string,
   return wallet;
 }
 
-mojom::ExternalWalletPtr GetWallet(LedgerImpl& ledger,
+mojom::ExternalWalletPtr GetWallet(RewardsEngine& engine,
                                    const std::string& wallet_type) {
   const auto state = WalletTypeToState(wallet_type);
   if (state.empty()) {
     return nullptr;
   }
 
-  auto json = ledger.state()->GetEncryptedString(state);
+  auto json = engine.state()->GetEncryptedString(state);
   if (!json || json->empty()) {
     return nullptr;
   }
 
-  return ExternalWalletPtrFromJSON(*json, wallet_type);
+  auto wallet = ExternalWalletPtrFromJSON(engine, *json, wallet_type);
+  if (wallet) {
+    MaybeAssignWalletLinks(engine, *wallet);
+  }
+
+  return wallet;
 }
 
 mojom::ExternalWalletPtr GetWalletIf(
-    LedgerImpl& ledger,
+    RewardsEngine& engine,
     const std::string& wallet_type,
     const std::set<mojom::WalletStatus>& statuses) {
   if (statuses.empty()) {
     return nullptr;
   }
 
-  auto wallet = GetWallet(ledger, wallet_type);
+  auto wallet = GetWallet(engine, wallet_type);
   if (!wallet) {
-    BLOG(9, wallet_type << " wallet is null!");
     return nullptr;
   }
 
@@ -174,17 +166,13 @@ mojom::ExternalWalletPtr GetWalletIf(
     std::copy(statuses.cbegin(), --cend,
               std::ostream_iterator<mojom::WalletStatus>(oss, ", "));
     oss << *cend;
-
-    BLOG(9, "Unexpected state for " << wallet_type << " wallet (currently in "
-                                    << wallet->status
-                                    << ", expected was: " << oss.str() << ")!");
     return nullptr;
   }
 
   return wallet;
 }
 
-bool SetWallet(LedgerImpl& ledger, mojom::ExternalWalletPtr wallet) {
+bool SetWallet(RewardsEngine& engine, mojom::ExternalWalletPtr wallet) {
   if (!wallet || wallet->type.empty()) {
     return false;
   }
@@ -198,13 +186,8 @@ bool SetWallet(LedgerImpl& ledger, mojom::ExternalWalletPtr wallet) {
   new_wallet.Set("token", wallet->token);
   new_wallet.Set("address", wallet->address);
   new_wallet.Set("status", static_cast<int>(wallet->status));
-  new_wallet.Set("one_time_string", wallet->one_time_string);
-  new_wallet.Set("code_verifier", wallet->code_verifier);
   new_wallet.Set("user_name", wallet->user_name);
   new_wallet.Set("member_id", wallet->member_id);
-  new_wallet.Set("account_url", wallet->account_url);
-  new_wallet.Set("login_url", wallet->login_url);
-  new_wallet.Set("activity_url", wallet->activity_url);
   new_wallet.Set("fees", std::move(fees));
 
   std::string json;
@@ -212,7 +195,7 @@ bool SetWallet(LedgerImpl& ledger, mojom::ExternalWalletPtr wallet) {
     return false;
   }
 
-  return ledger.state()->SetEncryptedString(WalletTypeToState(wallet->type),
+  return engine.state()->SetEncryptedString(WalletTypeToState(wallet->type),
                                             json);
 }
 
@@ -222,21 +205,19 @@ bool SetWallet(LedgerImpl& ledger, mojom::ExternalWalletPtr wallet) {
 //
 // Invariants:
 // - kNotConnected: token and address are cleared
-mojom::ExternalWalletPtr EnsureValidCreation(const std::string& wallet_type,
+mojom::ExternalWalletPtr EnsureValidCreation(RewardsEngine& engine,
+                                             const std::string& wallet_type,
                                              mojom::WalletStatus to) {
   if (to != mojom::WalletStatus::kNotConnected) {
-    BLOG(0, "Attempting to create " << wallet_type << " wallet as " << to
-                                    << " (a status other than "
-                                       "kNotConnected)!");
+    engine.LogError(FROM_HERE)
+        << "Attempting to create " << wallet_type << " wallet as " << to
+        << " (a status other than "
+           "kNotConnected)";
     return nullptr;
   }
 
   auto wallet = mojom::ExternalWallet::New();
   wallet->type = wallet_type;
-
-  wallet->one_time_string = util::GenerateRandomHexString();
-  wallet->code_verifier = util::GeneratePKCECodeVerifier();
-
   wallet->status = to;
 
   return wallet;
@@ -245,16 +226,22 @@ mojom::ExternalWalletPtr EnsureValidCreation(const std::string& wallet_type,
 // Valid transitions:
 // - kNotConnected ==> kConnected:
 //    - on successful wallet connection
+// - kConnected ==> kNotConnected:
+//    - on getting notified of linkage termination on the server side
 // - kConnected ==> kLoggedOut:
 //    - on access token expiry
 //    - on losing eligibility for wallet connection (Uphold-only)
+// - kLoggedOut ==> kNotConnected:
+//    - on getting notified of linkage termination on the server side
 // - kLoggedOut ==> kConnected:
 //    - on successful (re)connection
 //
 // Invariants:
+// - kNotConnected: token and address are cleared
 // - kConnected: needs !token.empty() && !address.empty()
 // - kLoggedOut: token and address are cleared
-mojom::ExternalWalletPtr EnsureValidTransition(mojom::ExternalWalletPtr wallet,
+mojom::ExternalWalletPtr EnsureValidTransition(RewardsEngine& engine,
+                                               mojom::ExternalWalletPtr wallet,
                                                mojom::WalletStatus to) {
   DCHECK(wallet);
   const auto wallet_type = wallet->type;
@@ -269,36 +256,37 @@ mojom::ExternalWalletPtr EnsureValidTransition(mojom::ExternalWalletPtr wallet,
   // kLoggedOut ==> kConnected
   const bool wallet_reconnection = from == mojom::WalletStatus::kLoggedOut &&
                                    to == mojom::WalletStatus::kConnected;
+  // kConnected ==> kNotConnected || kLoggedOut ==> kNotConnected
+  const bool linkage_termination = (from == mojom::WalletStatus::kConnected &&
+                                    to == mojom::WalletStatus::kNotConnected) ||
+                                   (from == mojom::WalletStatus::kLoggedOut &&
+                                    to == mojom::WalletStatus::kNotConnected);
 
-  if (!wallet_connection && !wallet_logout && !wallet_reconnection) {
-    BLOG(0, "Invalid " << wallet_type << " wallet status transition: " << from
-                       << " ==> " << to << '!');
+  if (!wallet_connection && !wallet_logout && !wallet_reconnection &&
+      !linkage_termination) {
+    engine.LogError(FROM_HERE)
+        << "Invalid " << wallet_type << " wallet status transition: " << from
+        << " ==> " << to << '!';
     return nullptr;
   }
 
   switch (to) {
     case mojom::WalletStatus::kConnected:
       if (wallet->token.empty() || wallet->address.empty()) {
-        BLOG(0, "Invariant violation when attempting to transition "
-                    << wallet->type << " wallet status (" << from << " ==> "
-                    << to << ")!");
+        engine.LogError(FROM_HERE)
+            << "Invariant violation when attempting to transition "
+            << wallet->type << " wallet status (" << from << " ==> " << to
+            << ")";
         return nullptr;
       }
 
       break;
+    case mojom::WalletStatus::kNotConnected:
     case mojom::WalletStatus::kLoggedOut:
       // token.empty() && address.empty()
       wallet = mojom::ExternalWallet::New();
       wallet->type = wallet_type;
-
-      wallet->one_time_string = util::GenerateRandomHexString();
-      wallet->code_verifier = util::GeneratePKCECodeVerifier();
       break;
-    case mojom::WalletStatus::kNotConnected:
-      NOTREACHED()
-          << "No transitions to kNotConnected are permitted (except for "
-             "when the wallet is being created)!";
-      return nullptr;
   }
 
   wallet->status = to;
@@ -307,32 +295,33 @@ mojom::ExternalWalletPtr EnsureValidTransition(mojom::ExternalWalletPtr wallet,
 }
 
 mojom::ExternalWalletPtr TransitionWallet(
-    LedgerImpl& ledger,
+    RewardsEngine& engine,
     absl::variant<mojom::ExternalWalletPtr, std::string> wallet_info,
     mojom::WalletStatus to) {
-  absl::optional<mojom::WalletStatus> from;
+  std::optional<mojom::WalletStatus> from;
 
   auto wallet = absl::visit(
       base::Overloaded{
           [&](const std::string& wallet_type) -> mojom::ExternalWalletPtr {
-            auto wallet = GetWallet(ledger, wallet_type);
+            auto wallet = GetWallet(engine, wallet_type);
             if (wallet) {
-              BLOG(0, wallet_type << " wallet already exists!");
+              engine.LogError(FROM_HERE)
+                  << wallet_type << " wallet already exists";
               return nullptr;
             }
 
-            return EnsureValidCreation(wallet_type, to);
+            return EnsureValidCreation(engine, wallet_type, to);
           },
           [&](mojom::ExternalWalletPtr wallet) -> mojom::ExternalWalletPtr {
             DCHECK(wallet);
             if (!wallet) {
-              BLOG(0, "Wallet is null!");
+              engine.LogError(FROM_HERE) << "Wallet is null";
               return nullptr;
             }
 
             from = wallet->status;
 
-            return EnsureValidTransition(std::move(wallet), to);
+            return EnsureValidTransition(engine, std::move(wallet), to);
           }},
       std::move(wallet_info));
 
@@ -340,98 +329,65 @@ mojom::ExternalWalletPtr TransitionWallet(
     return nullptr;
   }
 
-  wallet = GenerateLinks(std::move(wallet));
-  if (!wallet) {
-    BLOG(0, "Failed to generate links for wallet!");
+  MaybeAssignWalletLinks(engine, *wallet);
+
+  if (!SetWallet(engine, wallet->Clone())) {
+    engine.LogError(FROM_HERE) << "Failed to set " << wallet->type << " wallet";
     return nullptr;
   }
 
-  if (!SetWallet(ledger, wallet->Clone())) {
-    BLOG(0, "Failed to set " << wallet->type << " wallet!");
-    return nullptr;
-  }
-
-  OnWalletStatusChange(ledger, wallet->type, from, to);
+  OnWalletStatusChange(engine, wallet->type, from, to);
 
   return wallet;
 }
 
-mojom::ExternalWalletPtr MaybeCreateWallet(LedgerImpl& ledger,
+mojom::ExternalWalletPtr MaybeCreateWallet(RewardsEngine& engine,
                                            const std::string& wallet_type) {
-  auto wallet = GetWallet(ledger, wallet_type);
+  auto wallet = GetWallet(engine, wallet_type);
   if (!wallet) {
-    wallet = TransitionWallet(ledger, wallet_type,
+    wallet = TransitionWallet(engine, wallet_type,
                               mojom::WalletStatus::kNotConnected);
     if (!wallet) {
-      BLOG(0, "Failed to create " << wallet_type << " wallet!");
+      engine.LogError(FROM_HERE)
+          << "Failed to create " << wallet_type << " wallet";
     }
   }
 
   return wallet;
 }
 
-bool LogOutWallet(LedgerImpl& ledger,
+bool LogOutWallet(RewardsEngine& engine,
                   const std::string& wallet_type,
                   const std::string& notification) {
   DCHECK(!wallet_type.empty());
 
-  BLOG(1, "Logging out " << wallet_type << " wallet...");
+  engine.Log(FROM_HERE) << "Logging out " << wallet_type << " wallet...";
 
   auto wallet =
-      GetWalletIf(ledger, wallet_type, {mojom::WalletStatus::kConnected});
+      GetWalletIf(engine, wallet_type, {mojom::WalletStatus::kConnected});
   if (!wallet) {
     return false;
   }
 
   const std::string abbreviated_address = wallet->address.substr(0, 5);
-  wallet = TransitionWallet(ledger, std::move(wallet),
+  wallet = TransitionWallet(engine, std::move(wallet),
                             mojom::WalletStatus::kLoggedOut);
   if (!wallet) {
     return false;
   }
 
-  ledger.database()->SaveEventLog(log::kWalletDisconnected,
+  engine.database()->SaveEventLog(log::kWalletDisconnected,
                                   wallet_type + abbreviated_address);
 
-  if (!ledger.IsShuttingDown()) {
-    ledger.client()->ExternalWalletLoggedOut();
-    ledger.client()->ShowNotification(notification.empty()
+  if (!engine.Get<InitializationManager>().is_shutting_down()) {
+    engine.client()->ExternalWalletLoggedOut();
+    engine.client()->ShowNotification(notification.empty()
                                           ? notifications::kWalletDisconnected
                                           : notification,
-                                      {}, base::DoNothing());
+                                      {wallet_type}, base::DoNothing());
   }
 
   return true;
-}
-
-mojom::ExternalWalletPtr GenerateLinks(mojom::ExternalWalletPtr wallet) {
-  if (wallet->type == constant::kWalletBitflyer) {
-    return bitflyer::GenerateLinks(std::move(wallet));
-  } else if (wallet->type == constant::kWalletGemini) {
-    return gemini::GenerateLinks(std::move(wallet));
-  } else if (wallet->type == constant::kWalletUphold) {
-    return uphold::GenerateLinks(std::move(wallet));
-  } else if (wallet->type == "test") {
-    return wallet;
-  } else {
-    NOTREACHED() << "Unexpected wallet type " << wallet->type << '!';
-    return nullptr;
-  }
-}
-
-void FetchBalance(LedgerImpl& ledger,
-                  const std::string& wallet_type,
-                  base::OnceCallback<void(mojom::Result, double)> callback) {
-  if (wallet_type == constant::kWalletBitflyer) {
-    ledger.bitflyer()->FetchBalance(std::move(callback));
-  } else if (wallet_type == constant::kWalletGemini) {
-    ledger.gemini()->FetchBalance(std::move(callback));
-  } else if (wallet_type == constant::kWalletUphold) {
-    ledger.uphold()->FetchBalance(std::move(callback));
-  } else {
-    NOTREACHED() << "Unexpected wallet type " << wallet_type << '!';
-    std::move(callback).Run(mojom::Result::LEDGER_ERROR, 0.0);
-  }
 }
 
 }  // namespace brave_rewards::internal::wallet

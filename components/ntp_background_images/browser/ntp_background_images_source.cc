@@ -5,6 +5,7 @@
 
 #include "brave/components/ntp_background_images/browser/ntp_background_images_source.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -24,10 +25,10 @@ namespace ntp_background_images {
 
 namespace {
 
-absl::optional<std::string> ReadFileToString(const base::FilePath& path) {
+std::optional<std::string> ReadFileToString(const base::FilePath& path) {
   std::string contents;
   if (!base::ReadFileToString(path, &contents))
-    return absl::optional<std::string>();
+    return std::optional<std::string>();
   return contents;
 }
 
@@ -80,14 +81,12 @@ void NTPBackgroundImagesSource::GetImageFile(
 
 void NTPBackgroundImagesSource::OnGotImageFile(
     GotDataCallback callback,
-    absl::optional<std::string> input) {
+    std::optional<std::string> input) {
   if (!input)
     return;
 
-  scoped_refptr<base::RefCountedMemory> bytes;
-  bytes = new base::RefCountedBytes(
-       reinterpret_cast<const unsigned char*>(input->c_str()), input->length());
-  std::move(callback).Run(std::move(bytes));
+  std::move(callback).Run(
+      new base::RefCountedBytes(base::as_byte_span(*input)));
 }
 
 std::string NTPBackgroundImagesSource::GetMimeType(const GURL& url) {
@@ -102,8 +101,7 @@ std::string NTPBackgroundImagesSource::GetMimeType(const GURL& url) {
   } else if (file_path.MatchesExtension(FILE_PATH_LITERAL(".avif"))) {
     return "image/avif";
   } else {
-    NOTREACHED();
-    return "image/jpeg";
+    return "";
   }
 }
 

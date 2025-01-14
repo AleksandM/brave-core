@@ -6,16 +6,15 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_DEPRECATED_CONFIRMATIONS_CONFIRMATION_STATE_MANAGER_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_DEPRECATED_CONFIRMATIONS_CONFIRMATION_STATE_MANAGER_H_
 
+#include <optional>
 #include <string>
 
 #include "base/memory/weak_ptr.h"
 #include "base/values.h"
-#include "brave/components/brave_ads/core/ads_callback.h"
-#include "brave/components/brave_ads/core/internal/account/confirmations/confirmation_info.h"
+#include "brave/components/brave_ads/core/internal/account/tokens/confirmation_tokens/confirmation_tokens.h"
+#include "brave/components/brave_ads/core/internal/account/tokens/payment_tokens/payment_tokens.h"
 #include "brave/components/brave_ads/core/internal/account/wallet/wallet_info.h"
-#include "brave/components/brave_ads/core/internal/privacy/tokens/unblinded_payment_tokens/unblinded_payment_tokens.h"
-#include "brave/components/brave_ads/core/internal/privacy/tokens/unblinded_tokens/unblinded_tokens.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "brave/components/brave_ads/core/public/ads_callback.h"
 
 namespace brave_ads {
 
@@ -26,71 +25,53 @@ class ConfirmationStateManager final {
   ConfirmationStateManager(const ConfirmationStateManager&) = delete;
   ConfirmationStateManager& operator=(const ConfirmationStateManager&) = delete;
 
-  ConfirmationStateManager(ConfirmationStateManager&&) noexcept = delete;
-  ConfirmationStateManager& operator=(ConfirmationStateManager&&) noexcept =
-      delete;
-
   ~ConfirmationStateManager();
 
   static ConfirmationStateManager& GetInstance();
 
-  void Load(const absl::optional<WalletInfo>& wallet,
-            InitializeCallback callback);
+  void LoadState(std::optional<WalletInfo> wallet, InitializeCallback callback);
 
   bool IsInitialized() const { return is_initialized_; }
 
-  void Save();
+  void SaveState();
 
   std::string ToJson();
   [[nodiscard]] bool FromJson(const std::string& json);
 
-  absl::optional<OptedInInfo> GetOptedIn(const base::Value::Dict& dict) const;
-  bool GetFailedConfirmationsFromDictionary(
-      const base::Value::Dict& dict,
-      ConfirmationList* confirmations) const;
-  ConfirmationList GetFailedConfirmations() const;
-  void AppendFailedConfirmation(const ConfirmationInfo& confirmation);
-  bool RemoveFailedConfirmation(const ConfirmationInfo& confirmation);
-  void reset_failed_confirmations() { failed_confirmations_.clear(); }
-
-  const privacy::UnblindedTokens& GetUnblindedTokens() const {
+  const ConfirmationTokens& GetConfirmationTokens() const {
     CHECK(is_initialized_);
-    return unblinded_tokens_;
+    return confirmation_tokens_;
   }
 
-  privacy::UnblindedTokens& GetUnblindedTokens() {
+  ConfirmationTokens& GetConfirmationTokens() {
     CHECK(is_initialized_);
-    return unblinded_tokens_;
+    return confirmation_tokens_;
   }
 
-  const privacy::UnblindedPaymentTokens& GetUnblindedPaymentTokens() const {
+  const PaymentTokens& GetPaymentTokens() const {
     CHECK(is_initialized_);
-    return unblinded_payment_tokens_;
+    return payment_tokens_;
   }
 
-  privacy::UnblindedPaymentTokens& GetUnblindedPaymentTokens() {
+  PaymentTokens& GetPaymentTokens() {
     CHECK(is_initialized_);
-    return unblinded_payment_tokens_;
+    return payment_tokens_;
   }
 
  private:
   void LoadCallback(InitializeCallback callback,
-                    const absl::optional<std::string>& json);
+                    const std::optional<std::string>& json);
 
-  bool ParseFailedConfirmationsFromDictionary(const base::Value::Dict& dict);
+  void ParseConfirmationTokensFromDictionary(const base::Value::Dict& dict);
 
-  bool ParseUnblindedTokensFromDictionary(const base::Value::Dict& dict);
-
-  bool ParseUnblindedPaymentTokensFromDictionary(const base::Value::Dict& dict);
+  void ParsePaymentTokensFromDictionary(const base::Value::Dict& dict);
 
   bool is_initialized_ = false;
 
-  absl::optional<WalletInfo> wallet_;
+  std::optional<WalletInfo> wallet_;
 
-  ConfirmationList failed_confirmations_;
-
-  privacy::UnblindedTokens unblinded_tokens_;
-  privacy::UnblindedPaymentTokens unblinded_payment_tokens_;
+  ConfirmationTokens confirmation_tokens_;
+  PaymentTokens payment_tokens_;
 
   base::WeakPtrFactory<ConfirmationStateManager> weak_factory_{this};
 };

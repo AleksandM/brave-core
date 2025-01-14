@@ -5,82 +5,66 @@
 
 #include "brave/components/brave_ads/core/internal/common/database/database_table_util.h"
 
-#include <utility>
-
 #include "base/check_op.h"
 #include "base/strings/string_util.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
+#include "brave/components/brave_ads/core/internal/common/database/database_transaction_util.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads::database {
 
-namespace {
-
-std::string BuildInsertSql(const std::string& from,
-                           const std::string& to,
-                           const std::vector<std::string>& from_columns,
-                           const std::vector<std::string>& to_columns) {
-  CHECK(!from.empty());
-  CHECK(!to.empty());
-  CHECK_NE(from, to);
-  CHECK(!from_columns.empty());
-  CHECK(!to_columns.empty());
-  CHECK_EQ(from_columns.size(), to_columns.size());
-
-  return base::ReplaceStringPlaceholders(
-      "INSERT INTO $1 ($2) SELECT $3 FROM $4;",
-      {to, base::JoinString(to_columns, ", "),
-       base::JoinString(from_columns, ", "), from},
-      nullptr);
-}
-
-}  // namespace
-
-void CreateTableIndex(mojom::DBTransactionInfo* transaction,
+void CreateTableIndex(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
                       const std::string& table_name,
-                      const std::string& key) {
-  CHECK(transaction);
+                      const std::vector<std::string>& columns) {
+  CHECK(mojom_db_transaction);
   CHECK(!table_name.empty());
-  CHECK(!key.empty());
+  CHECK(!columns.empty());
 
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::EXECUTE;
-  command->sql = base::ReplaceStringPlaceholders(
-      "CREATE INDEX IF NOT EXISTS $1_$2_index ON $3 ($4);",
-      {table_name, key, table_name, key}, nullptr);
-  transaction->commands.push_back(std::move(command));
+  Execute(mojom_db_transaction, R"(
+            CREATE INDEX IF NOT EXISTS
+              $1_$2_index ON $3 ($4);)",
+          {table_name, base::JoinString(columns, "_"), table_name,
+           base::JoinString(columns, ", ")});
 }
 
-void DropTable(mojom::DBTransactionInfo* transaction,
+void DropTableIndex(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
+                    const std::string& index_name) {
+  CHECK(mojom_db_transaction);
+  CHECK(!index_name.empty());
+
+  Execute(mojom_db_transaction, R"(
+      DROP INDEX IF EXISTS
+        ad_events_created_at_index;)");
+}
+
+void DropTable(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
                const std::string& table_name) {
-  CHECK(transaction);
+  CHECK(mojom_db_transaction);
   CHECK(!table_name.empty());
 
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::EXECUTE;
-  command->sql = base::ReplaceStringPlaceholders("DROP TABLE IF EXISTS $1;",
-                                                 {table_name}, nullptr);
-  transaction->commands.push_back(std::move(command));
+  Execute(mojom_db_transaction, R"(
+            DROP TABLE IF EXISTS
+              $1;)",
+          {table_name});
 }
 
-void DeleteTable(mojom::DBTransactionInfo* transaction,
+void DeleteTable(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
                  const std::string& table_name) {
-  CHECK(transaction);
+  CHECK(mojom_db_transaction);
   CHECK(!table_name.empty());
 
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::EXECUTE;
-  command->sql =
-      base::ReplaceStringPlaceholders("DELETE FROM $1;", {table_name}, nullptr);
-  transaction->commands.push_back(std::move(command));
+  Execute(mojom_db_transaction, R"(
+            DELETE FROM
+              $1;)",
+          {table_name});
 }
 
-void CopyTableColumns(mojom::DBTransactionInfo* transaction,
+void CopyTableColumns(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
                       const std::string& from,
                       const std::string& to,
                       const std::vector<std::string>& from_columns,
                       const std::vector<std::string>& to_columns,
-                      const bool should_drop) {
-  CHECK(transaction);
+                      bool should_drop) {
+  CHECK(mojom_db_transaction);
   CHECK(!from.empty());
   CHECK(!to.empty());
   CHECK_NE(from, to);
@@ -88,37 +72,43 @@ void CopyTableColumns(mojom::DBTransactionInfo* transaction,
   CHECK(!to_columns.empty());
   CHECK_EQ(from_columns.size(), to_columns.size());
 
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::EXECUTE;
-  command->sql = BuildInsertSql(from, to, from_columns, to_columns);
-  transaction->commands.push_back(std::move(command));
+  Execute(mojom_db_transaction, R"(
+            INSERT INTO $1 (
+              $2
+            )
+            SELECT
+              $3
+            FROM
+              $4;)",
+          {to, base::JoinString(to_columns, ", "),
+           base::JoinString(from_columns, ", "), from});
 
   if (should_drop) {
-    DropTable(transaction, from);
+    DropTable(mojom_db_transaction, from);
   }
 }
 
-void CopyTableColumns(mojom::DBTransactionInfo* transaction,
+void CopyTableColumns(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
                       const std::string& from,
                       const std::string& to,
                       const std::vector<std::string>& columns,
-                      const bool should_drop) {
-  return CopyTableColumns(transaction, from, to, columns, columns, should_drop);
+                      bool should_drop) {
+  return CopyTableColumns(mojom_db_transaction, from, to, columns, columns,
+                          should_drop);
 }
 
-void RenameTable(mojom::DBTransactionInfo* transaction,
+void RenameTable(const mojom::DBTransactionInfoPtr& mojom_db_transaction,
                  const std::string& from,
                  const std::string& to) {
-  CHECK(transaction);
+  CHECK(mojom_db_transaction);
   CHECK(!from.empty());
   CHECK(!to.empty());
   CHECK_NE(from, to);
 
-  mojom::DBCommandInfoPtr command = mojom::DBCommandInfo::New();
-  command->type = mojom::DBCommandInfo::Type::EXECUTE;
-  command->sql = base::ReplaceStringPlaceholders("ALTER TABLE $1 RENAME TO $2;",
-                                                 {from, to}, nullptr);
-  transaction->commands.push_back(std::move(command));
+  Execute(mojom_db_transaction, R"(
+            ALTER TABLE
+              $1 RENAME TO $2;)",
+          {from, to});
 }
 
 }  // namespace brave_ads::database

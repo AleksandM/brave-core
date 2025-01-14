@@ -6,7 +6,6 @@
 static_library("core") {
   sources = [
     "constants.h",
-    "pref_names.cc",
     "pref_names.h",
     "utils.cc",
     "utils.h",
@@ -14,6 +13,7 @@ static_library("core") {
 
   deps = [
     "//base",
+    "//components/base32:base32",
     "//components/prefs",
     "//net",
     "//url",

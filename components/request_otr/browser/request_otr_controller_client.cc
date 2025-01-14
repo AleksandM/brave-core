@@ -62,7 +62,7 @@ void RequestOTRControllerClient::Proceed() {
   if (dont_warn_again_) {
     if (PrefService* prefs = GetPrefService()) {
       prefs->SetInteger(
-          prefs::kRequestOTRActionOption,
+          kRequestOTRActionOption,
           static_cast<int>(RequestOTRService::RequestOTRActionOption::kNever));
     }
   }
@@ -78,18 +78,22 @@ void RequestOTRControllerClient::ProceedOTR() {
   if (dont_warn_again_) {
     if (PrefService* prefs = GetPrefService()) {
       prefs->SetInteger(
-          prefs::kRequestOTRActionOption,
+          kRequestOTRActionOption,
           static_cast<int>(RequestOTRService::RequestOTRActionOption::kNever));
     }
   }
   tab_storage->MaybeEnable1PESForUrl(
       ephemeral_storage_service_, request_url_,
-      base::BindOnce(&RequestOTRControllerClient::ReloadPage,
+      base::BindOnce(&RequestOTRControllerClient::On1PESState,
                      weak_ptr_factory_.GetWeakPtr()));
 }
 
 void RequestOTRControllerClient::ReloadPage() {
   web_contents_->GetController().Reload(content::ReloadType::NORMAL, false);
+}
+
+void RequestOTRControllerClient::On1PESState(bool is_1pes_enabled) {
+  ReloadPage();
 }
 
 void RequestOTRControllerClient::SetDontWarnAgain(bool value) {

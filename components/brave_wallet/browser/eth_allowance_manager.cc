@@ -8,8 +8,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "base/no_destructor.h"
 #include "brave/components/brave_wallet/browser/blockchain_registry.h"
-#include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/json_rpc_service.h"
 #include "brave/components/brave_wallet/browser/keyring_service.h"
 #include "brave/components/brave_wallet/browser/pref_names.h"
@@ -115,11 +115,11 @@ void EthAllowanceManager::DiscoverEthAllowancesOnAllSupportedChains(
   }
   discover_eth_allowance_callbacks_.push_back(std::move(callback));
 
-  const auto keyring_info =
-      keyring_service_->GetKeyringInfoSync(mojom::kDefaultKeyringId);
   std::vector<std::string> account_addresses;
-  for (const auto& account_info : keyring_info->account_infos) {
-    account_addresses.push_back(account_info->address);
+  for (const auto& account_info : keyring_service_->GetAllAccountInfos()) {
+    if (account_info->account_id->coin == mojom::CoinType::ETH) {
+      account_addresses.push_back(account_info->address);
+    }
   }
 
   if (account_addresses.empty()) {
@@ -164,7 +164,8 @@ void EthAllowanceManager::OnGetCurrentBlock(
     return;
   }
 
-  const auto approval_topic_hash = KeccakHash(kApprovalTopicFunctionSignature);
+  const auto approval_topic_hash = ToHex(KeccakHash(
+      base::byte_span_from_cstring(kApprovalTopicFunctionSignature)));
   for (const auto& account_address : account_addresses) {
     std::string account_address_hex;
     if (!PadHexEncodedParameter(account_address, &account_address_hex)) {
@@ -238,7 +239,6 @@ void EthAllowanceManager::LoadCachedAllowances(
     const auto* amount = ca_dict->FindString(kAmount);
 
     if (!approver_address || !contract_address || !spender_address || !amount) {
-      NOTREACHED() << " Wrong allowance cache format";
       continue;
     }
 

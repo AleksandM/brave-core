@@ -7,6 +7,7 @@
 
 #include "base/files/file_path.h"
 #include "base/path_service.h"
+#include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
 #include "base/test/mock_callback.h"
@@ -51,7 +52,7 @@ using ::testing::Return;
 namespace translate {
 
 namespace {
-const char kTestScript[] = R"(
+constexpr char kTestScript[] = R"(
 var api_key = undefined;
 var google = {};
 google.translate = (function() {
@@ -82,7 +83,7 @@ cr.googleTranslate.onLoadCSS("https://translate.googleapis.com/translate_static/
 cr.googleTranslate.onLoadJavascript("https://translate.googleapis.com/translate_static/js/element/main.js");
 )";
 
-const char kXhrPromiseTemplate[] = R"(
+constexpr char kXhrPromiseTemplate[] = R"(
   new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.onload = () => resolve(xhr.%s);
@@ -98,22 +99,23 @@ const char kXhrPromiseTemplate[] = R"(
 
 class BraveTranslateBrowserTest : public InProcessBrowserTest {
  public:
-  BraveTranslateBrowserTest() {
-    https_server_ = std::make_unique<net::EmbeddedTestServer>(
-        net::test_server::EmbeddedTestServer::TYPE_HTTPS);
+  BraveTranslateBrowserTest()
+      : https_server_(net::test_server::EmbeddedTestServer::TYPE_HTTPS) {}
 
-    brave::RegisterPathProvider();
+  void SetUp() override {
+    ASSERT_TRUE(https_server_.InitializeAndListen());
+    InProcessBrowserTest::SetUp();
+  }
+
+  void SetUpOnMainThread() override {
     base::FilePath test_data_dir;
     CHECK(base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir));
     embedded_test_server()->ServeFilesFromDirectory(test_data_dir);
     CHECK(embedded_test_server()->Start());
-
-    https_server_->RegisterRequestHandler(base::BindRepeating(
+    https_server_.RegisterRequestHandler(base::BindRepeating(
         &BraveTranslateBrowserTest::HandleRequest, base::Unretained(this)));
-    CHECK(https_server_->Start());
-  }
+    https_server_.StartAcceptingConnections();
 
-  void SetUpOnMainThread() override {
     mock_cert_verifier_.mock_cert_verifier()->set_default_result(net::OK);
     ResetObserver();
   }
@@ -128,7 +130,7 @@ class BraveTranslateBrowserTest : public InProcessBrowserTest {
     mock_cert_verifier_.SetUpCommandLine(command_line);
 
     // Remap translate.brave.com requests to the https test server.
-    const std::string host_port = https_server_->host_port_pair().ToString();
+    const std::string host_port = https_server_.host_port_pair().ToString();
     command_line->AppendSwitchASCII(network::switches::kHostResolverRules,
                                     "MAP translate.brave.com:443 " + host_port +
                                         ", MAP translate.google.com:443 " +
@@ -228,16 +230,18 @@ class BraveTranslateBrowserTest : public InProcessBrowserTest {
     if (!infobar_manager)
       return ::testing::AssertionFailure() << "!infobar_manager";
 
-    for (size_t i = 0; i < infobar_manager->infobar_count(); ++i) {
-      if (infobar_manager->infobar_at(i)->delegate()->GetIdentifier() ==
-          infobars::InfoBarDelegate::BAD_FLAGS_INFOBAR_DELEGATE) {
-        return ::testing::AssertionFailure() << "Bad flags infobar found.";
-      }
+    const auto it = base::ranges::find(
+        infobar_manager->infobars(),
+        infobars::InfoBarDelegate::BAD_FLAGS_INFOBAR_DELEGATE,
+        &infobars::InfoBar::GetIdentifier);
+    if (it != infobar_manager->infobars().cend()) {
+      return ::testing::AssertionFailure() << "Bad flags infobar found.";
     }
+
     return ::testing::AssertionSuccess();
   }
 
-  std::unique_ptr<net::EmbeddedTestServer> https_server_;
+  net::EmbeddedTestServer https_server_;
   MockFunction<std::tuple<net::HttpStatusCode, std::string, std::string>(
       std::string)>
       backend_request_;
@@ -292,6 +296,7 @@ IN_PROC_BROWSER_TEST_F(BraveTranslateBrowserTest, InternalTranslation) {
   // Check that we haven't tried to update the language lists.
   auto* language_list =
       TranslateDownloadManager::GetInstance()->language_list();
+  language_list->RequestLanguageList();
   EXPECT_FALSE(language_list->HasOngoingLanguageListLoadingForTesting());
 
   // Check used urls.
@@ -335,7 +340,7 @@ class BraveTranslateBrowserGoogleRedirectTest
  public:
   void SetUpCommandLine(base::CommandLine* command_line) override {
     BraveTranslateBrowserTest::SetUpCommandLine(command_line);
-    const std::string host_port = https_server_->host_port_pair().ToString();
+    const std::string host_port = https_server_.host_port_pair().ToString();
     // Add translate.google.com redirection to the https test server.
     command_line->AppendSwitchASCII(network::switches::kHostResolverRules,
                                     "MAP translate.brave.com:443 " + host_port +
@@ -356,8 +361,9 @@ IN_PROC_BROWSER_TEST_F(BraveTranslateBrowserGoogleRedirectTest,
   GetTranslateManager()->TranslatePage("es", "en", true);
   WaitUntilPageTranslated();
 
-  const char kTestURL[] = "https://translate.google.com/something.svg";
-  const char kTestSvg[] = R"(
+  static constexpr char kTestURL[] =
+      "https://translate.google.com/something.svg";
+  static constexpr char kTestSvg[] = R"(
     <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"></svg>
   )";
 
@@ -377,7 +383,7 @@ IN_PROC_BROWSER_TEST_F(BraveTranslateBrowserGoogleRedirectTest,
   EXPECT_EQ("https://translate.brave.com/something.svg",
             EvalTranslateJs(do_xhr_and_get_final_url));
 
-  const char kLoadImageTemplate[] = R"(
+  static constexpr char kLoadImageTemplate[] = R"(
     new Promise((resolve) => {
       let p = new Image();
       p.onload = () => resolve(true);

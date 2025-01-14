@@ -5,31 +5,31 @@
 
 #include "brave/components/brave_rewards/core/state/state_migration_v11.h"
 
+#include <utility>
+
 #include "base/check.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/state/state.h"
 #include "brave/components/brave_rewards/core/state/state_keys.h"
 
-namespace brave_rewards::internal {
-namespace state {
+namespace brave_rewards::internal::state {
 
-StateMigrationV11::StateMigrationV11(LedgerImpl& ledger) : ledger_(ledger) {}
+StateMigrationV11::StateMigrationV11(RewardsEngine& engine) : engine_(engine) {}
 
 StateMigrationV11::~StateMigrationV11() = default;
 
-void StateMigrationV11::Migrate(LegacyResultCallback callback) {
+void StateMigrationV11::Migrate(ResultCallback callback) {
   // In version 7 encryption was added for |kWalletBrave|. However due to wallet
   // corruption, users copying their profiles to new computers or reinstalling
   // their operating system we are reverting this change
 
   const auto decrypted_wallet =
-      ledger_->state()->GetEncryptedString(kWalletBrave);
+      engine_->state()->GetEncryptedString(kWalletBrave);
   if (decrypted_wallet) {
-    ledger_->SetState(kWalletBrave, decrypted_wallet.value());
+    engine_->SetState(kWalletBrave, decrypted_wallet.value());
   }
 
-  callback(mojom::Result::LEDGER_OK);
+  std::move(callback).Run(mojom::Result::OK);
 }
 
-}  // namespace state
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::state

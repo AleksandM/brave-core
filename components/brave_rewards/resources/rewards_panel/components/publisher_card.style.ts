@@ -5,7 +5,7 @@
 
 import styled from 'styled-components'
 
-import * as leo from '@brave/leo/tokens/css'
+import * as leo from '@brave/leo/tokens/css/variables'
 import * as mixins from '../../shared/lib/css_mixins'
 
 export const root = styled.div`
@@ -33,6 +33,10 @@ export const icon = styled.div`
   img {
     height: 32px;
     width: auto;
+
+    &.rounded {
+      border-radius: 50%;
+    }
   }
 `
 
@@ -82,7 +86,7 @@ export const statusIndicator = styled.div`
 
 export const verifiedIcon = styled.div`
   --leo-icon-size: 16px;
-  color: ${leo.color.gray['30']};
+  color: ${leo.color.neutral['30']};
 `
 
 export const refreshStatus = styled.div`
@@ -117,26 +121,6 @@ export const refreshStatus = styled.div`
   }
 `
 
-export const attention = styled.div`
-  font-size: 14px;
-  line-height: 26px;
-  padding: 4px 0;
-  display: flex;
-
-  > * {
-    flex: 1 1 auto;
-  }
-
-  .value {
-    font-weight: 500;
-    text-align: right;
-  }
-
-  .brave-theme-dark & {
-    color: var(--brave-palette-grey000);
-  }
-`
-
 export const contribution = styled.div`
   border-top: solid 1px var(--brave-palette-neutral200);
   border-bottom: solid 1px var(--brave-palette-neutral200);
@@ -153,19 +137,6 @@ export const contribution = styled.div`
   &:empty {
     border: none;
     padding: 0;
-  }
-`
-
-export const autoContribution = styled.div`
-  display: flex;
-  align-items: center;
-
-  > * {
-    flex: 1 1 auto;
-  }
-
-  > :last-child {
-    text-align: right;
   }
 `
 

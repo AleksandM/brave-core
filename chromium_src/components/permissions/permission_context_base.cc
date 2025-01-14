@@ -109,14 +109,11 @@ void PermissionContextBase::PermissionDecided(const PermissionRequestID& id,
 }
 
 void PermissionContextBase::DecidePermission(
-    const PermissionRequestID& id,
-    const GURL& requesting_origin,
-    const GURL& embedding_origin,
-    bool user_gesture,
+    permissions::PermissionRequestData request_data,
     BrowserPermissionCallback callback) {
-  PermissionContextBase_ChromiumImpl::DecidePermission(
-      id, requesting_origin, embedding_origin, user_gesture,
-      std::move(callback));
+  auto id = request_data.id;
+  PermissionContextBase_ChromiumImpl::DecidePermission(std::move(request_data),
+                                                       std::move(callback));
 
   if (!IsGroupedPermissionType(content_settings_type())) {
     return;
@@ -141,9 +138,12 @@ void PermissionContextBase::DecidePermission(
   pending_requests_.erase(pending_request);
 }
 
-void PermissionContextBase::CleanUpRequest(const PermissionRequestID& id) {
+void PermissionContextBase::CleanUpRequest(
+    const PermissionRequestID& id,
+    bool embedded_permission_element_initiated) {
   if (!IsGroupedPermissionType(content_settings_type())) {
-    PermissionContextBase_ChromiumImpl::CleanUpRequest(id);
+    PermissionContextBase_ChromiumImpl::CleanUpRequest(
+        id, embedded_permission_element_initiated);
     return;
   }
 

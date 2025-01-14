@@ -189,9 +189,10 @@ void CustomBackgroundFileManager::SaveImageAsPNG(
   }
   auto encode_and_save = base::BindOnce(
       [](const SkBitmap& bitmap, const base::FilePath& target_path) {
-        auto encoded = base::MakeRefCounted<base::RefCountedBytes>();
-        if (!gfx::PNGCodec::EncodeBGRASkBitmap(
-                bitmap, /*discard_transparency=*/false, &encoded->data())) {
+        std::optional<std::vector<uint8_t>> encoded =
+            gfx::PNGCodec::EncodeBGRASkBitmap(bitmap,
+                                              /*discard_transparency=*/false);
+        if (!encoded) {
           DVLOG(2) << "Failed to encode image as PNG";
           return base::FilePath();
         }
@@ -202,9 +203,7 @@ void CustomBackgroundFileManager::SaveImageAsPNG(
               base::StringPrintf("-%d", i));
         }
 
-        if (!base::WriteFile(
-                modified_path,
-                base::span<const uint8_t>(encoded->front(), encoded->size()))) {
+        if (!base::WriteFile(modified_path, *encoded)) {
           DVLOG(2) << "Failed to write image to file " << modified_path;
           return base::FilePath();
         }

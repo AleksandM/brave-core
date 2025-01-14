@@ -1,3 +1,8 @@
+// Copyright (c) 2023 The Brave Authors. All rights reserved.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this file,
+// You can obtain one at https://mozilla.org/MPL/2.0/.
+
 mod errors;
 mod httpclient;
 mod log;
@@ -6,28 +11,38 @@ mod storage;
 use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
+use std::thread;
 
-use cxx::{type_id, ExternType, UniquePtr};
+use cxx::UniquePtr;
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::task::LocalSpawnExt;
+use futures::lock::Mutex;
 
 use tracing::debug;
 
 pub use skus;
 
 use crate::httpclient::{HttpRoundtripContext, WakeupContext};
+use crate::storage::{StorageGetContext, StoragePurgeContext, StorageSetContext};
 
-pub struct NativeClientContext {
+pub struct NativeClientExecutor {
+    is_shutdown: bool,
+    pool: Option<LocalPool>,
+    spawner: LocalSpawner,
+    thread_id: thread::ThreadId,
+}
+
+#[derive(Clone)]
+pub struct NativeClientInner {
     environment: skus::Environment,
-    ctx: UniquePtr<ffi::SkusContext>,
+    executor: Rc<RefCell<NativeClientExecutor>>,
+    ctx: Rc<RefCell<UniquePtr<ffi::SkusContext>>>,
 }
 
 #[derive(Clone)]
 pub struct NativeClient {
-    is_shutdown: Rc<RefCell<bool>>,
-    pool: Rc<RefCell<LocalPool>>,
-    spawner: LocalSpawner,
-    ctx: Rc<RefCell<NativeClientContext>>,
+    executor: Rc<RefCell<NativeClientExecutor>>,
+    inner: Rc<Mutex<NativeClientInner>>,
 }
 
 impl fmt::Debug for NativeClient {
@@ -38,17 +53,51 @@ impl fmt::Debug for NativeClient {
 
 impl NativeClient {
     fn try_run_until_stalled(&self) {
-        if *self.is_shutdown.borrow() {
+        let executor = self.executor.clone();
+        if let Ok(mut executor) = executor.try_borrow_mut() {
+            executor.try_run_until_stalled()
+        };
+    }
+
+    fn get_spawner(&self) -> LocalSpawner {
+        self.executor.borrow().spawner.clone()
+    }
+}
+
+impl NativeClientExecutor {
+    fn new() -> Self {
+        let pool = LocalPool::new();
+        let spawner = pool.spawner();
+        Self {
+            is_shutdown: false,
+            pool: Some(pool),
+            spawner,
+            thread_id: thread::current().id(),
+        }
+    }
+
+    fn shutdown(&mut self) {
+        // drop any existing futures
+        drop(self.pool.take());
+        // ensure lingering callbacks passed to c++ are short circuited
+        self.is_shutdown = true;
+    }
+
+    fn try_run_until_stalled(&mut self) {
+        assert!(thread::current().id() == self.thread_id, "sdk called on a different thread!");
+        let _ = thread::current().id() == self.thread_id;
+        if self.is_shutdown {
             debug!("sdk is shutdown, exiting");
             return;
         }
-        if let Ok(mut pool) = self.pool.try_borrow_mut() {
+        if let Some(pool) = &mut self.pool {
             pool.run_until_stalled();
         }
     }
 }
 
 #[allow(unused)]
+#[allow(unsafe_op_in_unsafe_fn)]
 #[cxx::bridge(namespace = skus)]
 mod ffi {
     #[derive(Debug)]
@@ -76,7 +125,16 @@ mod ffi {
     }
 
     #[derive(Debug)]
-    pub enum SkusResult {
+    pub struct SkusResult {
+        code: SkusResultCode,
+        msg: String,
+    }
+
+    // Must match components/skus/common/skus_sdk.mojom
+    #[derive(Debug)]
+    #[repr(u32)]
+    #[namespace = "skus::mojom"]
+    pub enum SkusResultCode {
         Ok,
         RequestFailed,
         InternalServer,
@@ -121,42 +179,52 @@ mod ffi {
     extern "Rust" {
         type HttpRoundtripContext;
         type WakeupContext;
+        type StoragePurgeContext;
+        type StorageSetContext;
+        type StorageGetContext;
 
         type CppSDK;
         fn initialize_sdk(ctx: UniquePtr<SkusContext>, env: String) -> Box<CppSDK>;
         fn shutdown(self: &CppSDK);
         fn refresh_order(
             self: &CppSDK,
-            callback: RefreshOrderCallback,
-            callback_state: UniquePtr<RefreshOrderCallbackState>,
+            mut callback: UniquePtr<RustBoundPostTask>,
             order_id: String,
         );
         fn fetch_order_credentials(
             self: &CppSDK,
-            callback: FetchOrderCredentialsCallback,
-            callback_state: UniquePtr<FetchOrderCredentialsCallbackState>,
+            mut callback: UniquePtr<RustBoundPostTask>,
             order_id: String,
         );
         fn prepare_credentials_presentation(
             self: &CppSDK,
-            callback: PrepareCredentialsPresentationCallback,
-            callback_state: UniquePtr<PrepareCredentialsPresentationCallbackState>,
+            mut callback: UniquePtr<RustBoundPostTask>,
             domain: String,
             path: String,
         );
         fn credential_summary(
             self: &CppSDK,
-            callback: CredentialSummaryCallback,
-            callback_state: UniquePtr<CredentialSummaryCallbackState>,
+            mut callback: UniquePtr<RustBoundPostTask>,
             domain: String,
         );
         fn submit_receipt(
             self: &CppSDK,
-            callback: SubmitReceiptCallback,
-            callback_state: UniquePtr<SubmitReceiptCallbackState>,
+            mut callback: UniquePtr<RustBoundPostTask>,
             order_id: String,
             receipt: String,
         );
+        fn create_order_from_receipt(
+            self: &CppSDK,
+            mut callback: UniquePtr<RustBoundPostTask>,
+            receipt: String,
+        );
+    }
+
+    #[namespace = "skus::mojom"]
+    extern "C++" {
+        include!("brave/components/skus/common/skus_sdk.mojom-shared.h");
+
+        type SkusResultCode;
     }
 
     unsafe extern "C++" {
@@ -180,20 +248,31 @@ mod ffi {
             ctx: Box<WakeupContext>,
         );
 
-        fn shim_purge(ctx: Pin<&mut SkusContext>);
-        fn shim_set(ctx: Pin<&mut SkusContext>, key: &str, value: &str);
-        fn shim_get(ctx: Pin<&mut SkusContext>, key: &str) -> String;
+        fn shim_purge(
+            ctx: Pin<&mut SkusContext>,
+            done: fn(Box<StoragePurgeContext>, bool),
+            st_ctx: Box<StoragePurgeContext>,
+        );
 
-        type RefreshOrderCallbackState;
-        type RefreshOrderCallback = crate::RefreshOrderCallback;
-        type FetchOrderCredentialsCallbackState;
-        type FetchOrderCredentialsCallback = crate::FetchOrderCredentialsCallback;
-        type PrepareCredentialsPresentationCallbackState;
-        type PrepareCredentialsPresentationCallback = crate::PrepareCredentialsPresentationCallback;
-        type CredentialSummaryCallbackState;
-        type CredentialSummaryCallback = crate::CredentialSummaryCallback;
-        type SubmitReceiptCallbackState;
-        type SubmitReceiptCallback = crate::SubmitReceiptCallback;
+        fn shim_set(
+            ctx: Pin<&mut SkusContext>,
+            key: &str,
+            value: &str,
+            done: fn(Box<StorageSetContext>, bool),
+            st_ctx: Box<StorageSetContext>,
+        );
+
+        fn shim_get(
+            ctx: Pin<&mut SkusContext>,
+            key: &str,
+            done: fn(Box<StorageGetContext>, String, bool),
+            st_ctx: Box<StorageGetContext>,
+        );
+
+        fn Run(self: Pin<&mut RustBoundPostTask>, result: SkusResult);
+        fn RunWithResponse(self: Pin<&mut RustBoundPostTask>, result: SkusResult, response: &str);
+
+        type RustBoundPostTask;
     }
 }
 
@@ -213,14 +292,15 @@ fn initialize_sdk(ctx: UniquePtr<ffi::SkusContext>, env: String) -> Box<CppSDK> 
 
     let env = env.parse::<skus::Environment>().unwrap_or(skus::Environment::Local);
 
-    let pool = LocalPool::new();
-    let spawner = pool.spawner();
+    let executor = Rc::new(RefCell::new(NativeClientExecutor::new()));
     let sdk = skus::sdk::SDK::new(
         NativeClient {
-            is_shutdown: Rc::new(RefCell::new(false)),
-            pool: Rc::new(RefCell::new(pool)),
-            spawner: spawner.clone(),
-            ctx: Rc::new(RefCell::new(NativeClientContext { environment: env.clone(), ctx })),
+            executor: executor.clone(),
+            inner: Rc::new(Mutex::new(NativeClientInner {
+                environment: env.clone(),
+                executor,
+                ctx: Rc::new(RefCell::new(ctx)),
+            })),
         },
         env,
         None,
@@ -229,34 +309,31 @@ fn initialize_sdk(ctx: UniquePtr<ffi::SkusContext>, env: String) -> Box<CppSDK> 
     let sdk = Rc::new(sdk);
     {
         let sdk = sdk.clone();
+        let spawner = sdk.client.get_spawner();
         let init = async move { sdk.initialize().await };
         if spawner.spawn_local(init).is_err() {
             debug!("pool is shutdown");
         }
     }
 
-    sdk.client.pool.borrow_mut().run_until_stalled();
+    sdk.client.try_run_until_stalled();
 
     Box::new(CppSDK { sdk })
 }
 
 impl CppSDK {
     fn shutdown(&self) {
-        // drop any existing futures
-        drop(self.sdk.client.pool.take());
-        // ensure lingering callbacks passed to c++ are short circuited
-        *self.sdk.client.is_shutdown.borrow_mut() = true;
+        self.sdk.client.executor.borrow_mut().shutdown();
     }
 
     fn refresh_order(
         &self,
-        callback: RefreshOrderCallback,
-        callback_state: UniquePtr<ffi::RefreshOrderCallbackState>,
+        callback: UniquePtr<ffi::RustBoundPostTask>,
         order_id: String,
     ) {
-        let spawner = self.sdk.client.spawner.clone();
+        let spawner = self.sdk.client.get_spawner();
         if spawner
-            .spawn_local(refresh_order_task(self.sdk.clone(), callback, callback_state, order_id))
+            .spawn_local(refresh_order_task(self.sdk.clone(), callback, order_id))
             .is_err()
         {
             debug!("pool is shutdown");
@@ -267,16 +344,14 @@ impl CppSDK {
 
     fn fetch_order_credentials(
         &self,
-        callback: FetchOrderCredentialsCallback,
-        callback_state: UniquePtr<ffi::FetchOrderCredentialsCallbackState>,
+        callback: UniquePtr<ffi::RustBoundPostTask>,
         order_id: String,
     ) {
-        let spawner = self.sdk.client.spawner.clone();
+        let spawner = self.sdk.client.get_spawner();
         if spawner
             .spawn_local(fetch_order_credentials_task(
                 self.sdk.clone(),
                 callback,
-                callback_state,
                 order_id,
             ))
             .is_err()
@@ -289,17 +364,15 @@ impl CppSDK {
 
     fn prepare_credentials_presentation(
         &self,
-        callback: PrepareCredentialsPresentationCallback,
-        callback_state: UniquePtr<ffi::PrepareCredentialsPresentationCallbackState>,
+        callback: UniquePtr<ffi::RustBoundPostTask>,
         domain: String,
         path: String,
     ) {
-        let spawner = self.sdk.client.spawner.clone();
+        let spawner = self.sdk.client.get_spawner();
         if spawner
             .spawn_local(prepare_credentials_presentation_task(
                 self.sdk.clone(),
                 callback,
-                callback_state,
                 domain,
                 path,
             ))
@@ -313,16 +386,14 @@ impl CppSDK {
 
     fn credential_summary(
         &self,
-        callback: CredentialSummaryCallback,
-        callback_state: UniquePtr<ffi::CredentialSummaryCallbackState>,
+        callback: UniquePtr<ffi::RustBoundPostTask>,
         domain: String,
     ) {
-        let spawner = self.sdk.client.spawner.clone();
+        let spawner = self.sdk.client.get_spawner();
         if spawner
             .spawn_local(credential_summary_task(
                 self.sdk.clone(),
                 callback,
-                callback_state,
                 domain,
             ))
             .is_err()
@@ -335,18 +406,35 @@ impl CppSDK {
 
     fn submit_receipt(
         self: &CppSDK,
-        callback: SubmitReceiptCallback,
-        callback_state: UniquePtr<ffi::SubmitReceiptCallbackState>,
+        callback: UniquePtr<ffi::RustBoundPostTask>,
         order_id: String,
         receipt: String,
     ) {
-        let spawner = self.sdk.client.spawner.clone();
+        let spawner = self.sdk.client.get_spawner();
         if spawner
             .spawn_local(submit_receipt_task(
                 self.sdk.clone(),
                 callback,
-                callback_state,
                 order_id,
+                receipt,
+            ))
+            .is_err()
+        {
+            debug!("pool is shutdown");
+        }
+
+        self.sdk.client.try_run_until_stalled();
+    }
+    fn create_order_from_receipt(
+        self: &CppSDK,
+        callback: UniquePtr<ffi::RustBoundPostTask>,
+        receipt: String,
+    ) {
+        let spawner = self.sdk.client.get_spawner();
+        if spawner
+            .spawn_local(create_order_from_receipt_task(
+                self.sdk.clone(),
+                callback,
                 receipt,
             ))
             .is_err()
@@ -358,24 +446,9 @@ impl CppSDK {
     }
 }
 
-#[repr(transparent)]
-pub struct RefreshOrderCallback(
-    pub  extern "C" fn(
-        callback_state: *mut ffi::RefreshOrderCallbackState,
-        result: ffi::SkusResult,
-        order: &str,
-    ),
-);
-
-unsafe impl ExternType for RefreshOrderCallback {
-    type Id = type_id!("skus::RefreshOrderCallback");
-    type Kind = cxx::kind::Trivial;
-}
-
 async fn refresh_order_task(
     sdk: Rc<skus::sdk::SDK<NativeClient>>,
-    callback: RefreshOrderCallback,
-    callback_state: UniquePtr<ffi::RefreshOrderCallbackState>,
+    mut callback: UniquePtr<ffi::RustBoundPostTask>,
     order_id: String,
 ) {
     match sdk
@@ -384,84 +457,38 @@ async fn refresh_order_task(
         .and_then(|order| serde_json::to_string(&order).map_err(|e| e.into()))
         .map_err(|e| e.into())
     {
-        Ok(order) => callback.0(callback_state.into_raw(), ffi::SkusResult::Ok, &order),
-        Err(e) => callback.0(callback_state.into_raw(), e, ""),
+        Ok(order) => callback.pin_mut().RunWithResponse(ffi::SkusResult::new(ffi::SkusResultCode::Ok, ""), &order),
+        Err(e) => callback.pin_mut().RunWithResponse(e, ""),
     }
-}
-
-#[repr(transparent)]
-pub struct FetchOrderCredentialsCallback(
-    pub  extern "C" fn(
-        callback_state: *mut ffi::FetchOrderCredentialsCallbackState,
-        result: ffi::SkusResult,
-    ),
-);
-
-unsafe impl ExternType for FetchOrderCredentialsCallback {
-    type Id = type_id!("skus::FetchOrderCredentialsCallback");
-    type Kind = cxx::kind::Trivial;
 }
 
 async fn fetch_order_credentials_task(
     sdk: Rc<skus::sdk::SDK<NativeClient>>,
-    callback: FetchOrderCredentialsCallback,
-    callback_state: UniquePtr<ffi::FetchOrderCredentialsCallbackState>,
+    mut callback: UniquePtr<ffi::RustBoundPostTask>,
     order_id: String,
 ) {
     match sdk.fetch_order_credentials(&order_id).await.map_err(|e| e.into()) {
-        Ok(_) => callback.0(callback_state.into_raw(), ffi::SkusResult::Ok),
-        Err(e) => callback.0(callback_state.into_raw(), e),
+        Ok(_) => callback.pin_mut().Run(ffi::SkusResult::new(ffi::SkusResultCode::Ok, "")),
+        Err(e) => callback.pin_mut().Run(e),
     }
-}
-
-#[repr(transparent)]
-pub struct PrepareCredentialsPresentationCallback(
-    pub  extern "C" fn(
-        callback_state: *mut ffi::PrepareCredentialsPresentationCallbackState,
-        result: ffi::SkusResult,
-        presentation: &str,
-    ),
-);
-
-unsafe impl ExternType for PrepareCredentialsPresentationCallback {
-    type Id = type_id!("skus::PrepareCredentialsPresentationCallback");
-    type Kind = cxx::kind::Trivial;
 }
 
 async fn prepare_credentials_presentation_task(
     sdk: Rc<skus::sdk::SDK<NativeClient>>,
-    callback: PrepareCredentialsPresentationCallback,
-    callback_state: UniquePtr<ffi::PrepareCredentialsPresentationCallbackState>,
+    mut callback: UniquePtr<ffi::RustBoundPostTask>,
     domain: String,
     path: String,
 ) {
     match sdk.prepare_credentials_presentation(&domain, &path).await.map_err(|e| e.into()) {
-        Ok(Some(presentation)) => {
-            callback.0(callback_state.into_raw(), ffi::SkusResult::Ok, &presentation)
-        }
-        Ok(None) => callback.0(callback_state.into_raw(), ffi::SkusResult::Ok, ""),
-        Err(e) => callback.0(callback_state.into_raw(), e, ""),
+        Ok(Some(presentation)) => callback.pin_mut().RunWithResponse(ffi::SkusResult::new(ffi::SkusResultCode::Ok, ""), &presentation),
+        Ok(None) => callback.pin_mut().RunWithResponse(ffi::SkusResult::new(ffi::SkusResultCode::Ok, ""), ""),
+        Err(e) => callback.pin_mut().RunWithResponse(e, ""),
     }
-}
-
-#[repr(transparent)]
-pub struct CredentialSummaryCallback(
-    pub extern "C" fn(
-        callback_state: *mut ffi::CredentialSummaryCallbackState,
-        result: ffi::SkusResult,
-        summary: &str,
-    ),
-);
-
-unsafe impl ExternType for CredentialSummaryCallback {
-    type Id = type_id!("skus::CredentialSummaryCallback");
-    type Kind = cxx::kind::Trivial;
 }
 
 async fn credential_summary_task(
     sdk: Rc<skus::sdk::SDK<NativeClient>>,
-    callback: CredentialSummaryCallback,
-    callback_state: UniquePtr<ffi::CredentialSummaryCallbackState>,
+    mut callback: UniquePtr<ffi::RustBoundPostTask>,
     domain: String,
 ) {
     match sdk
@@ -472,31 +499,31 @@ async fn credential_summary_task(
         })
         .map_err(|e| e.into())
     {
-        Ok(Some(summary)) => callback.0(callback_state.into_raw(), ffi::SkusResult::Ok, &summary),
-        Ok(None) => callback.0(callback_state.into_raw(), ffi::SkusResult::Ok, "{}"), // none, empty
-        Err(e) => callback.0(callback_state.into_raw(), e, "{}"), // none, empty
+        Ok(Some(summary)) => callback.pin_mut().RunWithResponse(ffi::SkusResult::new(ffi::SkusResultCode::Ok, ""), &summary),
+        Ok(None) => callback.pin_mut().RunWithResponse(ffi::SkusResult::new(ffi::SkusResultCode::Ok, ""), "{}"), /* none, empty */
+        Err(e) => callback.pin_mut().RunWithResponse(e, "{}"),                     // none, empty
     }
-}
-
-#[repr(transparent)]
-pub struct SubmitReceiptCallback(
-    pub extern "C" fn(callback_state: *mut ffi::SubmitReceiptCallbackState, result: ffi::SkusResult),
-);
-
-unsafe impl ExternType for SubmitReceiptCallback {
-    type Id = type_id!("skus::SubmitReceiptCallback");
-    type Kind = cxx::kind::Trivial;
 }
 
 async fn submit_receipt_task(
     sdk: Rc<skus::sdk::SDK<NativeClient>>,
-    callback: SubmitReceiptCallback,
-    callback_state: UniquePtr<ffi::SubmitReceiptCallbackState>,
+    mut callback: UniquePtr<ffi::RustBoundPostTask>,
     order_id: String,
     receipt: String,
 ) {
     match sdk.submit_receipt(&order_id, &receipt).await.map_err(|e| e.into()) {
-        Ok(_) => callback.0(callback_state.into_raw(), ffi::SkusResult::Ok),
-        Err(e) => callback.0(callback_state.into_raw(), e),
+        Ok(_) => callback.pin_mut().Run(ffi::SkusResult::new(ffi::SkusResultCode::Ok, "")),
+        Err(e) => callback.pin_mut().Run(e),
+    }
+}
+
+async fn create_order_from_receipt_task(
+    sdk: Rc<skus::sdk::SDK<NativeClient>>,
+    mut callback: UniquePtr<ffi::RustBoundPostTask>,
+    receipt: String,
+) {
+    match sdk.create_order_from_receipt(&receipt).await.map_err(|e| e.into()) {
+        Ok(order_id) => callback.pin_mut().RunWithResponse(ffi::SkusResult::new(ffi::SkusResultCode::Ok, ""), &order_id),
+        Err(e) => callback.pin_mut().RunWithResponse(e, ""),
     }
 }

@@ -11,8 +11,4 @@ BASE_FEATURE(kUserActivityFeature,
              "UserActivity",
              base::FEATURE_ENABLED_BY_DEFAULT);
 
-bool IsUserActivityFeatureEnabled() {
-  return base::FeatureList::IsEnabled(kUserActivityFeature);
-}
-
 }  // namespace brave_ads

@@ -1,4 +1,4 @@
-/* Copyright 2022 The Brave Authors. All rights reserved.
+/* Copyright (c) 2022 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
@@ -34,6 +34,10 @@ class NET_EXPORT TransportSecurityState
   using TransportSecurityState_ChromiumImpl::
       TransportSecurityState_ChromiumImpl;
 
+  SSLUpgradeDecision GetSSLUpgradeDecision(
+      const NetworkAnonymizationKey& network_anonymization_key,
+      const std::string& host,
+      const NetLogWithSource& net_log = NetLogWithSource());
   bool ShouldSSLErrorsBeFatal(
       const NetworkAnonymizationKey& network_anonymization_key,
       const std::string& host);
@@ -42,11 +46,11 @@ class NET_EXPORT TransportSecurityState
       const std::string& host,
       const NetLogWithSource& net_log = NetLogWithSource());
   bool AddHSTSHeader(const IsolationInfo& isolation_info,
-                     const std::string& host,
-                     const std::string& value);
+                     std::string_view host,
+                     std::string_view value);
 
   // This is used only for manual adding via net-internals page.
-  void AddHSTS(const std::string& host,
+  void AddHSTS(std::string_view host,
                const base::Time& expiry,
                bool include_subdomains);
   // These are used in some places where no NIK is available.

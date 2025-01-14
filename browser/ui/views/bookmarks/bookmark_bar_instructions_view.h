@@ -1,13 +1,14 @@
-/* Copyright 2020 The Brave Authors. All rights reserved.
+/* Copyright (c) 2020 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #ifndef BRAVE_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_BAR_INSTRUCTIONS_VIEW_H_
 #define BRAVE_BROWSER_UI_VIEWS_BOOKMARKS_BOOKMARK_BAR_INSTRUCTIONS_VIEW_H_
 
 #include "base/compiler_specific.h"
 #include "base/memory/raw_ptr.h"
+#include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/views/context_menu_controller.h"
 #include "ui/views/view.h"
 
@@ -25,6 +26,7 @@ class Browser;
 // NOTE: Most of code is copied from chromium's deleted file.
 class BookmarkBarInstructionsView : public views::View,
                                     public views::ContextMenuController {
+  METADATA_HEADER(BookmarkBarInstructionsView, views::View)
  public:
   explicit BookmarkBarInstructionsView(Browser* browser);
   BookmarkBarInstructionsView(const BookmarkBarInstructionsView&) = delete;
@@ -33,16 +35,17 @@ class BookmarkBarInstructionsView : public views::View,
 
  private:
   // views::View:
-  gfx::Size CalculatePreferredSize() const override;
-  void Layout() override;
-  const char* GetClassName() const override;
+  gfx::Size CalculatePreferredSize(
+      const views::SizeBounds& available_size) const override;
+  void Layout(PassKey) override;
   void OnThemeChanged() override;
   void GetAccessibleNodeData(ui::AXNodeData* node_data) override;
 
   // views::ContextMenuController:
-  void ShowContextMenuForViewImpl(views::View* source,
-                                  const gfx::Point& point,
-                                  ui::MenuSourceType source_type) override;
+  void ShowContextMenuForViewImpl(
+      views::View* source,
+      const gfx::Point& point,
+      ui::mojom::MenuSourceType source_type) override;
 
   void UpdateColors();
   void LinkClicked();

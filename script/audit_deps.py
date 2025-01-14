@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin/env vpython3
 # pylint: disable=line-too-long
-
 """This script runs `npm audit' and `cargo audit' on relevant paths in the
 repo."""
 
@@ -14,46 +13,39 @@ import json
 import os
 import subprocess
 import sys
+import urllib.request
 
-import requests
 
 def get_remote_audit_config(
-        url = "https://raw.githubusercontent.com/brave/audit-config/main/config.json",
-        retry = 3):
-    """Fetch additional audit configuration"""
-    s = requests.Session()
-    s.mount(url, requests.adapters.HTTPAdapter(max_retries=retry))
-    return s.get(url).json()
+    url="https://raw.githubusercontent.com/brave/audit-config/main/config.json"
+):
+    return json.loads(urllib.request.urlopen(url).read().decode("utf-8"))
+
 
 REMOTE_AUDIT_CONFIG = get_remote_audit_config()
-IGNORED_CARGO_ADVISORIES = [e["advisory"] for e in REMOTE_AUDIT_CONFIG["ignore"]["cargo"]]
-IGNORED_NPM_ADVISORIES = [e["advisory"] for e in REMOTE_AUDIT_CONFIG["ignore"]["npm"]]
+IGNORED_CARGO_ADVISORIES = [
+    e["advisory"] for e in REMOTE_AUDIT_CONFIG["ignore"]["cargo"]
+]
+IGNORED_NPM_ADVISORIES = [
+    e["advisory"] for e in REMOTE_AUDIT_CONFIG["ignore"]["npm"]
+]
 
 # Use all (sub)paths except these for npm audit.
-NPM_EXCLUDE_PATHS = [
-    'build',
-    os.path.join('node_modules')
-]
+NPM_EXCLUDE_PATHS = ['build', os.path.join('node_modules')]
 
-# Use only these (sub)paths for cargo audit.
-CARGO_INCLUDE_PATHS = [
-    os.path.join('build', 'rust'),
-]
+# Only check Cargo.lock for this path.
+CARGO_INCLUDE_PATH = os.path.join('third_party', 'rust', 'chromium_crates_io')
 
 
 def main():
     """Audit a specified path, or the whole project."""
 
     if len(IGNORED_NPM_ADVISORIES) > 0:
-        print(
-            f"Ignoring NPM advisories "
-            f"{', '.join(map(str, IGNORED_NPM_ADVISORIES))}"
-        )
+        print(f"Ignoring NPM advisories "
+              f"{', '.join(map(str, IGNORED_NPM_ADVISORIES))}")
     if len(IGNORED_CARGO_ADVISORIES) > 0:
-        print(
-            f"Ignoring Cargo advisories "
-            f"{', '.join(map(str, IGNORED_CARGO_ADVISORIES))}"
-        )
+        print(f"Ignoring Cargo advisories "
+              f"{', '.join(map(str, IGNORED_CARGO_ADVISORIES))}")
 
     args = parse_args()
     errors = 0
@@ -61,14 +53,19 @@ def main():
     if args.input_dir:
         return audit_path(os.path.abspath(args.input_dir), args)
 
-    for path in [os.path.dirname(os.path.dirname(args.source_root)),
-                 args.source_root]:
+    for path in [
+            os.path.dirname(os.path.dirname(args.source_root)), args.source_root
+    ]:
         errors += audit_path(path, args)
 
     for dir_path, dirs, _ in os.walk(args.source_root):
         for dir_name in dirs:
             full_path = os.path.join(dir_path, dir_name)
             errors += audit_path(full_path, args)
+
+    print(f'Auditing (cargo) {CARGO_INCLUDE_PATH}')
+    errors += cargo_audit_deps(
+        os.path.join(args.source_root, CARGO_INCLUDE_PATH), args)
 
     return errors > 0
 
@@ -83,13 +80,6 @@ def audit_path(path, args):
                for p in NPM_EXCLUDE_PATHS):
         print(f'Auditing (npm) {path}')
         return npm_audit_deps(path, args)
-
-    if os.path.isfile(os.path.join(path, 'Cargo.toml')) and \
-        os.path.isfile(os.path.join(path, 'Cargo.lock')) and \
-        any(full_path.startswith(os.path.join(args.source_root, p, ""))
-            for p in CARGO_INCLUDE_PATHS):
-        print(f'Auditing (cargo) {path}')
-        return cargo_audit_deps(path, args)
 
     return 0
 
@@ -106,8 +96,7 @@ def npm_audit_deps(path, args):
         # Don't support npm audit --production until dev dependencies are
         # correctly identified in package.json
         print('npm audit --production not supported; auditing dev dependencies')
-    audit_process = subprocess.Popen(
-        npm_args, stdout=subprocess.PIPE, cwd=path)
+    audit_process = subprocess.Popen(npm_args, stdout=subprocess.PIPE, cwd=path)
     output, _ = audit_process.communicate()
 
     try:
@@ -133,20 +122,8 @@ def npm_audit_deps(path, args):
 
 def cargo_audit_deps(path, args):
     """Run `cargo audit' in the specified path."""
-    env = os.environ.copy()
-
-    rustup_home = args.rustup_home
-    env['RUSTUP_HOME'] = rustup_home
-
-    cargo_home = args.cargo_home
-    env['CARGO_HOME'] = cargo_home
-
-    rustup_bin = os.path.abspath(os.path.join(rustup_home, 'bin'))
-    rustup_bin_exe = os.path.join(rustup_bin, 'cargo.exe')
-    env['PATH'] = rustup_bin + os.pathsep + env['PATH']
-
     cargo_args = []
-    cargo_args.append("cargo" if sys.platform != "win32" else rustup_bin_exe)
+    cargo_args.append(args.cargo_audit_exe)
     cargo_args.append("audit")
     cargo_args.append("--file")
     cargo_args.append(os.path.join(path, "Cargo.lock"))
@@ -154,7 +131,7 @@ def cargo_audit_deps(path, args):
         cargo_args.append("--ignore")
         cargo_args.append(advisory)
 
-    return subprocess.call(cargo_args, env=env)
+    return subprocess.call(cargo_args)
 
 
 def extract_resolutions(result):
@@ -189,10 +166,10 @@ def parse_args():
 
     parser = argparse.ArgumentParser(description='Audit brave-core npm deps')
     parser.add_argument('input_dir', nargs='?', help='Directory to check')
-    parser.add_argument('--source_root', required=True,
+    parser.add_argument('--source_root',
+                        required=True,
                         help='Full path of the src/brave directory')
-    parser.add_argument('--rustup_home', required=True)
-    parser.add_argument('--cargo_home', required=True)
+    parser.add_argument('--cargo_audit_exe', required=True)
     parser.add_argument('--audit_dev_deps',
                         action='store_true',
                         help='Audit dev dependencies')

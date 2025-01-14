@@ -5,6 +5,8 @@
 
 #include "brave/browser/ui/views/permission_bubble/brave_wallet_permission_prompt_impl.h"
 
+#include <optional>
+
 #include "brave/browser/brave_wallet/brave_wallet_tab_helper.h"
 #include "components/permissions/permission_uma_util.h"
 
@@ -30,8 +32,10 @@ void BraveWalletPermissionPromptImpl::ShowBubble() {
 }
 
 bool BraveWalletPermissionPromptImpl::UpdateAnchor() {
-  // Returning false will force the caller to recreate the view.
-  return false;
+  // Don't recreate the view for every BrowserView::Layout() which would cause
+  // BraveWalletPermissionPromptImpl being destoryed which leads to bubble
+  // dismissed unintentionally.
+  return true;
 }
 
 permissions::PermissionPrompt::TabSwitchingBehavior
@@ -43,4 +47,28 @@ BraveWalletPermissionPromptImpl::GetTabSwitchingBehavior() {
 permissions::PermissionPromptDisposition
 BraveWalletPermissionPromptImpl::GetPromptDisposition() const {
   return permissions::PermissionPromptDisposition::ANCHORED_BUBBLE;
+}
+
+bool BraveWalletPermissionPromptImpl::IsAskPrompt() const {
+  return true;
+}
+
+std::optional<gfx::Rect>
+BraveWalletPermissionPromptImpl::GetViewBoundsInScreen() const {
+  return std::nullopt;
+}
+
+bool BraveWalletPermissionPromptImpl::ShouldFinalizeRequestAfterDecided()
+    const {
+  return true;
+}
+
+std::vector<permissions::ElementAnchoredBubbleVariant>
+BraveWalletPermissionPromptImpl::GetPromptVariants() const {
+  return {};
+}
+
+std::optional<permissions::feature_params::PermissionElementPromptPosition>
+BraveWalletPermissionPromptImpl::GetPromptPosition() const {
+  return std::nullopt;
 }

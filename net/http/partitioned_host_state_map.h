@@ -7,6 +7,7 @@
 #define BRAVE_NET_HTTP_PARTITIONED_HOST_STATE_MAP_H_
 
 #include <array>
+#include <optional>
 #include <string>
 
 #include "base/auto_reset.h"
@@ -14,7 +15,6 @@
 #include "base/ranges/algorithm.h"
 #include "crypto/sha2.h"
 #include "net/base/net_export.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace net {
 
@@ -31,8 +31,8 @@ class NET_EXPORT PartitionedHostStateMapBase {
       delete;
 
   // Stores scoped partition hash for use in subsequent calls.
-  base::AutoReset<absl::optional<HashedHost>> SetScopedPartitionHash(
-      absl::optional<HashedHost> partition_hash);
+  base::AutoReset<std::optional<HashedHost>> SetScopedPartitionHash(
+      std::optional<HashedHost> partition_hash);
   // Returns true if |partition_hash_| is set. The value may be empty.
   bool HasPartitionHash() const;
   // Returns true if |partition_hash_| contains a non empty valid hash.
@@ -42,16 +42,13 @@ class NET_EXPORT PartitionedHostStateMapBase {
   // CHECKs if |partition_hash_| is not valid.
   HashedHost GetKeyWithPartitionHash(const HashedHost& k) const;
 
-  // Returns first `HashedHost::size() / 2` bytes from |k|.
-  static base::span<const uint8_t> GetHalfKey(const HashedHost& k);
-
  private:
   // Partition hash can be of these values:
   //   nullopt - unpartitioned;
   //   empty array - invalid/opaque partition, i.e. shouldn't be stored;
   //   non-empty array - valid partition.
   // Where empty is defined as zero-initialized.
-  absl::optional<HashedHost> partition_hash_;
+  std::optional<HashedHost> partition_hash_;
 };
 
 // Allows data partitioning using half key from PartitionHash. The class mimics
@@ -116,14 +113,18 @@ class NET_EXPORT PartitionedHostStateMap : public PartitionedHostStateMapBase {
   // Removes all items with similar first 16 bytes of |k|, effectively ignoring
   // partition hash part.
   bool DeleteDataInAllPartitions(const key_type& k) {
+    static_assert(crypto::kSHA256Length == sizeof(key_type));
     auto equal_range_pair = base::ranges::equal_range(
-        map_, GetHalfKey(k),
+        map_, base::span(k).template first<crypto::kSHA256Length / 2>(),
         [](const auto& v1, const auto& v2) {
           // Mimic std::less by calling memcmp on base::span arrays.
           DCHECK(v1.size() == v2.size());
           return memcmp(v1.data(), v2.data(), v1.size()) < 0;
         },
-        [](const value_type& v) { return GetHalfKey(v.first); });
+        [](const value_type& v) {
+          return base::span(v.first)
+              .template first<crypto::kSHA256Length / 2>();
+        });
 
     if (equal_range_pair.first == equal_range_pair.second) {
       return false;

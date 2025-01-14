@@ -7,20 +7,29 @@
 
 #include <stdlib.h>
 
-#include <algorithm>
-#include <memory>
+#include <cstdint>
+#include <map>
+#include <optional>
+#include <queue>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "base/check.h"
+#include "base/location.h"
 #include "base/no_destructor.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_util.h"
 #include "base/time/time.h"
-#include "base/values.h"
+#include "base/timer/timer.h"
 #include "crypto/random.h"
+#include "net/base/host_port_pair.h"
 #include "net/base/network_anonymization_key.h"
+#include "net/base/proxy_chain.h"
+#include "net/base/proxy_server.h"
 #include "net/base/proxy_string_util.h"
 #include "net/base/schemeful_site.h"
+#include "net/proxy_resolution/proxy_config.h"
+#include "net/proxy_resolution/proxy_config_service.h"
 #include "net/proxy_resolution/proxy_config_with_annotation.h"
 #include "net/proxy_resolution/proxy_resolution_service.h"
 
@@ -70,12 +79,12 @@ constexpr NetworkTrafficAnnotationTag kTorProxyTrafficAnnotation =
         policy_exception_justification: "Not implemented."
       })");
 
-static base::NoDestructor<std::map<
-    ProxyResolutionService*, TorProxyMap>> tor_proxy_map_;
+static base::NoDestructor<std::map<ProxyResolutionService*, TorProxyMap>>
+    g_tor_proxy_map;
 
 TorProxyMap* GetTorProxyMap(
     ProxyResolutionService* service) {
-  return &(tor_proxy_map_.get()->operator[](service));
+  return &(g_tor_proxy_map.get()->operator[](service));
 }
 
 bool IsTorProxyConfig(const ProxyConfigWithAnnotation& config) {
@@ -84,10 +93,10 @@ bool IsTorProxyConfig(const ProxyConfigWithAnnotation& config) {
   // empty TorProxyMap (all entries have expired)
   // we do this here because the other methods are only called when
   // IsTorProxy is true so the last entry will never be deleted
-  for (auto it = tor_proxy_map_.get()->cbegin();
-       it != tor_proxy_map_.get()->cend(); ) {
+  for (auto it = g_tor_proxy_map.get()->cbegin();
+       it != g_tor_proxy_map.get()->cend();) {
     if (it->second.size() == 0) {
-      tor_proxy_map_->erase(it++);
+      g_tor_proxy_map->erase(it++);
     } else {
       ++it;
     }
@@ -97,11 +106,21 @@ bool IsTorProxyConfig(const ProxyConfigWithAnnotation& config) {
          kTorProxyTrafficAnnotation.unique_id_hash_code;
 }
 
+std::string AnonymizationKeyToString(const NetworkAnonymizationKey& key) {
+  const std::optional<net::SchemefulSite>& schemeful_site =
+      key.GetTopFrameSite();
+  CHECK(schemeful_site.has_value());
+  std::string host = GURL(schemeful_site->Serialize()).host();
+  return host;
+}
+
 }  // namespace
 
-const int kTorPasswordLength = 16;
+constexpr int kTorPasswordLength = 16;
 // Default tor circuit life time is 10 minutes
 constexpr base::TimeDelta kTenMins = base::Minutes(10);
+
+bool ProxyConfigServiceTor::bypass_tor_proxy_config_for_testing_ = false;
 
 ProxyConfigServiceTor::ProxyConfigServiceTor() = default;
 
@@ -143,11 +162,7 @@ std::string ProxyConfigServiceTor::CircuitAnonymizationKey(const GURL& url) {
   const auto network_anonymization_key =
       net::NetworkAnonymizationKey::CreateFromFrameSite(url_site, url_site);
 
-  const absl::optional<net::SchemefulSite>& schemeful_site =
-      network_anonymization_key.GetTopFrameSite();
-  DCHECK(schemeful_site.has_value());
-  std::string host = GURL(schemeful_site->Serialize()).host();
-  return host;
+  return AnonymizationKeyToString(network_anonymization_key);
 }
 
 void ProxyConfigServiceTor::SetNewTorCircuit(const GURL& url) {
@@ -171,18 +186,25 @@ void ProxyConfigServiceTor::SetNewTorCircuit(const GURL& url) {
 void ProxyConfigServiceTor::SetProxyAuthorization(
     const ProxyConfigWithAnnotation& config,
     const GURL& url,
+    const NetworkAnonymizationKey& key,
     ProxyResolutionService* service,
     ProxyInfo* result) {
-  if (!IsTorProxyConfig(config))
+  if (!IsTorProxyConfig(config)) {
     return;
+  }
 
   // Adding username & password to global sock://127.0.0.1:[port] config
   // without actually modifying it when resolving proxy for each url.
-  const std::string username = CircuitAnonymizationKey(url);
-  const std::string& proxy_uri = net::ProxyServerToProxyUri(
-      config.value().proxy_rules().single_proxies.Get());
-  HostPortPair host_port_pair =
-      config.value().proxy_rules().single_proxies.Get().host_port_pair();
+  const std::string username = AnonymizationKeyToString(key);
+  const auto& proxy_rules = config.value().proxy_rules();
+  if (proxy_rules.empty() || proxy_rules.single_proxies.IsEmpty()) {
+    return;
+  }
+  const net::ProxyChain& chain = proxy_rules.single_proxies.First();
+  CHECK(chain.is_single_proxy());
+  const net::ProxyServer& server = chain.GetProxyServer(/*chain_index=*/0);
+  const std::string& proxy_uri = net::ProxyServerToProxyUri(server);
+  HostPortPair host_port_pair = server.host_port_pair();
 
   if (!username.empty()) {
     auto* map = GetTorProxyMap(service);
@@ -219,8 +241,9 @@ void ProxyConfigServiceTor::RemoveObserver(Observer* observer) {
 ProxyConfigServiceTor::ConfigAvailability
 ProxyConfigServiceTor::GetLatestProxyConfig(
     net::ProxyConfigWithAnnotation* config) {
-  if (!proxy_server_.is_valid())
+  if (!proxy_server_.is_valid() || bypass_tor_proxy_config_for_testing_) {
     return CONFIG_UNSET;
+  }
 
   ProxyConfig proxy_config;
   proxy_config.proxy_rules().bypass_rules.AddRulesToSubtractImplicit();
@@ -232,6 +255,17 @@ ProxyConfigServiceTor::GetLatestProxyConfig(
   return CONFIG_VALID;
 }
 
+// static
+void ProxyConfigServiceTor::SetBypassTorProxyConfigForTesting(bool bypass) {
+  bypass_tor_proxy_config_for_testing_ = bypass;
+}
+
+// static
+NetworkTrafficAnnotationTag
+ProxyConfigServiceTor::GetTorAnnotationTagForTesting() {
+  return kTorProxyTrafficAnnotation;
+}
+
 TorProxyMap::TorProxyMap() = default;
 TorProxyMap::~TorProxyMap() {
   timer_.Stop();
@@ -240,7 +274,7 @@ TorProxyMap::~TorProxyMap() {
 // static
 std::string TorProxyMap::GenerateNewPassword() {
   std::vector<uint8_t> password(kTorPasswordLength);
-  crypto::RandBytes(password.data(), password.size());
+  crypto::RandBytes(password);
   return base::HexEncode(password.data(), password.size());
 }
 

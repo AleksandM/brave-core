@@ -6,9 +6,9 @@
 #include <string>
 
 #include "base/strings/string_util.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/command_line_switch_info.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_command_line_switch_util.h"
+#include "brave/components/brave_ads/core/internal/common/test/command_line_switch_test_info.h"
+#include "brave/components/brave_ads/core/internal/common/test/command_line_switch_test_util.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
 #include "brave/components/brave_ads/core/internal/global_state/global_state.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds*
@@ -17,35 +17,30 @@ namespace brave_ads {
 
 namespace {
 
-constexpr char kRewardsSwitch[] = "rewards";
-
 struct ParamInfo final {
-  CommandLineSwitchInfo command_line_switch;
+  test::CommandLineSwitchInfo command_line_switch;
   bool expected_should_debug;
-} const kTests[] = {{{kRewardsSwitch, "debug=true"}, true},
-                    {{kRewardsSwitch, "debug=1"}, true},
-                    {{kRewardsSwitch, "debug=false"}, false},
-                    {{kRewardsSwitch, "debug=foobar"}, false},
+} const kTests[] = {{{"rewards", "debug=true"}, true},
+                    {{"rewards", "debug=1"}, true},
+                    {{"rewards", "debug=false"}, false},
+                    {{"rewards", "debug=foobar"}, false},
                     {{}, false}};
 
 }  // namespace
 
 class BraveAdsDebugCommandLineSwitchParserUtilTest
-    : public UnitTestBase,
+    : public test::TestBase,
       public ::testing::WithParamInterface<ParamInfo> {
  protected:
   void SetUpMocks() override {
-    AppendCommandLineSwitches({GetParam().command_line_switch});
+    test::AppendCommandLineSwitches({GetParam().command_line_switch});
   }
 };
 
 TEST_P(BraveAdsDebugCommandLineSwitchParserUtilTest,
        ParseDebugCommandLineSwitch) {
-  // Arrange
-
-  // Act
-
-  // Assert
+  // Act & Assert
+  ASSERT_TRUE(GlobalState::HasInstance());
   EXPECT_EQ(GetParam().expected_should_debug,
             GlobalState::GetInstance()->Flags().should_debug);
 }
@@ -56,7 +51,7 @@ std::string TestParamToString(
       test_param.param.expected_should_debug ? "ShouldDebug" : "ShouldNotDebug";
 
   const std::string sanitized_command_line_switch =
-      SanitizeCommandLineSwitch(test_param.param.command_line_switch);
+      test::ToString(test_param.param.command_line_switch);
 
   return base::ReplaceStringPlaceholders(
       "$1For$2", {expected_should_debug, sanitized_command_line_switch},
@@ -65,7 +60,7 @@ std::string TestParamToString(
 
 INSTANTIATE_TEST_SUITE_P(,
                          BraveAdsDebugCommandLineSwitchParserUtilTest,
-                         testing::ValuesIn(kTests),
+                         ::testing::ValuesIn(kTests),
                          TestParamToString);
 
 }  // namespace brave_ads

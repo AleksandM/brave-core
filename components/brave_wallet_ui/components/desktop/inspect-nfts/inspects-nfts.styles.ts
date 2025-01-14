@@ -52,7 +52,7 @@ export const TopRowButton = styled(WalletButton)`
   font-size: 13px;
   line-height: 20px;
   background-color: transparent;
-  color: ${p => p.theme.palette.white};
+  color: ${(p) => p.theme.palette.white};
   outline: none;
   border: none;
 `
@@ -64,7 +64,7 @@ const TopRowIcon = styled.div`
   width: 18px;
   height: 18px;
   mask-repeat: none;
-  background-color: ${p => p.theme.palette.white};
+  background-color: ${(p) => p.theme.palette.white};
 `
 
 export const CloseIcon = styled(TopRowIcon)`
@@ -94,18 +94,20 @@ export const NftCountHeading = styled.h1`
   font-weight: 600;
   font-size: 40px;
   line-height: 60px;
-  color: ${p => p.theme.palette.white};
-  margin: 0  0 32px 0;
+  color: ${(p) => p.theme.palette.white};
+  margin: 0 0 32px 0;
   padding: 0;
 `
 
-export const PinNftsButton = styled(ActionButton)`
+export const PinNftsButton = styled(ActionButton).attrs({
+  'data-theme': 'dark'
+})`
   margin: 32px;
-  
+
   &:disabled {
     color: ${leo.color.white};
     opacity: 0.5;
-    background-color: ${leo.color.dark.gray[30]};
+    background-color: ${leo.color.neutral[30]};
     cursor: default;
   }
 `
@@ -118,7 +120,7 @@ export const InfoSubHeading = styled.h6`
   line-height: 18px;
   margin: 0;
   padding: 0;
-  color: ${p => p.theme.color.interactive08};
+  color: ${(p) => p.theme.color.interactive08};
   cursor: pointer;
 `
 

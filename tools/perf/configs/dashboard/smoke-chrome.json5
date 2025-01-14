@@ -1,15 +1,19 @@
 {
   "configurations": [{
     "dashboard-bot-name": "test-agent",
-    "browser-type": "chrome",
-    "profile": "chrome-typical",
-    "extra-browser-args": [],
-    "extra-benchmark-args": [],
+    "browser-type": "chromium",
+    "profile": "chrome-typical-win",
+    "extra-browser-args": [
+      "--disable-features=CalculateNativeWinOcclusion",
+    ],
+    "extra-benchmark-args": [
+      "--also-run-disabled-tests"
+    ],
     "save-artifacts": true,
   }],
   "benchmarks": [
     {
-      "name": "loading.desktop.brave",
+      "name": "loading.desktop.brave.startup",
       "pageset-repeat": 1,
       "stories": [
         "example.com_cold",
@@ -18,17 +22,37 @@
       ]
     },
     {
-      "name": "speedometer2-chrome-health",
+      "name": "system_health.common_desktop",
       "pageset-repeat": 1,
+      "stories": [
+        "load:site:example:2023",
+        "load:site:twitter:2023",
+        "load:site:imdb:2024",
+        "load:ntp:brave_news:2024",
+      ]
     },
     {
       "name": "system_health.memory_desktop",
       "pageset-repeat": 1,
       "stories": [
-        "load:chrome:blank",
-        "browse:news:hackernews:2020",
-        "load:media:youtube:2018",
+        "load:site:example:2023",
+        "load:site:twitter:2023",
+        "load:site:imdb:2024",
+        "load:ntp:brave_news:2024",
+        "multitab_load:site:example.com:2024",
       ]
     },
+    {
+      "name": "speedometer3",
+    },
+    {
+      "name": "jetstream2",
+    },
+    {
+      "name": "rendering.desktop",
+      "stories": [
+        "motionmark_fixed_2_seconds"
+      ]
+    }
   ]
 }

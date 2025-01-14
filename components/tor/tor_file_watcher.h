@@ -12,6 +12,7 @@
 #include "base/files/file_path.h"
 #include "base/files/file_path_watcher.h"
 #include "base/functional/callback.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/weak_ptr.h"
 #include "base/time/time.h"
 
@@ -34,7 +35,7 @@ class TorFileWatcher {
   using WatchCallback = base::OnceCallback<
       void(bool success, std::vector<uint8_t> cookie, int port)>;
 
-  explicit TorFileWatcher(const base::FilePath& watch_dir_path);
+  explicit TorFileWatcher(base::FilePath watch_dir_path);
 
   ~TorFileWatcher();
 

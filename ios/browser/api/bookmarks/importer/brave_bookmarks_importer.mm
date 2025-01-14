@@ -7,12 +7,12 @@
 
 #include <vector>
 
+#include "base/apple/foundation_util.h"
 #include "base/base_paths.h"
 #include "base/compiler_specific.h"
 #include "base/files/file_path.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
-#include "base/mac/foundation_util.h"
 #include "base/path_service.h"
 #include "base/stl_util.h"
 #include "base/strings/sys_string_conversions.h"
@@ -23,7 +23,7 @@
 #include "brave/ios/browser/api/bookmarks/importer/imported_bookmark_entry.h"
 #include "ios/web/public/thread/web_task_traits.h"
 #include "ios/web/public/thread/web_thread.h"
-#import "net/base/mac/url_conversions.h"
+#import "net/base/apple/url_conversions.h"
 #include "url/gurl.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -45,7 +45,8 @@
     _path = paths;
     _title = base::SysUTF16ToNSString(entry.title);
     _creationTime =
-        [NSDate dateWithTimeIntervalSince1970:entry.creation_time.ToDoubleT()];
+        [NSDate dateWithTimeIntervalSince1970:entry.creation_time
+                                                  .InSecondsFSinceUnixEpoch()];
   }
   return self;
 }
@@ -57,8 +58,8 @@
   }
 
   ImportedBookmarkEntry entry;
-  entry.creation_time =
-      base::Time::FromDoubleT([self.creationTime timeIntervalSince1970]);
+  entry.creation_time = base::Time::FromSecondsSinceUnixEpoch(
+      [self.creationTime timeIntervalSince1970]);
   entry.url = net::GURLWithNSURL(self.url);
   entry.title = base::SysNSStringToUTF16(self.title);
   entry.in_toolbar = self.inToolbar;
@@ -78,7 +79,9 @@
   if ((self = [super init])) {
     self.cancelled = false;
 
-    import_thread_ = web::GetIOThreadTaskRunner({});
+    import_thread_ = base::ThreadPool::CreateSequencedTaskRunner(
+        {base::MayBlock(), base::TaskPriority::USER_VISIBLE,
+         base::TaskShutdownBehavior::BLOCK_SHUTDOWN});
   }
   return self;
 }
@@ -97,7 +100,7 @@
           withListener:
               (void (^)(BraveBookmarksImporterState,
                         NSArray<BraveImportedBookmark*>* _Nullable))listener {
-  base::FilePath source_file_path = base::mac::NSStringToFilePath(filePath);
+  base::FilePath source_file_path = base::apple::NSStringToFilePath(filePath);
 
   // In Chromium, this is IDS_BOOKMARK_GROUP (804)
   std::u16string top_level_folder_name = base::SysNSStringToUTF16(folderName);
@@ -143,7 +146,7 @@
               listener(BraveBookmarksImporterStateAutoCompleted, nullptr);
             };
 
-        // Import into the Profile/ChromeBrowserState on the main-thread.
+        // Import into the Profile/ProfileIOS on the main-thread.
         web::GetUIThreadTaskRunner({})->PostTask(
             FROM_HERE, base::BindOnce(complete_import, std::move(bookmarks),
                                       top_level_folder_name, listener));
@@ -190,7 +193,7 @@
         listener(BraveBookmarksImporterStateCompleted);
       };
 
-  // Import into the Profile/ChromeBrowserState on the main-thread.
+  // Import into the Profile/ProfileIOS on the main-thread.
   __weak BraveBookmarksImporter* weakSelf = self;
   import_thread_->PostTask(FROM_HERE,
                            base::BindOnce(start_import, weakSelf, bookmarks,
@@ -214,7 +217,7 @@
   // Filter out the URLs with unsupported schemes.
   const char* const kInvalidSchemes[] = {"wyciwyg", "place", "about", "chrome"};
   for (size_t i = 0; i < std::size(kInvalidSchemes); ++i) {
-    if (url.SchemeIs(kInvalidSchemes[i])) {
+    if (UNSAFE_TODO(url.SchemeIs(kInvalidSchemes[i]))) {
       return false;
     }
   }

@@ -8,7 +8,7 @@ import { NavObjectType, NavTypes } from '../../../constants/types'
 import { StyledWrapper } from './style'
 
 // Components
-import { SideNavButton } from '../'
+import { SideNavButton } from '../side-nav-button/index'
 
 export interface Props {
   navList: NavObjectType[]
@@ -16,25 +16,31 @@ export interface Props {
   onSubmit: (id: NavTypes) => void
 }
 
-export default class SideNav extends React.PureComponent<Props, {}> {
+export class SideNav extends React.PureComponent<Props, {}> {
   onNav = (id: NavTypes) => () => {
     this.props.onSubmit(id)
   }
 
-  render () {
+  render() {
     const { navList, selectedButton } = this.props
     return (
       <StyledWrapper>
-        {navList.map((option) =>
+        {navList.map((option) => (
           <SideNavButton
             key={option.id}
             isSelected={selectedButton === option.id}
             onSubmit={this.onNav(option.id)}
             text={option.name}
-            icon={selectedButton === option.id ? option.primaryIcon : option.secondaryIcon}
+            icon={
+              selectedButton === option.id
+                ? option.primaryIcon
+                : option.secondaryIcon
+            }
           />
-        )}
+        ))}
       </StyledWrapper>
     )
   }
 }
+
+export default SideNav

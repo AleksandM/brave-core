@@ -3,64 +3,110 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-#include "base/functional/bind.h"
 #include "base/strings/stringprintf.h"
-#include "brave/components/brave_ads/core/internal/ads/ad_events/ad_event_info.h"
-#include "brave/components/brave_ads/core/internal/ads/ad_events/ad_event_unittest_util.h"
-#include "brave/components/brave_ads/core/internal/ads/ad_events/ad_events.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_constants.h"
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_time_util.h"
-#include "brave/components/brave_ads/core/internal/creatives/creative_ad_info.h"
-#include "brave/components/brave_ads/core/internal/creatives/creative_ad_unittest_util.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
+#include "brave/components/brave_ads/core/internal/database/database_manager.h"
+#include "brave/components/brave_ads/core/internal/database/database_manager_observer.h"
 #include "brave/components/brave_ads/core/internal/legacy_migration/database/database_constants.h"
+#include "brave/components/brave_ads/core/public/ads_constants.h"
 
 // npm run test -- brave_unit_tests --filter=BraveAds*
 
 namespace brave_ads {
 
-class BraveAdsDatabaseMigrationTest
-    : public UnitTestBase,
-      public ::testing::WithParamInterface<int> {
+namespace {
+
+constexpr int kFreshInstallDatabaseVersion = 0;
+
+std::string TestParamToString(::testing::TestParamInfo<int> test_param) {
+  return base::StringPrintf("%d_to_%d", test_param.param,
+                            database::kVersionNumber);
+}
+
+}  // namespace
+
+class BraveAdsDatabaseMigrationTest : public test::TestBase,
+                                      public ::testing::WithParamInterface<int>,
+                                      public DatabaseManagerObserver {
  protected:
   void SetUpMocks() override {
-    const std::string database_filename =
-        base::StringPrintf("database_schema_%d.sqlite", GetSchemaVersion());
-    CopyFileFromTestPathToTempPath(database_filename, kDatabaseFilename);
+    DatabaseManager::GetInstance().AddObserver(this);
+
+    MaybeMockDatabase();
   }
 
-  static int GetSchemaVersion() { return GetParam() + 1; }
+  void TearDown() override {
+    DatabaseManager::GetInstance().RemoveObserver(this);
+
+    test::TestBase::TearDown();
+  }
+
+  static int GetSchemaVersion() { return GetParam(); }
+
+  static std::string DatabasePathForSchemaVersion() {
+    return base::StringPrintf("database/migration/database_schema_%d.sqlite",
+                              GetSchemaVersion());
+  }
+
+  static bool IsTestingFreshInstall() {
+    return GetSchemaVersion() <= database::kRazeDatabaseThresholdVersionNumber;
+  }
+
+  static bool IsTestingUpgrade() {
+    return !IsTestingFreshInstall() &&
+           GetSchemaVersion() > database::kRazeDatabaseThresholdVersionNumber &&
+           GetSchemaVersion() < database::kVersionNumber;
+  }
+
+  void MaybeMockDatabase() {
+    if (IsTestingFreshInstall()) {
+      // No need to mock sqlite database for a fresh install.
+      return;
+    }
+
+    ASSERT_TRUE(CopyFileFromTestDataPathToProfilePath(
+        DatabasePathForSchemaVersion(), kDatabaseFilename));
+  }
+
+  // DatabaseManagerObserver:
+  void OnDidCreateDatabase() override { did_create_database_ = true; }
+
+  void OnDidMigrateDatabase(int /*from_version*/, int /*to_version*/) override {
+    did_migrate_database_ = true;
+  }
+
+  void OnFailedToMigrateDatabase(int /*from_version*/,
+                                 int /*to_version*/) override {
+    failed_to_migrate_database_ = true;
+  }
+
+  void OnDatabaseIsReady() override { database_is_ready_ = true; }
+
+  bool did_create_database_ = false;
+  bool did_migrate_database_ = false;
+  bool failed_to_migrate_database_ = false;
+  bool database_is_ready_ = false;
 };
 
 TEST_P(BraveAdsDatabaseMigrationTest, MigrateFromSchema) {
-  // Arrange
-  const CreativeAdInfo creative_ad =
-      BuildCreativeAd(/*should_use_random_uuids*/ true);
-  const AdEventInfo ad_event = BuildAdEvent(
-      creative_ad, AdType::kNotificationAd, ConfirmationType::kViewed, Now());
-
-  // Act
-  LogAdEvent(ad_event,
-             base::BindOnce(
-                 [](const int schema_version, const bool success) {
-                   EXPECT_TRUE(success)
-                       << "Failed to migrate database from schema version "
-                       << schema_version << " to schema version "
-                       << database::kVersion;
-                 },
-                 GetSchemaVersion()));
+  // Database migration occurs after invoking `Setup` and `SetUpMocks` during
+  // the initialization of `Ads` in `test::TestBase`. Consequently,
+  // `EXPECT_CALL` cannot be used with the mocks.
 
   // Assert
+  EXPECT_EQ(IsTestingFreshInstall(), did_create_database_);
+  EXPECT_EQ(IsTestingUpgrade(), did_migrate_database_);
+  EXPECT_FALSE(failed_to_migrate_database_);
+  EXPECT_TRUE(database_is_ready_);
 }
 
-std::string TestParamToString(::testing::TestParamInfo<int> test_param) {
-  return base::StringPrintf("%d_to_%d", test_param.param + 1,
-                            database::kVersion);
-}
-
-INSTANTIATE_TEST_SUITE_P(,
-                         BraveAdsDatabaseMigrationTest,
-                         testing::Range(0, database::kVersion),
-                         TestParamToString);
+INSTANTIATE_TEST_SUITE_P(
+    ,
+    BraveAdsDatabaseMigrationTest,
+    ::testing::Range(
+        kFreshInstallDatabaseVersion,
+        database::kVersionNumber +
+            1),  // We add 1 because `::testing::Range` end is exclusive.
+    TestParamToString);
 
 }  // namespace brave_ads

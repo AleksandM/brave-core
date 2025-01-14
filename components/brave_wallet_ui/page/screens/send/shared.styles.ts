@@ -5,28 +5,69 @@
 
 import styled from 'styled-components'
 
-export const Text = styled.span<{
-  textSize?: '22px' | '20px' | '18px' | '16px' | '14px' | '12px'
+// Leo styles
+import * as leo from '@brave/leo/tokens/css/variables'
+
+export interface TextProps {
+  textSize?:
+    | '22px'
+    | '20px'
+    | '18px'
+    | '16px'
+    | '14px'
+    | '12px'
+    | '11px'
+    | '10px'
   isBold?: boolean
-  textColor?: 'text01' | 'text02' | 'text03' | 'success' | 'error'
+  textColor?:
+    | 'text01'
+    | 'text02'
+    | 'text03'
+    | 'success'
+    | 'error'
+    | 'warning'
+    | 'primary'
+    | 'secondary'
+    | 'tertiary'
+    | 'info'
+    | 'disabled'
   maintainHeight?: boolean
   textAlign?: 'left' | 'right'
-}>`
+}
+
+export const Text = styled.span<TextProps>`
+  --primary: ${leo.color.text.primary};
+  --secondary: ${leo.color.text.secondary};
+  --tertiary: ${leo.color.text.tertiary};
+  --info: ${leo.color.systemfeedback.infoText};
+  --error: ${leo.color.systemfeedback.errorText};
+  --warning: ${leo.color.systemfeedback.warningText};
+  --disabled: ${leo.color.text.disabled};
+  // ToDo: We should to remove these old color variables
+  // in a refactor.
   --text01: ${(p) => p.theme.color.text01};
   --text02: ${(p) => p.theme.color.text02};
   --text03: ${(p) => p.theme.color.text03};
   --success: ${(p) => p.theme.color.successIcon};
-  --line-height: ${(p) => (p.textSize === '12px' ? '18px' : p.textSize === '22px' ? '24px' : '20px')}
+  --line-height: ${(p) =>
+    p.textSize === '12px' ? '18px' : p.textSize === '22px' ? '24px' : '20px'};
   font-family: 'Poppins';
   color: ${(p) =>
-    p.textColor ? `var(--${p.textColor})` : p.theme.color.text01};
+    p.color ?? p.textColor ? `var(--${p.textColor})` : p.theme.color.text01};
   font-size: ${(p) => (p.textSize ? p.textSize : '18px')};
   font-weight: ${(p) => (p.isBold ? 500 : 400)};
   height: ${(p) => (p.maintainHeight ? 'var(--line-height)' : 'unset')};
   line-height: var(--line-height);
-  letter-spacing: 0.02em;
   text-align: ${(p) => (p.textAlign ? p.textAlign : 'center')};
   word-wrap: wrap;
+`
+
+export const TextWithOverflowEllipsis = styled(Text)<{ maxLines?: number }>`
+  text-overflow: ellipsis;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: ${(p) => p.maxLines || '1'};
+  -webkit-box-orient: vertical;
 `
 
 export const StyledDiv = styled.div`
@@ -42,7 +83,7 @@ export const StyledDiv = styled.div`
   letter-spacing: 0.02em;
 `
 
-export const Row = styled(StyledDiv) <{
+export const Row = styled(StyledDiv)<{
   rowWidth?: 'dynamic' | 'full'
   rowHeight?: 'dynamic' | 'full'
   marginBottom?: number
@@ -64,12 +105,13 @@ export const Row = styled(StyledDiv) <{
   align-items: ${(p) => p.verticalAlign ?? 'center'};
   justify-content: ${(p) => p.horizontalAlign ?? 'space-between'};
   margin-bottom: ${(p) => p.marginBottom ?? 0}px;
-  padding: var(--padding-top) var(--padding-right) var(--padding-bottom) var(--padding-left);
+  padding: var(--padding-top) var(--padding-right) var(--padding-bottom)
+    var(--padding-left);
   width: ${(p) => (p.rowWidth === 'full' ? '100%' : 'unset')};
   height: ${(p) => (p.rowHeight === 'full' ? '100%' : 'unset')};
 `
 
-export const Column = styled(StyledDiv) <{
+export const Column = styled(StyledDiv)<{
   columnWidth?: 'dynamic' | 'full'
   columnHeight?: 'dynamic' | 'full'
   horizontalAlign?: 'flex-start' | 'center' | 'flex-end' | 'space-between'
@@ -89,29 +131,29 @@ export const Column = styled(StyledDiv) <{
   width: ${(p) => (p.columnWidth === 'full' ? '100%' : 'unset')};
 `
 
-export const HorizontalSpacer = styled(StyledDiv) <{
+export const HorizontalSpacer = styled(StyledDiv)<{
   size: number
 }>`
   height: 100%;
   width: ${(p) => p.size}px;
 `
 
-export const VerticalSpacer = styled(StyledDiv) <{
+export const VerticalSpacer = styled(StyledDiv)<{
   size: number
 }>`
   height: ${(p) => p.size}px;
   width: 100%;
 `
 
-export const HorizontalDivider = styled(StyledDiv) <{
+export const HorizontalDivider = styled(StyledDiv)<{
   height?: number
   marginLeft?: number
   marginRight?: number
   dividerTheme?: 'lighter' | 'darker'
 }>`
-  --light-theme-color: #E9E9F4;
+  --light-theme-color: #e9e9f4;
   @media (prefers-color-scheme: dark) {
-  --light-theme-color: ${(p) => p.theme.color.interactive08};
+    --light-theme-color: ${(p) => p.theme.color.interactive08};
   }
   background-color: ${(p) =>
     p.dividerTheme === 'lighter'
@@ -123,7 +165,7 @@ export const HorizontalDivider = styled(StyledDiv) <{
   width: 2px;
 `
 
-export const VerticalDivider = styled(StyledDiv) <{
+export const VerticalDivider = styled(StyledDiv)<{
   width?: number
   marginTop?: number
   marginBottom?: number
@@ -135,7 +177,7 @@ export const VerticalDivider = styled(StyledDiv) <{
   width: ${(p) => (p.width ? `${p.width}px` : '100%')};
 `
 
-export const Icon = styled(StyledDiv) <{
+export const Icon = styled(StyledDiv)<{
   size: number
   icon: string
 }>`
@@ -184,7 +226,7 @@ export const StyledButton = styled.button`
   }
 `
 
-export const IconButton = styled(StyledButton) <{
+export const IconButton = styled(StyledButton)<{
   size?: number
   icon: string
 }>`
@@ -196,7 +238,7 @@ export const IconButton = styled(StyledButton) <{
   -webkit-mask-image: url(${(p) => p.icon});
 `
 
-export const HiddenResponsiveRow = styled(Row) <{ dontHide?: boolean }>`
+export const HiddenResponsiveRow = styled(Row)<{ dontHide?: boolean }>`
   display: flex;
   @media screen and (max-width: 800px) {
     display: ${(p) => (p.dontHide ? 'flex' : 'none')};

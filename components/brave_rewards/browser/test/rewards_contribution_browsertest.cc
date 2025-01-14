@@ -17,7 +17,6 @@
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_context_util.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_contribution.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_network_util.h"
-#include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_promotion.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_response.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_util.h"
 #include "brave/components/brave_rewards/common/pref_names.h"
@@ -40,7 +39,6 @@ class RewardsContributionBrowserTest : public InProcessBrowserTest {
   RewardsContributionBrowserTest() {
     contribution_ =
         std::make_unique<test_util::RewardsBrowserTestContribution>();
-    promotion_ = std::make_unique<test_util::RewardsBrowserTestPromotion>();
     response_ = std::make_unique<test_util::RewardsBrowserTestResponse>();
   }
 
@@ -60,7 +58,6 @@ class RewardsContributionBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(https_server_->Start());
 
     // Rewards service
-    brave::RegisterPathProvider();
     auto* profile = browser()->profile();
     rewards_service_ = static_cast<RewardsServiceImpl*>(
         RewardsServiceFactory::GetForProfile(profile));
@@ -72,10 +69,9 @@ class RewardsContributionBrowserTest : public InProcessBrowserTest {
         base::BindRepeating(
             &RewardsContributionBrowserTest::GetTestResponse,
             base::Unretained(this)));
-    rewards_service_->SetLedgerEnvForTesting();
+    rewards_service_->SetEngineEnvForTesting();
 
     // Other
-    promotion_->Initialize(browser(), rewards_service_);
     contribution_->Initialize(browser(), rewards_service_);
 
     test_util::SetOnboardingBypassed(browser());
@@ -86,6 +82,7 @@ class RewardsContributionBrowserTest : public InProcessBrowserTest {
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
+    InProcessBrowserTest::SetUpCommandLine(command_line);
     // HTTPS server only serves a valid cert for localhost, so this is needed
     // to load pages from other hosts without an error
     command_line->AppendSwitch(switches::kIgnoreCertificateErrors);
@@ -122,33 +119,32 @@ class RewardsContributionBrowserTest : public InProcessBrowserTest {
         "[data-test-id=refresh-publisher-button]");
   }
 
-  raw_ptr<RewardsServiceImpl> rewards_service_ = nullptr;
+  void SetSKUOrderResponse() {
+    std::vector<mojom::SKUOrderItemPtr> items;
+    auto item = mojom::SKUOrderItem::New();
+    item->order_item_id = "ed193339-e58c-483c-8d61-7decd3c24827";
+    item->order_id = "a38b211b-bf78-42c8-9479-b11e92e3a76c";
+    item->quantity = 80;
+    item->price = 0.25;
+    item->description = "description";
+    item->type = mojom::SKUOrderItemType::SINGLE_USE;
+    items.push_back(std::move(item));
+
+    auto order = mojom::SKUOrder::New();
+    order->order_id = "a38b211b-bf78-42c8-9479-b11e92e3a76c";
+    order->total_amount = 20;
+    order->merchant_id = "";
+    order->location = "brave.com";
+    order->items = std::move(items);
+    response_->SetSKUOrder(std::move(order));
+  }
+
+  raw_ptr<RewardsServiceImpl, DanglingUntriaged> rewards_service_ = nullptr;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
   std::unique_ptr<test_util::RewardsBrowserTestContribution> contribution_;
-  std::unique_ptr<test_util::RewardsBrowserTestPromotion> promotion_;
   std::unique_ptr<test_util::RewardsBrowserTestResponse> response_;
   std::unique_ptr<test_util::RewardsBrowserTestContextHelper> context_helper_;
 };
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest, AutoContribution) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true);
-
-  rewards_service_->StartContributionsForTesting();
-
-  contribution_->WaitForACReconcileCompleted();
-  ASSERT_EQ(contribution_->GetACStatus(), mojom::Result::LEDGER_OK);
-
-  contribution_->IsBalanceCorrect();
-
-  test_util::WaitForElementToContain(
-      contents(), "[data-test-id=rewards-summary-ac]", "20.00 BAT");
-}
 
 IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
                        AutoContributionUnconnected) {
@@ -206,146 +202,22 @@ IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
 }
 
 IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
-                       AutoContributionMultiplePublishers) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true);
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "laurenwags.github.io"), true);
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "site1.com"), true);
-
-  rewards_service_->StartContributionsForTesting();
-
-  contribution_->WaitForACReconcileCompleted();
-  ASSERT_EQ(contribution_->GetACStatus(), mojom::Result::LEDGER_OK);
-
-  contribution_->IsBalanceCorrect();
-
-  test_util::WaitForElementToContain(
-      contents(), "[data-test-id=rewards-summary-ac]", "20.00 BAT");
-
-  context_helper_->LoadURL(test_util::GetRewardsInternalsUrl());
-
-  test_util::WaitForElementThenClick(
-      contents(), "#internals-tabs > div > div:nth-of-type(4)");
-
-  for (int i = 1; i <= 3; i++) {
-    const std::string query = base::StringPrintf(
-        "[data-test-id='publisher-wrapper'] > div:nth-of-type(%d) "
-        "[data-test-id='contributed-amount']",
-        i);
-    LOG(ERROR) << query;
-    EXPECT_NE(test_util::WaitForElementThenGetContent(contents(), query),
-              "0 BAT");
-  }
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
-                       AutoContributionMultiplePublishersUphold) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  contribution_->SetUpUpholdWallet(rewards_service_, 50.0);
-
-  std::vector<mojom::SKUOrderItemPtr> items;
-  auto item = mojom::SKUOrderItem::New();
-  item->order_item_id = "ed193339-e58c-483c-8d61-7decd3c24827";
-  item->order_id = "a38b211b-bf78-42c8-9479-b11e92e3a76c";
-  item->quantity = 80;
-  item->price = 0.25;
-  item->description = "description";
-  item->type = mojom::SKUOrderItemType::SINGLE_USE;
-  items.push_back(std::move(item));
-
-  auto order = mojom::SKUOrder::New();
-  order->order_id = "a38b211b-bf78-42c8-9479-b11e92e3a76c";
-  order->total_amount = 20;
-  order->merchant_id = "";
-  order->location = "brave.com";
-  order->items = std::move(items);
-  response_->SetSKUOrder(std::move(order));
-
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true);
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "laurenwags.github.io"), true);
-
-  rewards_service_->StartContributionsForTesting();
-
-  contribution_->WaitForACReconcileCompleted();
-  ASSERT_EQ(contribution_->GetACStatus(), mojom::Result::LEDGER_OK);
-
-  contribution_->IsBalanceCorrect();
-
-  test_util::WaitForElementToContain(
-      contents(), "[data-test-id=rewards-summary-ac]", "20.00 BAT");
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
-                       AutoContributeWhenACOff) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true);
-
-  test_util::WaitForElementThenClick(
-      contents(),
-      "[data-test-id=auto-contribute-panel] "
-      "[data-test-id=setting-enabled-toggle] button");
-
-  rewards_service_->StartContributionsForTesting();
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest, TipVerifiedPublisher) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  contribution_->TipPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), false, 1);
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
                        TipVerifiedPublisherWithCustomAmount) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
+  contribution_->StartProcessWithBalance(30);
   contribution_->TipPublisher(
       test_util::GetUrl(https_server_.get(), "duckduckgo.com"), false, 1, 0,
       1.25);
 }
 
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest, TipUnverifiedPublisher) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  contribution_->TipPublisher(
-      test_util::GetUrl(https_server_.get(), "brave.com"), false);
-}
-
 IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
                        RecurringTipForVerifiedPublisher) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
+  contribution_->StartProcessWithBalance(30);
   contribution_->TipPublisher(
       test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true, 1);
 }
 
 IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest, TipWithVerifiedWallet) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  contribution_->SetUpUpholdWallet(rewards_service_, 50.0);
+  contribution_->StartProcessWithBalance(30);
 
   const double amount = 5.0;
   contribution_->TipViaCode("duckduckgo.com", amount,
@@ -360,8 +232,7 @@ IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest, TipWithVerifiedWallet) {
 IN_PROC_BROWSER_TEST_F(
     RewardsContributionBrowserTest,
     DISABLED_MultipleTipsProduceMultipleFeesWithVerifiedWallet) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  contribution_->SetUpUpholdWallet(rewards_service_, 50.0);
+  contribution_->StartProcessWithBalance(50);
 
   double total_amount = 0.0;
   const double amount = 5.0;
@@ -377,8 +248,7 @@ IN_PROC_BROWSER_TEST_F(
 
   base::RunLoop run_loop_first;
   rewards_service_->GetExternalWallet(
-      base::BindLambdaForTesting([&](GetExternalWalletResult result) {
-        const auto wallet = std::move(result).value_or(nullptr);
+      base::BindLambdaForTesting([&](mojom::ExternalWalletPtr wallet) {
         ASSERT_TRUE(wallet);
         ASSERT_EQ(wallet->fees.size(), 2UL);
         for (auto const& value : wallet->fees) {
@@ -392,24 +262,19 @@ IN_PROC_BROWSER_TEST_F(
 
 // Ensure that we can make a one-time tip of a non-integral amount.
 IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest, TipNonIntegralAmount) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
+  contribution_->StartProcessWithBalance(30);
 
   rewards_service_->SendContribution("duckduckgo.com", 2.5, false,
                                      base::DoNothing());
   contribution_->WaitForTipReconcileCompleted();
-  ASSERT_EQ(contribution_->GetTipStatus(), mojom::Result::LEDGER_OK);
+  ASSERT_EQ(contribution_->GetTipStatus(), mojom::Result::OK);
   ASSERT_EQ(contribution_->GetReconcileTipTotal(), 2.5);
 }
 
 // Ensure that we can make a recurring tip of a non-integral amount.
 IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
                        RecurringTipNonIntegralAmount) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
+  contribution_->StartProcessWithBalance(30);
 
   const bool verified = true;
   context_helper_->VisitPublisher(
@@ -419,209 +284,13 @@ IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
                                      base::DoNothing());
   rewards_service_->StartContributionsForTesting();
   contribution_->WaitForTipReconcileCompleted();
-  ASSERT_EQ(contribution_->GetTipStatus(), mojom::Result::LEDGER_OK);
+  ASSERT_EQ(contribution_->GetTipStatus(), mojom::Result::OK);
 
   ASSERT_EQ(contribution_->GetReconcileTipTotal(), 2.5);
 }
 
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
-                       RecurringAndPartialAutoContribution) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  // Visit verified publisher
-  const bool verified = true;
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true);
-
-  // Set monthly recurring
-  contribution_->TipViaCode("duckduckgo.com", 25.0,
-                            mojom::PublisherStatus::UPHOLD_VERIFIED, true);
-
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "brave.com"), !verified);
-
-  // Trigger contribution process
-  rewards_service_->StartContributionsForTesting();
-
-  // Wait for reconciliation to complete
-  contribution_->WaitForTipReconcileCompleted();
-  ASSERT_EQ(contribution_->GetTipStatus(), mojom::Result::LEDGER_OK);
-
-  // Wait for reconciliation to complete successfully
-  contribution_->WaitForACReconcileCompleted();
-  ASSERT_EQ(contribution_->GetACStatus(), mojom::Result::LEDGER_OK);
-
-  // Make sure that balance is updated correctly
-  contribution_->IsBalanceCorrect();
-
-  // Check that summary table shows the appropriate contribution
-  test_util::WaitForElementToContain(
-      contents(), "[data-test-id=rewards-summary-ac]", "5.00 BAT");
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
-                       MultipleRecurringOverBudgetAndPartialAutoContribution) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  contribution_->TipViaCode("duckduckgo.com", 3.0,
-                            mojom::PublisherStatus::UPHOLD_VERIFIED, true);
-
-  contribution_->TipViaCode("site1.com", 5.0,
-                            mojom::PublisherStatus::UPHOLD_VERIFIED, true);
-
-  contribution_->TipViaCode("site2.com", 5.0,
-                            mojom::PublisherStatus::UPHOLD_VERIFIED, true);
-
-  contribution_->TipViaCode("site3.com", 5.0,
-                            mojom::PublisherStatus::UPHOLD_VERIFIED, true);
-
-  const bool verified = true;
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), verified);
-
-  // Trigger contribution process
-  rewards_service_->StartContributionsForTesting();
-
-  // Wait for reconciliation to complete
-  contribution_->WaitForMultipleTipReconcileCompleted(3);
-  ASSERT_EQ(contribution_->GetTipStatus(), mojom::Result::LEDGER_OK);
-
-  // Wait for reconciliation to complete successfully
-  contribution_->WaitForACReconcileCompleted();
-  ASSERT_EQ(contribution_->GetACStatus(), mojom::Result::LEDGER_OK);
-
-  // Make sure that balance is updated correctly
-  contribution_->IsBalanceCorrect();
-
-  // Check that summary table shows the appropriate contribution
-  test_util::WaitForElementToContain(
-      contents(), "[data-test-id=rewards-summary-ac]", "4.00 BAT");
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
-                       DISABLED_SplitProcessorAutoContribution) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  contribution_->SetUpUpholdWallet(rewards_service_, 50.0);
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "3zsistemi.si"), true);
-
-  // 30 form unblinded and 20 from uphold
-  rewards_service_->SetAutoContributionAmount(50.0);
-
-  std::vector<mojom::SKUOrderItemPtr> items;
-  auto item = mojom::SKUOrderItem::New();
-  item->order_item_id = "ed193339-e58c-483c-8d61-7decd3c24827";
-  item->order_id = "a38b211b-bf78-42c8-9479-b11e92e3a76c";
-  item->quantity = 80;
-  item->price = 0.25;
-  item->description = "description";
-  item->type = mojom::SKUOrderItemType::SINGLE_USE;
-  items.push_back(std::move(item));
-
-  auto order = mojom::SKUOrder::New();
-  order->order_id = "a38b211b-bf78-42c8-9479-b11e92e3a76c";
-  order->total_amount = 20;
-  order->merchant_id = "";
-  order->location = "brave.com";
-  order->items = std::move(items);
-  response_->SetSKUOrder(std::move(order));
-
-  // Trigger contribution process
-  rewards_service_->StartContributionsForTesting();
-
-  // Wait for reconciliation to complete successfully
-  contribution_->WaitForMultipleACReconcileCompleted(2);
-  auto statuses = contribution_->GetMultipleACStatus();
-  ASSERT_EQ(statuses[0], mojom::Result::LEDGER_OK);
-  ASSERT_EQ(statuses[1], mojom::Result::LEDGER_OK);
-
-  // Wait for UI to update with contribution
-  test_util::WaitForElementToContain(
-      contents(), "[data-test-id=rewards-summary-ac]", "50.00 BAT");
-
-  test_util::WaitForElementThenClick(contents(),
-                                     "[data-test-id=view-statement-button]");
-
-  test_util::WaitForElementToAppear(contents(), "#transactionTable");
-
-  test_util::WaitForElementToContain(contents(), "#transactionTable",
-                                     "30.000BAT");
-
-  test_util::WaitForElementToContain(contents(), "#transactionTable",
-                                     "20.000BAT");
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
-                       CheckIfReconcileWasReset) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  uint64_t current_stamp = 0;
-
-  base::RunLoop run_loop_first;
-  rewards_service_->GetReconcileStamp(
-      base::BindLambdaForTesting([&](uint64_t stamp) {
-        current_stamp = stamp;
-        run_loop_first.Quit();
-      }));
-  run_loop_first.Run();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true);
-
-  contribution_->TipPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true, 1);
-
-  base::RunLoop run_loop_second;
-  rewards_service_->GetReconcileStamp(
-      base::BindLambdaForTesting([&](uint64_t stamp) {
-        ASSERT_NE(current_stamp, stamp);
-        run_loop_second.Quit();
-      }));
-  run_loop_second.Run();
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest,
-                       CheckIfReconcileWasResetACOff) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  context_helper_->LoadRewardsPage();
-  uint64_t current_stamp = 0;
-
-  base::RunLoop run_loop_first;
-  rewards_service_->GetReconcileStamp(
-      base::BindLambdaForTesting([&](uint64_t stamp) {
-        current_stamp = stamp;
-        run_loop_first.Quit();
-      }));
-  run_loop_first.Run();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-  contribution_->TipPublisher(
-      test_util::GetUrl(https_server_.get(), "duckduckgo.com"), true, 1);
-
-  base::RunLoop run_loop_second;
-  rewards_service_->GetReconcileStamp(
-      base::BindLambdaForTesting([&](uint64_t stamp) {
-        ASSERT_NE(current_stamp, stamp);
-        run_loop_second.Quit();
-      }));
-  run_loop_second.Run();
-}
-
 IN_PROC_BROWSER_TEST_F(RewardsContributionBrowserTest, PanelMonthlyTipAmount) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
+  contribution_->StartProcessWithBalance(30);
 
   test_util::NavigateToPublisherAndWaitForUpdate(browser(), https_server_.get(),
                                                  "3zsistemi.si");

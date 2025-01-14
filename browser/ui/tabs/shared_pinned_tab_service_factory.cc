@@ -5,6 +5,8 @@
 
 #include "brave/browser/ui/tabs/shared_pinned_tab_service_factory.h"
 
+#include <memory>
+
 #include "base/no_destructor.h"
 #include "brave/browser/ui/tabs/shared_pinned_tab_service.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
@@ -23,14 +25,20 @@ SharedPinnedTabServiceFactory* SharedPinnedTabServiceFactory::GetInstance() {
 }
 
 SharedPinnedTabServiceFactory::SharedPinnedTabServiceFactory()
-    : ProfileKeyedServiceFactory("SharedPinnedTabService",
-                                 ProfileSelections::BuildForAllProfiles()) {}
+    : ProfileKeyedServiceFactory(
+          "SharedPinnedTabService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .Build()) {}
 
 SharedPinnedTabServiceFactory::~SharedPinnedTabServiceFactory() {}
 
-KeyedService* SharedPinnedTabServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SharedPinnedTabServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SharedPinnedTabService(Profile::FromBrowserContext(context));
+  return std::make_unique<SharedPinnedTabService>(
+      Profile::FromBrowserContext(context));
 }
 
 bool SharedPinnedTabServiceFactory::ServiceIsCreatedWithBrowserContext() const {

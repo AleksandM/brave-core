@@ -5,22 +5,46 @@
 
 #include "brave/components/brave_ads/core/internal/settings/settings.h"
 
-#include "brave/components/brave_ads/common/notification_ad_feature.h"
-#include "brave/components/brave_ads/common/pref_names.h"
-#include "brave/components/brave_ads/core/internal/ads_client_helper.h"
+#include "brave/components/brave_ads/core/internal/prefs/pref_util.h"
+#include "brave/components/brave_ads/core/public/ad_units/notification_ad/notification_ad_feature.h"
+#include "brave/components/brave_ads/core/public/prefs/pref_names.h"
+#include "brave/components/brave_news/common/pref_names.h"
+#include "brave/components/brave_rewards/common/pref_names.h"
+#include "brave/components/ntp_background_images/common/pref_names.h"
 
 namespace brave_ads {
 
-int GetMaximumNotificationAdsPerHourSetting() {
-  int ads_per_hour =
-      static_cast<int>(AdsClientHelper::GetInstance()->GetInt64Pref(
-          prefs::kMaximumNotificationAdsPerHour));
+bool UserHasJoinedBraveRewards() {
+  return GetProfileBooleanPref(brave_rewards::prefs::kEnabled);
+}
 
-  if (ads_per_hour == -1) {
-    ads_per_hour = kDefaultNotificationAdsPerHour.Get();
-  }
+bool UserHasOptedInToBraveNewsAds() {
+  return GetProfileBooleanPref(brave_news::prefs::kBraveNewsOptedIn) &&
+         GetProfileBooleanPref(brave_news::prefs::kNewTabPageShowToday);
+}
 
-  return ads_per_hour;
+bool UserHasOptedInToNewTabPageAds() {
+  return GetProfileBooleanPref(
+             ntp_background_images::prefs::kNewTabPageShowBackgroundImage) &&
+         GetProfileBooleanPref(
+             ntp_background_images::prefs::
+                 kNewTabPageShowSponsoredImagesBackgroundImage);
+}
+
+bool UserHasOptedInToNotificationAds() {
+  return UserHasJoinedBraveRewards() &&
+         GetProfileBooleanPref(prefs::kOptedInToNotificationAds);
+}
+
+int GetMaximumNotificationAdsPerHour() {
+  const int ads_per_hour = static_cast<int>(
+      GetProfileInt64Pref(prefs::kMaximumNotificationAdsPerHour));
+
+  return ads_per_hour > 0 ? ads_per_hour : kDefaultNotificationAdsPerHour.Get();
+}
+
+bool UserHasOptedInToSearchResultAds() {
+  return GetProfileBooleanPref(prefs::kOptedInToSearchResultAds);
 }
 
 }  // namespace brave_ads

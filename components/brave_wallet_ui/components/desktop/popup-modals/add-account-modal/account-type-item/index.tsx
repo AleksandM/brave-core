@@ -4,7 +4,7 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 import * as React from 'react'
 
-import { NavButton } from '../../../../extension'
+import { NavButton } from '../../../../extension/buttons/nav-button/index'
 
 // Styled Components
 import {
@@ -25,13 +25,7 @@ export interface Props {
 }
 
 const AccountTypeItem = (props: Props) => {
-  const {
-    title,
-    description,
-    buttonText,
-    icon,
-    onClickCreate
-  } = props
+  const { title, description, buttonText, icon, onClickCreate } = props
 
   return (
     <StyledWrapper>

@@ -6,6 +6,7 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_SOLANA_MESSAGE_H_
 #define BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_SOLANA_MESSAGE_H_
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -15,7 +16,6 @@
 #include "brave/components/brave_wallet/browser/solana_message_address_table_lookup.h"
 #include "brave/components/brave_wallet/browser/solana_message_header.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace base {
 class Value;
@@ -41,18 +41,18 @@ class SolanaMessage {
   ~SolanaMessage();
   bool operator==(const SolanaMessage&) const;
 
-  static absl::optional<SolanaMessage> CreateLegacyMessage(
+  static std::optional<SolanaMessage> CreateLegacyMessage(
       const std::string& recent_blockhash,
       uint64_t last_valid_block_height,
       const std::string& fee_payer,
       std::vector<SolanaInstruction>&& instructions);
 
-  absl::optional<std::vector<uint8_t>> Serialize(
+  std::optional<std::vector<uint8_t>> Serialize(
       std::vector<std::string>* signers) const;
 
-  static absl::optional<SolanaMessage> Deserialize(
+  static std::optional<SolanaMessage> Deserialize(
       const std::vector<uint8_t>& bytes);
-  static absl::optional<std::vector<std::string>>
+  static std::optional<std::vector<std::string>>
   GetSignerAccountsFromSerializedMessage(
       const std::vector<uint8_t>& serialized_message);
 
@@ -70,25 +70,56 @@ class SolanaMessage {
   mojom::SolanaTxDataPtr ToSolanaTxData() const;
   base::Value::Dict ToValue() const;
 
-  static absl::optional<SolanaMessage> FromValue(
-      const base::Value::Dict& value);
-  static absl::optional<SolanaMessage> FromDeprecatedLegacyValue(
+  static std::optional<SolanaMessage> FromValue(const base::Value::Dict& value);
+  static std::optional<SolanaMessage> FromDeprecatedLegacyValue(
       const base::Value::Dict& value);
 
   void SetInstructionsForTesting(
       const std::vector<SolanaInstruction>& instructions) {
     instructions_ = instructions;
   }
+  const std::vector<SolanaInstruction>& instructions() const {
+    return instructions_;
+  }
+
+  const std::vector<SolanaAddress>& static_account_keys() const {
+    return static_account_keys_;
+  }
+
+  const SolanaMessageHeader& message_header() const { return message_header_; }
 
   mojom::SolanaMessageVersion version() const { return version_; }
 
+  // Returns true if transaction begins with a valid advance nonce instruction.
+  // https://docs.rs/solana-sdk/1.18.9/src/solana_sdk/transaction/versioned/mod.rs.html#192
+  bool UsesDurableNonce() const;
+
+  // Returns true if the message contains a compressed NFT transfer
+  // instruction.
+  bool ContainsCompressedNftTransfer() const;
+
+  // Returns whether the priority fee was added.
+  bool AddPriorityFee(uint32_t compute_units, uint64_t fee_per_compute_unit);
+
  private:
   FRIEND_TEST_ALL_PREFIXES(SolanaMessageUnitTest, GetUniqueAccountMetas);
+  FRIEND_TEST_ALL_PREFIXES(SolanaMessageUnitTest, UsesPriorityFee);
 
   static void GetUniqueAccountMetas(
       const std::string& fee_payer,
       const std::vector<SolanaInstruction>& instructions,
       std::vector<SolanaAccountMeta>* unique_account_metas);
+
+  static bool ProcessAccountMetas(
+      const std::vector<SolanaAccountMeta>& unique_account_metas,
+      std::vector<SolanaAddress>& static_accounts,
+      uint16_t& num_required_signatures,
+      uint16_t& num_readonly_signed_accounts,
+      uint16_t& num_readonly_unsigned_accounts);
+
+  // Returns true if transaction contains a set compute price or set compute
+  // unit price instruction.
+  bool UsesPriorityFee() const;
 
   mojom::SolanaMessageVersion version_;
   std::string recent_blockhash_;

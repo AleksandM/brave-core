@@ -6,19 +6,17 @@
 #include "chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.h"
 
 #include "base/feature_list.h"
+#include "brave/browser/ui/webui/ai_chat/ai_chat_untrusted_conversation_ui.h"
 #include "brave/browser/ui/webui/brave_wallet/ledger/ledger_ui.h"
+#include "brave/browser/ui/webui/brave_wallet/line_chart/line_chart_ui.h"
 #include "brave/browser/ui/webui/brave_wallet/market/market_ui.h"
 #include "brave/browser/ui/webui/brave_wallet/nft/nft_ui.h"
 #include "brave/browser/ui/webui/brave_wallet/trezor/trezor_ui.h"
+#include "brave/components/ai_chat/core/common/features.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
 #include "brave/components/playlist/common/buildflags/buildflags.h"
 #include "build/build_config.h"
 #include "content/public/browser/webui_config_map.h"
-
-#if !BUILDFLAG(IS_ANDROID)
-#include "brave/browser/ui/webui/ai_chat/ai_chat_ui.h"
-#include "brave/components/ai_chat/features.h"
-#endif  // !BUILDFLAG(IS_ANDROID)
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
 #if !BUILDFLAG(IS_ANDROID)
@@ -41,19 +39,17 @@
 
 void RegisterChromeUntrustedWebUIConfigs() {
   RegisterChromeUntrustedWebUIConfigs_ChromiumImpl();
+  content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
+      std::make_unique<market::UntrustedMarketUIConfig>());
+  content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
+      std::make_unique<nft::UntrustedNftUIConfig>());
+  content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
+      std::make_unique<line_chart::UntrustedLineChartUIConfig>());
 #if !BUILDFLAG(IS_ANDROID)
   content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
       std::make_unique<ledger::UntrustedLedgerUIConfig>());
   content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
-      std::make_unique<market::UntrustedMarketUIConfig>());
-  content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
       std::make_unique<trezor::UntrustedTrezorUIConfig>());
-  content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
-      std::make_unique<nft::UntrustedNftUIConfig>());
-  if (ai_chat::features::IsAIChatEnabled()) {
-    content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
-        std::make_unique<UntrustedChatUIConfig>());
-  }
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
   if (brave_vpn::IsBraveVPNFeatureEnabled()) {
     content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
@@ -69,4 +65,9 @@ void RegisterChromeUntrustedWebUIConfigs() {
   }
 #endif  // BUILDFLAG(ENABLE_PLAYLIST_WEBUI)
 #endif  // !BUILDFLAG(IS_ANDROID)
+
+  if (ai_chat::features::IsAIChatEnabled()) {
+    content::WebUIConfigMap::GetInstance().AddUntrustedWebUIConfig(
+        std::make_unique<AIChatUntrustedConversationUIConfig>());
+  }
 }

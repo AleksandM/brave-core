@@ -6,40 +6,17 @@
 #include "brave/components/brave_ads/core/internal/user_attention/user_idle_detection/user_idle_detection_util.h"
 
 #include "base/time/time.h"
-#include "brave/components/brave_ads/common/pref_names.h"
-#include "brave/components/brave_ads/core/internal/ads_client_helper.h"
-#include "brave/components/brave_ads/core/internal/user_attention/user_idle_detection/user_idle_detection_feature.h"
+#include "brave/components/brave_ads/core/public/user_attention/user_idle_detection/user_idle_detection_feature.h"
 
 namespace brave_ads {
 
-bool MaybeScreenWasLocked(const bool screen_was_locked) {
+bool MaybeScreenWasLocked(bool screen_was_locked) {
   return kShouldDetectScreenWasLocked.Get() && screen_was_locked;
 }
 
-bool HasExceededMaximumIdleTime(const base::TimeDelta idle_time) {
-  const base::TimeDelta maximum_idle_time = kMaximumIdleTime.Get();
-  if (maximum_idle_time.is_zero()) {  // Infinite
-    return false;
-  }
-
-  return idle_time > maximum_idle_time;
-}
-
-bool MaybeUpdateIdleTimeThreshold() {
-  const int last_idle_time_threshold =
-      AdsClientHelper::GetInstance()->GetIntegerPref(prefs::kIdleTimeThreshold);
-
-  const int idle_time_threshold =
-      static_cast<int>(kIdleTimeThreshold.Get().InSeconds());
-
-  if (idle_time_threshold == last_idle_time_threshold) {
-    return false;
-  }
-
-  AdsClientHelper::GetInstance()->SetIntegerPref(prefs::kIdleTimeThreshold,
-                                                 idle_time_threshold);
-
-  return true;
+bool HasExceededMaximumIdleTime(base::TimeDelta idle_time) {
+  const base::TimeDelta maximum_idle_time = kMaximumUserIdleDetectionTime.Get();
+  return maximum_idle_time.is_positive() && idle_time > maximum_idle_time;
 }
 
 }  // namespace brave_ads

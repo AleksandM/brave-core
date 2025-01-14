@@ -5,6 +5,8 @@
 
 #include "brave/components/brave_wallet/browser/solana_requests.h"
 
+#include <optional>
+
 #include "base/json/json_reader.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/gtest_util.h"
@@ -17,9 +19,7 @@ constexpr char kBlockhash[] = "J7rBdM6AecPDEZp8aPq5iPSNKVkU5Q76F3oAV4eW5wsW";
 
 }
 
-namespace brave_wallet {
-
-namespace solana {
+namespace brave_wallet::solana {
 
 TEST(SolanaRequestsUnitTest, getBalance) {
   ASSERT_EQ(
@@ -35,7 +35,7 @@ TEST(SolanaRequestsUnitTest, getTokenAccountBalance) {
 
 TEST(SolanaRequestsUnitTest, sendTransaction) {
   ASSERT_EQ(
-      sendTransaction("signed_tx", absl::nullopt),
+      sendTransaction("signed_tx", std::nullopt),
       R"({"id":1,"jsonrpc":"2.0","method":"sendTransaction","params":["signed_tx",{"encoding":"base64"}]})");
 
   std::string expected_json_string = R"(
@@ -100,7 +100,7 @@ TEST(SolanaRequestsUnitTest, getAccountInfo) {
 TEST(SolanaRequestsUnitTest, getFeeForMessage) {
   ASSERT_EQ(
       getFeeForMessage("message"),
-      R"({"id":1,"jsonrpc":"2.0","method":"getFeeForMessage","params":["message"]})");
+      R"({"id":1,"jsonrpc":"2.0","method":"getFeeForMessage","params":["message",{"commitment":"confirmed"}]})");
 }
 
 TEST(SolanaRequestsUnitTest, getBlockHeight) {
@@ -110,7 +110,7 @@ TEST(SolanaRequestsUnitTest, getBlockHeight) {
 }
 
 TEST(SolanaRequestsUnitTest, getTokenAccountsByOwner) {
-  std::string expected_json_string_fmt = R"(
+  constexpr char kExpectedJsonStringFormat[] = R"(
     {
       "id":1,
       "jsonrpc":"2.0",
@@ -118,7 +118,7 @@ TEST(SolanaRequestsUnitTest, getTokenAccountsByOwner) {
       "params":[
         "pubkey",
         {
-          "programId":"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "programId":"program"
         },
         {
           "encoding":"%s"
@@ -126,27 +126,28 @@ TEST(SolanaRequestsUnitTest, getTokenAccountsByOwner) {
       ]
     }
   )";
-  ASSERT_EQ(
-      base::test::ParseJsonDict(getTokenAccountsByOwner("pubkey", "base64")),
-      base::test::ParseJsonDict(
-          base::StringPrintf(expected_json_string_fmt.c_str(), "base64")));
-
-  ASSERT_EQ(
-      base::test::ParseJsonDict(getTokenAccountsByOwner("pubkey", "base58")),
-      base::test::ParseJsonDict(
-          base::StringPrintf(expected_json_string_fmt.c_str(), "base58")));
+  ASSERT_EQ(base::test::ParseJsonDict(
+                getTokenAccountsByOwner("pubkey", "base64", "program")),
+            base::test::ParseJsonDict(
+                base::StringPrintf(kExpectedJsonStringFormat, "base64")));
 
   ASSERT_EQ(base::test::ParseJsonDict(
-                getTokenAccountsByOwner("pubkey", "jsonParsed")),
-            base::test::ParseJsonDict(base::StringPrintf(
-                expected_json_string_fmt.c_str(), "jsonParsed")));
+                getTokenAccountsByOwner("pubkey", "base58", "program")),
+            base::test::ParseJsonDict(
+                base::StringPrintf(kExpectedJsonStringFormat, "base58")));
 
-  EXPECT_CHECK_DEATH(getTokenAccountsByOwner("pubkey", "invalid encoding"));
+  ASSERT_EQ(base::test::ParseJsonDict(
+                getTokenAccountsByOwner("pubkey", "jsonParsed", "program")),
+            base::test::ParseJsonDict(
+                base::StringPrintf(kExpectedJsonStringFormat, "jsonParsed")));
+
+  EXPECT_CHECK_DEATH(
+      getTokenAccountsByOwner("pubkey", "invalid encoding", "program"));
 }
 
 TEST(SolanaRequestsUnitTest, isBlockhashValid) {
   EXPECT_EQ(
-      base::test::ParseJsonDict(isBlockhashValid(kBlockhash, absl::nullopt)),
+      base::test::ParseJsonDict(isBlockhashValid(kBlockhash, std::nullopt)),
       base::test::ParseJsonDict(
           R"({"id": 1,
               "jsonrpc": "2.0",
@@ -170,6 +171,32 @@ TEST(SolanaRequestsUnitTest, isBlockhashValid) {
   EXPECT_CHECK_DEATH(isBlockhashValid(kBlockhash, "invalid_commitment"));
 }
 
-}  // namespace solana
+TEST(SolanaRequestsUnitTest, simulateTransaction) {
+  EXPECT_EQ(base::test::ParseJsonDict(simulateTransaction("unsigned tx")),
+            base::test::ParseJsonDict(
+                R"({
+                  "id": 1,
+                  "jsonrpc": "2.0",
+                  "method": "simulateTransaction",
+                  "params": [
+                    "unsigned tx",
+                    {
+                      "commitment": "confirmed",
+                      "encoding": "base64"
+                    }
+                  ]
+                })"));
+}
 
-}  // namespace brave_wallet
+TEST(SolanaRequestsUnitTest, getRecentPrioritizationFees) {
+  EXPECT_EQ(base::test::ParseJsonDict(getRecentPrioritizationFees()),
+            base::test::ParseJsonDict(
+                R"({
+                "id": 1,
+                "jsonrpc": "2.0",
+                "method": "getRecentPrioritizationFees",
+                "params": []
+              })"));
+}
+
+}  // namespace brave_wallet::solana

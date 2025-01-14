@@ -5,28 +5,13 @@
 
 source_set("unit_tests") {
   testonly = true
-  sources = [ "color_palette_unittest.cc" ]
+
+  sources = [ "brave_color_mixers_unittest.cc" ]
 
   deps = [
-    "//chrome/browser/ui",
+    "//chrome/browser/ui/color:color_headers",
     "//chrome/browser/ui/color:mixers",
     "//testing/gtest",
-    "//ui/gfx",
-  ]
-}
-
-copy("copy_leo_colors") {
-  sources = [ "//brave/node_modules/@brave/leo/tokens/skia/colors.h" ]
-
-  outputs = [ "$root_out_dir/gen/brave/browser/ui/color/leo/colors.h" ]
-}
-
-source_set("leo_colors") {
-  sources = get_target_outputs(":copy_leo_colors")
-
-  deps = [
-    ":copy_leo_colors",
-    "//skia",
-    "//ui/gfx",
+    "//ui/color",
   ]
 }

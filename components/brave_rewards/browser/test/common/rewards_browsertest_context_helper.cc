@@ -3,11 +3,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_context_helper.h"
+
 #include <string>
 
 #include "base/test/bind.h"
 #include "brave/browser/ui/brave_rewards/rewards_panel_coordinator.h"
-#include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_context_helper.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_context_util.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_util.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
@@ -70,7 +71,9 @@ RewardsBrowserTestContextHelper::OpenSiteBanner() {
 
   // Click button to initiate sending a tip.
   test_util::WaitForElementThenClick(popup_contents.get(),
-                                     "[data-test-id=tip-button]");
+                                     "[data-test-id=tip-button]:enabled");
+
+  LOG(INFO) << "Waiting for tip panel to open";
 
   // Wait for the site banner to load and retrieve the notification source
   base::WeakPtr<content::WebContents> banner =
@@ -99,35 +102,6 @@ void RewardsBrowserTestContextHelper::VisitPublisher(const GURL& url,
   test_util::WaitForAutoContributeVisitTime();
 
   LoadRewardsPage();
-
-  auto* contents = browser_->tab_strip_model()->GetActiveWebContents();
-
-  // Ensure that we are on the Rewards page.
-  EXPECT_EQ(contents->GetLastCommittedURL().host_piece(), "rewards");
-
-  // Ensure that the AC box is displayed.
-  test_util::WaitForElementToAppear(contents,
-                                    "[data-test-id=auto-contribute-panel]");
-
-  // Ensure that the AC sites table is displayed.
-  test_util::WaitForElementToAppear(contents,
-                                    "[data-test-id=auto-contribute-table]");
-
-  if (verified) {
-    // Make sure site appears in auto-contribute table
-    test_util::WaitForElementToEqual(
-        contents, "[data-test-id='ac_link_" + publisher + "']", publisher);
-
-    // A verified site has two images associated with it, the site's
-    // favicon and the verified icon
-    content::EvalJsResult js_result = EvalJs(
-        contents,
-        "document.querySelectorAll(\"[data-test-id='ac_link_" + publisher +
-            "'] [data-test-id=verified-icon]\").length === 1;",
-        content::EXECUTE_SCRIPT_DEFAULT_OPTIONS,
-        content::ISOLATED_WORLD_ID_CONTENT_END);
-    EXPECT_TRUE(js_result.ExtractBool());
-  }
 }
 
 void RewardsBrowserTestContextHelper::LoadURL(GURL url) {
@@ -158,7 +132,7 @@ void RewardsBrowserTestContextHelper::LoadRewardsPage() {
 
   // Wait for the content to be fully rendered before continuing.
   test_util::WaitForElementToAppear(tab_strip->GetActiveWebContents(),
-                                    "[data-test-id=rewards-balance-text]");
+                                    "#rewardsPage");
 }
 
 void RewardsBrowserTestContextHelper::ReloadCurrentSite() {

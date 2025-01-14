@@ -7,7 +7,6 @@ import * as React from 'react'
 
 import { AdaptiveCaptchaInfo, Host, HostState } from '../lib/interfaces'
 import { AdaptiveCaptchaView } from '../components/adaptive_captcha_view'
-import { Notification } from '../../shared/components/notifications'
 import { localeStrings } from './locale_strings'
 import { createStateManager } from '../../shared/lib/state_manager'
 
@@ -17,8 +16,6 @@ import { NotificationCard } from '../components/notification_card'
 
 import { App } from '../components/app'
 
-import grantCaptchaImageURL from './grant_captcha_image.png'
-import * as mojom from '../../shared/lib/mojom'
 import { optional } from '../../shared/lib/optional'
 
 export default {
@@ -27,26 +24,19 @@ export default {
 
 const locale = createLocaleContextForTesting(localeStrings)
 
-function actionLogger (name: string) {
+function actionLogger(name: string) {
   return (...args: any[]) => {
     console.log(name, ...args)
   }
 }
 
-function createHost (): Host {
+function createHost(): Host {
   const stateManager = createStateManager<HostState>({
     openTime: Date.now(),
     loading: false,
     requestedView: null,
     rewardsEnabled: true,
-    settings: {
-      adsEnabled: true,
-      adsPerHour: 3,
-      autoContributeEnabled: true,
-      autoContributeAmount: 5
-    },
     options: {
-      autoContributeAmounts: [1, 5, 10, 15],
       externalWalletRegions: new Map([
         ['uphold', { allow: ['US'], block: [] }],
         ['gemini', { allow: [], block: ['US'] }]
@@ -54,32 +44,15 @@ function createHost (): Host {
       vbatDeadline: Date.parse('2023-01-01T00:00:00-05:00'),
       vbatExpired: false
     },
-    grantCaptchaInfo: null && {
-      id: '123',
-      imageURL: grantCaptchaImageURL,
-      hint: 'square',
-      status: 'pending',
-      verifying: false,
-      grantInfo: {
-        id: 'grant123',
-        createdAt: Date.now(),
-        claimableUntil: Date.now() + 120_000,
-        expiresAt: Date.now() + 120_000,
-        amount: 10,
-        type: 'ads'
-      }
-    },
-    adaptiveCaptchaInfo: null && {
-      url: '',
-      status: 'pending'
-    },
-    externalWalletProviders: ['uphold', 'gemini'],
+    adaptiveCaptchaInfo: null,
+    externalWalletProviders: ['uphold', 'gemini', 'solana'],
     balance: optional(10.2),
     exchangeInfo: {
       rate: 0.75,
       currency: 'USD'
     },
     earningsInfo: {
+      adsReceivedThisMonth: 0,
       minEarningsThisMonth: 1.2,
       maxEarningsThisMonth: 2.1,
       minEarningsLastMonth: 2.0,
@@ -96,16 +69,15 @@ function createHost (): Host {
       icon: 'https://brave.com/static-assets/images/brave-favicon.png',
       platform: null,
       attentionScore: 0.17,
-      autoContributeEnabled: true,
       monthlyTip: 5,
       supportedWalletProviders: ['uphold']
     },
     publisherRefreshing: false,
     externalWallet: {
       provider: 'uphold',
-      username: 'brave123',
-      status: mojom.WalletStatus.kConnected,
-      links: {}
+      authenticated: true,
+      name: 'brave123',
+      url: ''
     },
     summaryData: {
       adEarnings: 10,
@@ -113,30 +85,26 @@ function createHost (): Host {
       oneTimeTips: -2,
       monthlyTips: -19
     },
-    notifications: [
-      {
-        type: 'monthly-tip-completed',
-        id: '1',
-        timeStamp: Date.now() - 100
-      }
-    ] && [],
+    notifications: [],
     availableCountries: ['US'],
     defaultCountry: 'US',
     declaredCountry: 'US',
-    userType: 'connected',
-    publishersVisitedCount: 4
+    userType: 'unconnected',
+    publishersVisitedCount: 4,
+    selfCustodyInviteDismissed: true,
+    isTermsOfServiceUpdateRequired: true
   })
 
   return {
-    get state () { return stateManager.getState() },
+    get state() { return stateManager.getState() },
 
     addListener: stateManager.addListener,
 
-    refreshPublisherStatus () {
+    refreshPublisherStatus() {
       console.log('refreshPublisherStatus')
     },
 
-    enableRewards () {
+    enableRewards() {
       stateManager.update({
         rewardsEnabled: true,
         declaredCountry: 'US'
@@ -144,57 +112,27 @@ function createHost (): Host {
       return Promise.resolve('success')
     },
 
-    setAdsEnabled (adsEnabled) {
-      stateManager.update({
-        settings: {
-          ...stateManager.getState().settings,
-          adsEnabled
-        }
-      })
-    },
-
-    setAdsPerHour (adsPerHour) {
-      stateManager.update({
-        settings: {
-          ...stateManager.getState().settings,
-          adsPerHour
-        }
-      })
-    },
-
-    setIncludeInAutoContribute (enabled) {
-      const { publisherInfo } = stateManager.getState()
-      if (publisherInfo) {
-        stateManager.update({
-          publisherInfo: {
-            ...publisherInfo,
-            autoContributeEnabled: enabled
-          }
-        })
-      }
-    },
-
-    openAdaptiveCaptchaSupport () {
+    openAdaptiveCaptchaSupport() {
       console.log('openAdaptiveCaptchaSupport')
     },
 
-    openRewardsSettings () {
+    openRewardsSettings() {
       console.log('openRewardsSettings')
     },
 
-    sendTip () {
+    sendTip() {
       console.log('sendTip')
     },
 
-    handleExternalWalletAction (action) {
+    handleExternalWalletAction(action) {
       console.log('externalWalletAction', action)
     },
 
-    handleNotificationAction (action) {
+    handleNotificationAction(action) {
       console.log('notificationAction', action)
     },
 
-    dismissNotification (notification) {
+    dismissNotification(notification) {
       const { notifications } = stateManager.getState()
       stateManager.update({
         notifications: notifications.filter((n) => {
@@ -203,33 +141,25 @@ function createHost (): Host {
       })
     },
 
-    solveGrantCaptcha (solution) {
-      console.log('solveGrantCaptcha', solution)
-      const { grantCaptchaInfo } = stateManager.getState()
-      if (!grantCaptchaInfo) {
-        return
-      }
-      stateManager.update({
-        grantCaptchaInfo: {
-          ...grantCaptchaInfo,
-          status: 'passed'
-        }
-      })
+    dismissSelfCustodyInvite() {
+      console.log('dismissSelfCustodyInvite')
     },
 
-    clearGrantCaptcha () {
-      stateManager.update({
-        grantCaptchaInfo: null
-      })
+    acceptTermsOfServiceUpdate() {
+      console.log('acceptTermsOfServiceUpdate')
     },
 
-    clearAdaptiveCaptcha () {
+    resetRewards() {
+      console.log('resetRewards')
+    },
+
+    clearAdaptiveCaptcha() {
       stateManager.update({
         adaptiveCaptchaInfo: null
       })
     },
 
-    handleAdaptiveCaptchaResult (result) {
+    handleAdaptiveCaptchaResult(result) {
       const { adaptiveCaptchaInfo } = stateManager.getState()
       if (!adaptiveCaptchaInfo) {
         return
@@ -253,83 +183,112 @@ function createHost (): Host {
       console.log('closePanel')
     },
 
-    onAppRendered () {
+    onAppRendered() {
       console.log('onAppRendered')
     }
   }
 }
 
-export function MainPanel () {
-  const [host] = React.useState(() => createHost())
-  return (
-    <div className='brave-theme-dark'>
-      <LocaleContext.Provider value={locale}>
-        <App host={host} />
-      </LocaleContext.Provider>
-    </div>
-  )
-}
-
-export function Notification () {
-  return (
-    <LocaleContext.Provider value={locale}>
-      <WithThemeVariables>
-        <div style={{ width: '375px' }}>
-          <NotificationCard
-            notification={{
-              type: 'monthly-tip-completed',
-              id: '123',
-              timeStamp: Date.now()
-            }}
-          />
-        </div>
-      </WithThemeVariables>
-    </LocaleContext.Provider>
-  )
-}
-
-export function GrantNotification () {
-  return (
-    <LocaleContext.Provider value={locale}>
-      <WithThemeVariables>
-        <div style={{ width: '375px' }}>
-          <NotificationCard
-            notification={{
-              type: 'grant-available',
-              id: '123',
-              grantInfo: {
-                id: '123',
-                type: 'ads',
-                amount: 1.25,
-                createdAt: Date.now(),
-                expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 5
-              },
-              timeStamp: Date.now()
-            } as any}
-          />
-        </div>
-      </WithThemeVariables>
-    </LocaleContext.Provider>
-  )
-}
-
-export function AdaptiveCaptcha () {
-  const adaptiveCaptchaInfo: AdaptiveCaptchaInfo = {
-    url: '',
-    status: 'pending'
+export const MainPanel = {
+  render: () => {
+    const [host] = React.useState(() => createHost())
+    return (
+      <div>
+        <LocaleContext.Provider value={locale}>
+          <App host={host} />
+        </LocaleContext.Provider>
+      </div>
+    )
   }
-  return (
-    <LocaleContext.Provider value={locale}>
-      <WithThemeVariables>
-        <div>
-          <AdaptiveCaptchaView
-            adaptiveCaptchaInfo={adaptiveCaptchaInfo}
-            onClose={actionLogger('onClose')}
-            onCaptchaResult={actionLogger('onCaptchaResult')}
-            onContactSupport={actionLogger('onContactSupport')}
-          />
-        </div>
-      </WithThemeVariables>
-    </LocaleContext.Provider>
-  )
+}
+
+export const _Notification = {
+  render: () => {
+    return (
+      <LocaleContext.Provider value={locale}>
+        <WithThemeVariables>
+          <div style={{ width: '375px' }}>
+            <NotificationCard
+              notification={{
+                type: 'monthly-tip-completed',
+                id: '123',
+                timeStamp: Date.now()
+              }}
+            />
+          </div>
+        </WithThemeVariables>
+      </LocaleContext.Provider>
+    )
+  }
+}
+
+export const ExternalWalletDisconnectedNotification = {
+  render: () => {
+    return (
+      <LocaleContext.Provider value={locale}>
+        <WithThemeVariables>
+          <div style={{ width: '375px' }}>
+            <NotificationCard
+              notification={{
+                type: 'external-wallet-disconnected',
+                id: '123',
+                timeStamp: Date.now(),
+                provider: 'Uphold'
+              } as any}
+            />
+          </div>
+        </WithThemeVariables>
+      </LocaleContext.Provider>
+    )
+  }
+}
+
+export const GrantNotification = {
+  render: () => {
+    return (
+      <LocaleContext.Provider value={locale}>
+        <WithThemeVariables>
+          <div style={{ width: '375px' }}>
+            <NotificationCard
+              notification={{
+                type: 'grant-available',
+                id: '123',
+                grantInfo: {
+                  id: '123',
+                  type: 'ads',
+                  amount: 1.25,
+                  createdAt: Date.now(),
+                  expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 5
+                },
+                timeStamp: Date.now()
+              } as any}
+            />
+          </div>
+        </WithThemeVariables>
+      </LocaleContext.Provider>
+    )
+  }
+}
+
+export const AdaptiveCaptcha = {
+  render: () => {
+    const adaptiveCaptchaInfo: AdaptiveCaptchaInfo = {
+      url: '',
+      status: 'pending'
+    }
+    return (
+      <LocaleContext.Provider value={locale}>
+        <WithThemeVariables>
+          <div>
+            <AdaptiveCaptchaView
+              adaptiveCaptchaInfo={adaptiveCaptchaInfo}
+              onClose={actionLogger('onClose')}
+              onCaptchaResult={actionLogger('onCaptchaResult')}
+              onContactSupport={actionLogger('onContactSupport')}
+            />
+          </div>
+        </WithThemeVariables>
+      </LocaleContext.Provider>
+    )
+  }
 }

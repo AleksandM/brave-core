@@ -5,18 +5,20 @@
 
 #include "brave/components/brave_rewards/core/wallet/wallet_create.h"
 
+#include <optional>
 #include <utility>
 
-#include "brave/components/brave_rewards/core/common/security_util.h"
+#include "brave/components/brave_rewards/core/common/signer.h"
 #include "brave/components/brave_rewards/core/common/time_util.h"
 #include "brave/components/brave_rewards/core/database/database.h"
-#include "brave/components/brave_rewards/core/endpoints/patch_wallets/patch_wallets.h"
-#include "brave/components/brave_rewards/core/endpoints/post_wallets/post_wallets.h"
+#include "brave/components/brave_rewards/core/endpoints/brave/patch_wallets.h"
+#include "brave/components/brave_rewards/core/endpoints/brave/post_wallets.h"
 #include "brave/components/brave_rewards/core/endpoints/request_for.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
 #include "brave/components/brave_rewards/core/logging/event_log_keys.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/state/state.h"
 #include "brave/components/brave_rewards/core/wallet/wallet.h"
+#include "brave/components/brave_rewards/core/wallet_provider/linkage_checker.h"
 
 namespace brave_rewards::internal {
 
@@ -48,25 +50,26 @@ mojom::CreateRewardsWalletResult MapEndpointError(PatchWallets::Error error) {
 
 }  // namespace
 
-WalletCreate::WalletCreate(LedgerImpl& ledger) : ledger_(ledger) {}
+WalletCreate::WalletCreate(RewardsEngine& engine) : engine_(engine) {}
 
-void WalletCreate::CreateWallet(absl::optional<std::string>&& geo_country,
+void WalletCreate::CreateWallet(std::optional<std::string>&& geo_country,
                                 CreateRewardsWalletCallback callback) {
   bool corrupted = false;
-  auto wallet = ledger_->wallet()->GetWallet(&corrupted);
+  auto wallet = engine_->wallet()->GetWallet(&corrupted);
 
   if (corrupted) {
     DCHECK(!wallet);
-    BLOG(0, "Rewards wallet data is corrupted - generating a new wallet!");
-    ledger_->database()->SaveEventLog(log::kWalletCorrupted, "");
+    engine_->LogError(FROM_HERE)
+        << "Rewards wallet data is corrupted - generating a new wallet";
+    engine_->database()->SaveEventLog(log::kWalletCorrupted, "");
   }
 
   if (!wallet) {
     wallet = mojom::RewardsWallet::New();
-    wallet->recovery_seed = util::Security::GenerateSeed();
+    wallet->recovery_seed = Signer::GenerateRecoverySeed();
 
-    if (!ledger_->wallet()->SetWallet(std::move(wallet))) {
-      BLOG(0, "Failed to set Rewards wallet!");
+    if (!engine_->wallet()->SetWallet(std::move(wallet))) {
+      engine_->LogError(FROM_HERE) << "Failed to set Rewards wallet";
       return std::move(callback).Run(
           mojom::CreateRewardsWalletResult::kUnexpected);
     }
@@ -77,10 +80,10 @@ void WalletCreate::CreateWallet(absl::optional<std::string>&& geo_country,
           &WalletCreate::OnResult<PatchWallets::Result>, base::Unretained(this),
           std::move(callback), geo_country);
 
-      return RequestFor<PatchWallets>(*ledger_, std::move(*geo_country))
+      return RequestFor<PatchWallets>(*engine_, std::move(*geo_country))
           .Send(std::move(on_update_wallet));
     } else {
-      BLOG(1, "Rewards wallet already exists.");
+      engine_->Log(FROM_HERE) << "Rewards wallet already exists.";
       return std::move(callback).Run(
           mojom::CreateRewardsWalletResult::kSuccess);
     }
@@ -90,7 +93,7 @@ void WalletCreate::CreateWallet(absl::optional<std::string>&& geo_country,
       base::BindOnce(&WalletCreate::OnResult<PostWallets::Result>,
                      base::Unretained(this), std::move(callback), geo_country);
 
-  RequestFor<PostWallets>(*ledger_, std::move(geo_country))
+  RequestFor<PostWallets>(*engine_, std::move(geo_country))
       .Send(std::move(on_create_wallet));
 }
 
@@ -99,13 +102,13 @@ inline constexpr bool dependent_false_v = false;
 
 template <typename Result>
 void WalletCreate::OnResult(CreateRewardsWalletCallback callback,
-                            absl::optional<std::string>&& geo_country,
+                            std::optional<std::string>&& geo_country,
                             Result&& result) {
   if (!result.has_value()) {
     if constexpr (std::is_same_v<Result, PostWallets::Result>) {
-      BLOG(0, "Failed to create Rewards wallet!");
+      engine_->LogError(FROM_HERE) << "Failed to create Rewards wallet";
     } else if constexpr (std::is_same_v<Result, PatchWallets::Result>) {
-      BLOG(0, "Failed to update Rewards wallet!");
+      engine_->LogError(FROM_HERE) << "Failed to update Rewards wallet";
     } else {
       static_assert(dependent_false_v<Result>,
                     "Result must be either "
@@ -116,26 +119,23 @@ void WalletCreate::OnResult(CreateRewardsWalletCallback callback,
     return std::move(callback).Run(MapEndpointError(result.error()));
   }
 
-  auto wallet = ledger_->wallet()->GetWallet();
+  auto wallet = engine_->wallet()->GetWallet();
   DCHECK(wallet);
   if constexpr (std::is_same_v<Result, PostWallets::Result>) {
     DCHECK(!result.value().empty());
     wallet->payment_id = std::move(result.value());
   }
 
-  if (!ledger_->wallet()->SetWallet(std::move(wallet))) {
-    BLOG(0, "Failed to set Rewards wallet!");
+  if (!engine_->wallet()->SetWallet(std::move(wallet))) {
+    engine_->LogError(FROM_HERE) << "Failed to set Rewards wallet";
     return std::move(callback).Run(
         mojom::CreateRewardsWalletResult::kUnexpected);
   }
 
   if constexpr (std::is_same_v<Result, PostWallets::Result>) {
-    ledger_->state()->ResetReconcileStamp();
-    if (!is_testing) {
-      ledger_->state()->SetEmptyBalanceChecked(true);
-      ledger_->state()->SetPromotionCorruptedMigrated(true);
-    }
-    ledger_->state()->SetCreationStamp(util::GetCurrentTimeStamp());
+    engine_->state()->ResetReconcileStamp();
+    engine_->state()->SetCreationStamp(util::GetCurrentTimeStamp());
+    engine_->Get<LinkageChecker>().Start();
   }
 
   std::move(callback).Run(mojom::CreateRewardsWalletResult::kSuccess);

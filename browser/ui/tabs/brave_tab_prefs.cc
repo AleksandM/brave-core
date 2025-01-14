@@ -5,26 +5,17 @@
 
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
 
+#include "brave/browser/ui/tabs/features.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
 namespace brave_tabs {
 
-const char kTabHoverMode[] = "brave.tabs.hover_mode";
-
-const char kVerticalTabsEnabled[] = "brave.tabs.vertical_tabs_enabled";
-const char kVerticalTabsCollapsed[] = "brave.tabs.vertical_tabs_collapsed";
-const char kVerticalTabsShowTitleOnWindow[] =
-    "brave.tabs.vertical_tabs_show_title_on_window";
-const char kVerticalTabsFloatingEnabled[] =
-    "brave.tabs.vertical_tabs_floating_enabled";
-const char kVerticalTabsExpandedWidth[] =
-    "brave.tabs.vertical_tabs_expanded_width";
-
 void RegisterBraveProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(kTabHoverMode, TabHoverMode::CARD);
   registry->RegisterBooleanPref(kVerticalTabsEnabled, false);
   registry->RegisterBooleanPref(kVerticalTabsCollapsed, false);
+  registry->RegisterBooleanPref(kVerticalTabsExpandedStatePerWindow, false);
 #if BUILDFLAG(IS_WIN)
   // On Windows, we show window title by default
   // https://github.com/brave/brave-browser/issues/30027
@@ -33,7 +24,20 @@ void RegisterBraveProfilePrefs(PrefRegistrySimple* registry) {
   registry->RegisterBooleanPref(kVerticalTabsShowTitleOnWindow, false);
 #endif
   registry->RegisterBooleanPref(kVerticalTabsFloatingEnabled, true);
-  registry->RegisterIntegerPref(kVerticalTabsExpandedWidth, 250);
+  registry->RegisterIntegerPref(kVerticalTabsExpandedWidth, 220);
+  registry->RegisterBooleanPref(kVerticalTabsOnRight, false);
+  registry->RegisterBooleanPref(kVerticalTabsShowScrollbar, false);
+
+  registry->RegisterBooleanPref(kSharedPinnedTab, false);
+}
+
+void MigrateBraveProfilePrefs(PrefService* prefs) {
+  if (auto* pref = prefs->FindPreference(kVerticalTabsShowScrollbar);
+      pref && pref->IsDefaultValue() &&
+      base::FeatureList::IsEnabled(
+          tabs::features::kBraveVerticalTabScrollBar)) {
+    prefs->SetBoolean(kVerticalTabsShowScrollbar, true);
+  }
 }
 
 bool AreTooltipsEnabled(PrefService* prefs) {

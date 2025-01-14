@@ -9,14 +9,7 @@ import("//testing/test.gni")
 
 buildflag_header("buildflags") {
   header = "buildflags.h"
-  flags = [
-    "BRAVE_P3A_ENABLED=$brave_p3a_enabled",
-    "P3A_JSON_UPLOAD_URL=\"$p3a_json_upload_url\"",
-    "P3A_CREATIVE_UPLOAD_URL=\"$p3a_creative_upload_url\"",
-    "P2A_JSON_UPLOAD_URL=\"$p2a_json_upload_url\"",
-    "P3A_CONSTELLATION_UPLOAD_URL=\"$p3a_constellation_upload_url\"",
-    "STAR_RANDOMNESS_HOST=\"$star_randomness_host\"",
-  ]
+  flags = [ "BRAVE_P3A_ENABLED=$brave_p3a_enabled" ]
 }
 
 static_library("p3a") {
@@ -31,6 +24,7 @@ static_library("p3a") {
     "histograms_braveizer.h",
     "message_manager.cc",
     "message_manager.h",
+    "metric_config.h",
     "metric_log_store.cc",
     "metric_log_store.h",
     "metric_log_type.cc",
@@ -50,8 +44,9 @@ static_library("p3a") {
     "p3a_message.h",
     "p3a_service.cc",
     "p3a_service.h",
-    "pref_names.cc",
     "pref_names.h",
+    "region.cc",
+    "region.h",
     "rotation_scheduler.cc",
     "rotation_scheduler.h",
     "scheduler.cc",
@@ -67,9 +62,11 @@ static_library("p3a") {
   ]
 
   deps = [
-    "constellation/rs/cxx",
+    "constellation/rs/cxx:rust_lib",
     "//base",
+    "//brave/brave_domains",
     "//brave/components/brave_stats/browser",
+    "//brave/components/l10n/common",
     "//brave/components/p3a:buildflags",
     "//brave/components/p3a_utils",
     "//brave/components/version_info",
@@ -87,6 +84,7 @@ static_library("p3a") {
     deps += [ "//ios/web/public/thread" ]
   } else {
     deps += [
+      "//brave/components/brave_referrals/common",
       "//content/public/browser",
       "//content/public/common",
     ]
@@ -101,16 +99,18 @@ source_set("unit_tests") {
     "message_manager_unittest.cc",
     "metric_log_store_unittest.cc",
     "metric_names_unittest.cc",
+    "nitro_utils/attestation_unittest.cc",
     "nitro_utils/cose_unittest.cc",
     "p2a_protocols_unittest.cc",
     "p3a_service_unittest.cc",
+    "region_unittest.cc",
     "rotation_scheduler_unittest.cc",
     "scheduler_unittest.cc",
     "star_randomness_test_util.cc",
     "star_randomness_test_util.h",
   ]
   deps = [
-    "constellation/rs/cxx",
+    "constellation/rs/cxx:rust_lib",
     "//base/test:test_support",
     "//brave/components/p3a",
     "//brave/components/p3a:buildflags",
@@ -122,6 +122,9 @@ source_set("unit_tests") {
     "//testing/gtest",
   ]
   if (!is_ios) {
-    deps += [ "//content/test:test_support" ]
+    deps += [
+      "//brave/components/brave_referrals/common",
+      "//content/test:test_support",
+    ]
   }
 }

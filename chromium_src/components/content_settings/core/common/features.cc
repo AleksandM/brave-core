@@ -5,7 +5,17 @@
 
 #include "src/components/content_settings/core/common/features.cc"
 
+#include "base/feature_override.h"
+
 namespace content_settings {
+namespace features {
+
+OVERRIDE_FEATURE_DEFAULT_STATES({{
+    {kTrackingProtection3pcd, base::FEATURE_DISABLED_BY_DEFAULT},
+    {kUserBypassUI, base::FEATURE_DISABLED_BY_DEFAULT},
+}});
+
+}  // namespace features
 
 // Brave implements a strictier policy to not leak blocked permissions into
 // incognito profiles. This feature (when enabled) restores the original

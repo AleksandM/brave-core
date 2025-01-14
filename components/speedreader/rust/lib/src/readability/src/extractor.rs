@@ -1,17 +1,17 @@
-// Copyright (c) 2021 The Brave Authors. All rights reserved.
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this file,
-// You can obtain one at https://mozilla.org/MPL/2.0/.
+/* Copyright (c) 2021 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 use crate::{dom, nlp, scorer, util};
 use html5ever::parse_document;
 use html5ever::tendril::TendrilSink;
 use html5ever::tree_builder::{ElementFlags, NodeOrText, TreeSink};
 use html5ever::QualName;
-use kuchiki::NodeRef as Handle;
-use kuchiki::Sink;
+use kuchikiki::NodeRef as Handle;
+use kuchikiki::Sink;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::default::Default;
 use std::io::Read;
 use thiserror::Error;
@@ -49,6 +49,11 @@ lazy_static! {
     static ref JSONLD_SCHEMA: Regex = Regex::new(r#"^https?://schema\.org[/?\w/?]*$"#).unwrap();
 }
 
+static SHOW_ORIGINAL_DIV_ID: &str = "c93e2206-2f31-4ddc-9828-2bb8e8ed940e";
+static READ_TIME_DIV_ID: &str = "da24e4ef-db57-4b9f-9fa5-548924fc9c32";
+static META_DATA_AREA_DIV_ID: &str = "3bafd2b4-a87d-4471-8134-7a9cca092000";
+static MAIN_CONTENT_DIV_ID: &str = "7c08a417-bf02-4241-a55e-ad5b8dc88f69";
+
 #[derive(Debug)]
 pub struct Product {
     pub meta: Meta,
@@ -68,7 +73,7 @@ where
     let mut dom: Sink =
         parse_document(Sink::default(), Default::default()).from_utf8().read_from(input)?;
 
-    extract_dom(&mut dom, &url, None, None, None, None, None, &HashMap::new())
+    extract_dom(&mut dom, &url, None, None, None, None, None, false)
 }
 
 #[derive(Default, Debug)]
@@ -76,8 +81,9 @@ pub struct Meta {
     pub title: String,
     pub author: Option<String>,
     pub description: Option<String>,
-    pub charset: Option<String>,
+    pub charset: Option<Handle>,
     pub last_modified: Option<OffsetDateTime>,
+    pub preserved_elements: Vec<Handle>,
 }
 
 impl Meta {
@@ -97,6 +103,7 @@ impl Meta {
         };
         self.charset = self.charset.or(other.charset);
         self.last_modified = self.last_modified.or(other.last_modified);
+        self.preserved_elements.extend(other.preserved_elements);
         self
     }
 }
@@ -116,6 +123,7 @@ pub fn extract_metadata(dom: &Sink) -> Meta {
                     e.attributes.borrow().get(local_name!("type")) == Some("application/ld+json")
                 }
                 local_name!("meta") | local_name!("title") => true,
+                local_name!("base") => true,
                 _ => false,
             })
             .unwrap_or(false)
@@ -142,59 +150,68 @@ pub fn extract_metadata(dom: &Sink) -> Meta {
         // NOTE: This unwrap is safe because the iterator only contains element types
         let data = node.as_element().unwrap();
 
-        if data.name.local != local_name!("meta") {
-            continue;
-        }
-        let attribute = data.attributes.borrow();
-        if let Some(property) =
-            attribute.get(local_name!("property")).or(attribute.get(local_name!("name")))
-        {
-            if let Some(ref content) = attribute.get(local_name!("content")) {
-                match property {
-                    "dc:title"
-                    | "dcterm:title"
-                    | "og:title"
-                    | "weibo:article:title"
-                    | "weibo:webpage:title"
-                    | "title"
-                    | "twitter:title" => {
-                        meta_tags.title = content.to_string();
-                    }
-                    "description"
-                    | "dc:description"
-                    | "dcterm:description"
-                    | "og:description"
-                    | "weibo:article:description"
-                    | "weibo:webpage:description"
-                    | "twitter:description" => {
-                        if let Some(ref desc) = meta_tags.description {
-                            if content.chars().count() < desc.chars().count() {
-                                meta_tags.description = Some(content.to_string());
+        match data.name.local {
+            local_name!("meta") => {
+                let attribute = data.attributes.borrow();
+                if let Some(property) =
+                    attribute.get(local_name!("property")).or(attribute.get(local_name!("name")))
+                {
+                    if let Some(ref content) = attribute.get(local_name!("content")) {
+                        match property {
+                            "dc:title"
+                            | "dcterm:title"
+                            | "og:title"
+                            | "weibo:article:title"
+                            | "weibo:webpage:title"
+                            | "title"
+                            | "twitter:title" => {
+                                meta_tags.title = content.to_string();
                             }
-                        } else {
-                            meta_tags.description = Some(content.to_string());
+                            "description"
+                            | "dc:description"
+                            | "dcterm:description"
+                            | "og:description"
+                            | "weibo:article:description"
+                            | "weibo:webpage:description"
+                            | "twitter:description" => {
+                                if let Some(ref desc) = meta_tags.description {
+                                    if content.chars().count() < desc.chars().count() {
+                                        meta_tags.description = Some(content.to_string());
+                                    }
+                                } else {
+                                    meta_tags.description = Some(content.to_string());
+                                }
+                            }
+                            "dc:creator" | "dcterm:creator" | "author" => {
+                                meta_tags.author = Some(content.to_string());
+                            }
+                            _ => (),
                         }
                     }
-                    "dc:creator" | "dcterm:creator" | "author" => {
-                        meta_tags.author = Some(content.to_string());
+                } else if attribute.get(local_name!("charset")).is_some() {
+                    meta_tags.preserved_elements.push(node.clone());
+                } else if let Some(attr) = attribute.get(local_name!("http-equiv")) {
+                    match attr.to_lowercase().as_str().trim() {
+                        "content-type" => {
+                            meta_tags.preserved_elements.push(node.clone());
+                        }
+                        "content-security-policy" => {
+                            if let Some(parent) = node.parent().as_ref() {
+                                if dom::get_tag_name(&parent) == Some(&local_name!("head")) {
+                                    meta_tags.preserved_elements.push(node.clone());
+                                }
+                            }
+                        }
+                        _ => (),
                     }
-                    _ => (),
                 }
             }
-        } else if let Some(charset) = attribute.get(local_name!("charset")) {
-            meta_tags.charset = Some(charset.to_string());
-        } else if attribute
-            .get(local_name!("http-equiv"))
-            .map(|e| e.to_ascii_lowercase() == "content-type")
-            .unwrap_or(false)
-        {
-            if let Some(content) = attribute.get(local_name!("content")) {
-                if let Some(charset) = content.split("charset=").nth(1) {
-                    meta_tags.charset = Some(charset.trim().to_string());
-                }
+            local_name!("base") => {
+                meta_tags.preserved_elements.push(node.clone());
             }
+            _ => (),
         }
-    }
+    } // match
 
     let mut meta = meta_jsonld.merge(meta_tags);
 
@@ -221,15 +238,15 @@ pub fn extract_metadata(dom: &Sink) -> Meta {
     meta
 }
 
-pub fn extract_dom<S: ::std::hash::BuildHasher>(
+pub fn extract_dom(
     mut dom: &mut Sink,
     url: &Url,
     min_out_length: Option<i32>,
     theme: Option<String>,
     font_family: Option<String>,
     font_size: Option<String>,
-    content_style: Option<String>,
-    features: &HashMap<String, u32, S>,
+    column_width: Option<String>,
+    debug_view: bool,
 ) -> Result<Product, std::io::Error> {
     let handle = dom.document_node.clone();
 
@@ -254,7 +271,8 @@ pub fn extract_dom<S: ::std::hash::BuildHasher>(
         top_candidate.clone(),
         &meta.title.split_whitespace().collect::<HashSet<_>>(),
         url,
-        features,
+        true,
+        debug_view,
     );
 
     post_process(&mut dom, top_candidate.clone(), &meta);
@@ -279,50 +297,64 @@ pub fn extract_dom<S: ::std::hash::BuildHasher>(
 
             // Our CSS formats based on id="article".
             dom::set_attr("id", "article", body.clone(), true);
+            dom::set_attr("hidden", "true", body.clone(), true);
             body.to_string()
         }
         _ => top_candidate.to_string(),
     };
 
+    let mut content_head = String::default();
+
+    if !meta.title.is_empty() {
+        let title_blob = format!("<title>{}</title>", &meta.title);
+        content_head += &title_blob;
+    }
+
     if let Some(ref charset) = meta.charset {
         // Since we strip out the entire head, we need to include charset if one
         // was provided. Otherwise the browser will use the default encoding,
         // and surprisingly it's not utf-8 ;)
-        let charset_blob = format!("<meta charset=\"{}\"/>", charset);
-        content = charset_blob + &content;
-    }
-    if !meta.title.is_empty() {
-        let title_blob = format!("<title>{}</title>", &meta.title);
-        content = title_blob + &content;
+        content_head += &charset.to_string();
     }
 
-    if theme.is_some() || font_family.is_some() || font_size.is_some() || content_style.is_some() {
+    if !meta.preserved_elements.is_empty() {
+        for node in meta.preserved_elements.iter() {
+            content_head += &node.to_string();
+        }
+    }
+
+    content = content_head + &content;
+
+    if theme.is_some() || font_family.is_some() || font_size.is_some() || column_width.is_some() {
         let mut header: String = String::from("<html");
         if let Some(theme) = theme {
-            header = [header, format!(" data-theme=\"{}\"", theme)].concat();
+            header += &format!(" data-theme=\"{}\"", theme);
         }
         if let Some(font_family) = font_family {
-            header = [header, format!(" data-font-family=\"{}\"", font_family)].concat();
+            header += &format!(" data-font-family=\"{}\"", font_family);
         }
         if let Some(font_size) = font_size {
-            header = [header, format!(" data-font-size=\"{}\"", font_size)].concat();
+            header += &format!(" data-font-size=\"{}\"", font_size);
         }
-        if let Some(content_style) = content_style {
-            header = [header, format!(" data-content-style=\"{}\"", content_style)].concat();
+        if let Some(column_width) = column_width {
+            header += &format!(" data-column-width=\"{}\"", column_width);
         }
-        content = [header, ">".to_string(), content, "</html>".to_string()].concat();
+        content = header + ">" + &content + "</html>";
     }
 
     Ok(Product { meta, content })
 }
 
 pub fn post_process(dom: &mut Sink, root: Handle, meta: &Meta) {
-    if let Some(first_child) = root.first_child() {
+    if root.first_child().is_some() {
+        let meta_area = dom::create_element_simple(dom, "div", "", None);
+        dom::set_attr("id", META_DATA_AREA_DIV_ID, meta_area.clone(), true);
+
         // Add in the title
         if !meta.title.is_empty() {
             let title_header =
                 dom::create_element_simple(dom, "h1", "title metadata", Some(&meta.title));
-            dom.append_before_sibling(&first_child, NodeOrText::AppendNode(title_header));
+            dom.append(&meta_area, NodeOrText::AppendNode(title_header));
         }
         // Add in the description
         if let Some(ref text) = meta.description {
@@ -337,17 +369,17 @@ pub fn post_process(dom: &mut Sink, root: Handle, meta: &Meta) {
                 "subhead metadata",
                 Some(&text[..slice_offset]),
             );
-            dom.append_before_sibling(&first_child, NodeOrText::AppendNode(description));
+            dom.append(&meta_area, NodeOrText::AppendNode(description));
         }
 
         // Vertical split
         if meta.author.is_some() || meta.last_modified.is_some() {
             let splitter = dom::create_element_simple(dom, "hr", "", None);
-            dom.append_before_sibling(&first_child, NodeOrText::AppendNode(splitter));
+            dom.append(&meta_area, NodeOrText::AppendNode(splitter));
         }
 
         let metadata_parent = dom::create_element_simple(dom, "div", "metadata", None);
-        dom.append_before_sibling(&first_child, NodeOrText::AppendNode(metadata_parent.clone()));
+        dom.append(&meta_area, NodeOrText::AppendNode(metadata_parent.clone()));
 
         // Add in the author
         if let Some(ref text) = meta.author {
@@ -370,19 +402,14 @@ pub fn post_process(dom: &mut Sink, root: Handle, meta: &Meta) {
         // Add 'read time'
         {
             let read_time = dom::create_element_simple(dom, "div", "readtime", None);
-            dom::set_attr("id", "da24e4ef-db57-4b9f-9fa5-548924fc9c32", read_time.clone(), true);
+            dom::set_attr("id", READ_TIME_DIV_ID, read_time.clone(), true);
             dom.append(&metadata_parent, NodeOrText::AppendNode(read_time));
         }
 
         // Add 'show original'
         {
             let show_original_link = dom::create_element_simple(dom, "div", "show_original", None);
-            dom::set_attr(
-                "id",
-                "c93e2206-2f31-4ddc-9828-2bb8e8ed940e",
-                show_original_link.clone(),
-                true,
-            );
+            dom::set_attr("id", SHOW_ORIGINAL_DIV_ID, show_original_link.clone(), true);
             dom.append(&metadata_parent, NodeOrText::AppendNode(show_original_link));
         }
 
@@ -393,8 +420,15 @@ pub fn post_process(dom: &mut Sink, root: Handle, meta: &Meta) {
             || meta.last_modified.is_some()
         {
             let splitter = dom::create_element_simple(dom, "hr", "", None);
-            dom.append_before_sibling(&first_child, NodeOrText::AppendNode(splitter));
+            dom.append(&meta_area, NodeOrText::AppendNode(splitter));
         }
+
+        let content = dom::create_element_simple(dom, "div", "", None);
+        dom::set_attr("id", MAIN_CONTENT_DIV_ID, content.clone(), true);
+        dom.reparent_children(&root, &content);
+
+        dom.append(&root, NodeOrText::AppendNode(meta_area));
+        dom.append(&root, NodeOrText::AppendNode(content));
 
         // Our CSS formats based on id="article".
         dom::set_attr("id", "article", root, true);

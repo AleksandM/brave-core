@@ -7,6 +7,7 @@
 #define BRAVE_COMPONENTS_BRAVE_WALLET_RENDERER_JS_SOLANA_PROVIDER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -31,16 +32,6 @@ class JSSolanaProvider final : public gin::Wrappable<JSSolanaProvider>,
 
   static gin::WrapperInfo kWrapperInfo;
 
-  class V8ConverterStrategy : public content::V8ValueConverter::Strategy {
-   public:
-    V8ConverterStrategy() = default;
-    ~V8ConverterStrategy() override = default;
-
-    bool FromV8ArrayBuffer(v8::Local<v8::Object> value,
-                           std::unique_ptr<base::Value>* out,
-                           v8::Isolate* isolate) override;
-  };
-
   static void Install(bool allow_overwrite_window_solana,
                       content::RenderFrame* render_frame);
 
@@ -50,7 +41,8 @@ class JSSolanaProvider final : public gin::Wrappable<JSSolanaProvider>,
   const char* GetTypeName() override;
 
   // mojom::SolanaEventsListener
-  void AccountChangedEvent(const absl::optional<std::string>& account) override;
+  void AccountChangedEvent(const std::optional<std::string>& account) override;
+  void DisconnectEvent() override;
 
  private:
   explicit JSSolanaProvider(content::RenderFrame* render_frame);
@@ -160,18 +152,18 @@ class JSSolanaProvider final : public gin::Wrappable<JSSolanaProvider>,
                     bool success);
 
   // Get solanaWeb3.Transaction.serializedMessage with base58 encoding
-  absl::optional<std::string> GetSerializedMessage(
+  std::optional<std::string> GetSerializedMessage(
       v8::Local<v8::Value> transaction);
 
-  absl::optional<std::vector<uint8_t>> GetSignatureBlobFromV8Signature(
+  std::optional<std::vector<uint8_t>> GetSignatureBlobFromV8Signature(
       const v8::Local<v8::Value>& v8_signature,
       const v8::Local<v8::Context>& context);
 
-  absl::optional<std::string> GetPubkeyStringFromV8Pubkey(
+  std::optional<std::string> GetPubkeyStringFromV8Pubkey(
       const v8::Local<v8::Value>& v8_pubkey_object,
       const v8::Local<v8::Context>& context);
 
-  absl::optional<std::vector<mojom::SignaturePubkeyPairPtr>> GetSignatures(
+  std::optional<std::vector<mojom::SignaturePubkeyPairPtr>> GetSignatures(
       v8::Local<v8::Value> transaction);
 
   mojom::SolanaSignTransactionParamPtr GetSignTransactionParam(
@@ -193,7 +185,6 @@ class JSSolanaProvider final : public gin::Wrappable<JSSolanaProvider>,
   bool wallet_standard_loaded_ = false;
   v8::Global<v8::Value> solana_web3_module_;
   std::unique_ptr<content::V8ValueConverter> v8_value_converter_;
-  V8ConverterStrategy strategy_;
   mojo::Remote<mojom::SolanaProvider> solana_provider_;
   mojo::Receiver<mojom::SolanaEventsListener> receiver_{this};
 };

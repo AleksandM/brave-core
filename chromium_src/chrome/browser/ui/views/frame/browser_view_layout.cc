@@ -14,9 +14,17 @@
 // Double check if the tab strip is actually visible to calculate constraints.
 #define SupportsWindowFeature(FEATURE)                                       \
   SupportsWindowFeature(FEATURE) && (FEATURE != Browser::FEATURE_TABSTRIP || \
-                                     delegate_->IsTabStripVisible());
+                                     delegate_->ShouldDrawTabStrip());
 
-#define SidePanel BraveSidePanel
+#define BRAVE_BROWSER_VIEW_LAYOUT_CONVERTED_HIT_TEST \
+  if (dst->GetWidget() != src->GetWidget()) {        \
+    return false;                                    \
+  }
+
 #include "src/chrome/browser/ui/views/frame/browser_view_layout.cc"
-#undef SidePanel
+#undef BRAVE_BROWSER_VIEW_LAYOUT_CONVERTED_HIT_TEST
 #undef SupportsWindowFeature
+
+void BrowserViewLayout::NotifyDialogPositionRequiresUpdate() {
+  dialog_host_->NotifyPositionRequiresUpdate();
+}

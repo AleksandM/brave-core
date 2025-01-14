@@ -9,23 +9,10 @@ import {
 } from '../../../brave_rewards/resources/shared/lib/user_type'
 
 import {
-  ExternalWallet,
-  externalWalletFromExtensionData
+  externalWalletFromExtensionData //
 } from '../../../brave_rewards/resources/shared/lib/external_wallet'
-
-export const WalletStatus = {
-  kNotConnected: 0,
-  kConnected: 2,
-  kLoggedOut: 4
-} as const
-export type WalletStatus = (typeof WalletStatus)[keyof typeof WalletStatus]
-
-export type RewardsExternalWallet = Pick<
-  ExternalWallet,
-  'links' | 'provider' | 'username'
-> & {
-  status: WalletStatus
-}
+import { RewardsExternalWallet, WalletStatus } from '../../constants/types'
+import { BraveRewardsProxyOverrides } from '../../constants/testing_types'
 
 export class BraveRewardsProxy {
   getRewardsEnabled = () => {
@@ -75,7 +62,9 @@ export class BraveRewardsProxy {
         const rewardsWallet: RewardsExternalWallet | null = externalWallet
           ? {
               ...externalWallet,
-              status: externalWallet.status as WalletStatus
+              status: externalWallet.authenticated
+                ? WalletStatus.kConnected
+                : WalletStatus.kLoggedOut
             }
           : null
         resolve(rewardsWallet)
@@ -99,8 +88,6 @@ export class BraveRewardsProxy {
     })
   }
 
-  onAdsEnabled = chrome.braveRewards.onAdsEnabled.addListener
-
   onCompleteReset = chrome.braveRewards.onCompleteReset.addListener
 
   onExternalWalletConnected =
@@ -116,18 +103,14 @@ export class BraveRewardsProxy {
 
   onReconcileComplete = chrome.braveRewards.onReconcileComplete.addListener
 
-  onRewardsWalletUpdated =
-    chrome.braveRewards.onRewardsWalletUpdated.addListener
-
-  onUnblindedTokensReady =
-    chrome.braveRewards.onUnblindedTokensReady.addListener
+  onRewardsWalletCreated =
+    chrome.braveRewards.onRewardsWalletCreated.addListener
 
   openRewardsPanel = chrome.braveRewards.openRewardsPanel
-  showRewardsSetup = chrome.braveRewards.showRewardsSetup
 
   onInitialized = (callback: () => any) =>
     chrome.braveRewards.initialized.addListener((error) => {
-      if (error === RewardsExtension.Result.LEDGER_OK) {
+      if (error === RewardsExtension.Result.OK) {
         callback()
       } else {
         console.error(`rewards onInitialized error: ${error}`)
@@ -169,4 +152,11 @@ export const getBraveRewardsProxy = () => {
   }
 
   return braveRewardsProxyInstance
+}
+
+/** For testing */
+export function resetRewardsProxy(
+  overrides?: BraveRewardsProxyOverrides | undefined
+) {
+  // no-op in production
 }

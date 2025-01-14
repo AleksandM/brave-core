@@ -8,458 +8,378 @@
 #include <utility>
 
 #include "base/time/time.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
-#include "brave/components/brave_ads/core/ads_client_notifier_observer.h"
-#include "brave/components/brave_ads/core/notification_ad_info.h"
-#include "brave/components/brave_ads/core/notification_ad_value_util.h"
-#include "brave/components/brave_federated/public/interfaces/brave_federated.mojom.h"  // IWYU pragma: keep
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
+#include "brave/components/brave_ads/core/public/ad_units/notification_ad/notification_ad_info.h"
+#include "brave/components/brave_ads/core/public/ad_units/notification_ad/notification_ad_value_util.h"
+#include "brave/components/brave_ads/core/public/ads_client/ads_client_notifier_observer.h"
 
 namespace bat_ads {
 
 BatAdsClientMojoBridge::BatAdsClientMojoBridge(
-    mojo::PendingAssociatedRemote<mojom::BatAdsClient> client_info,
-    mojo::PendingReceiver<mojom::BatAdsClientNotifier> client_notifier)
-    : notifier_impl_(std::move(client_notifier)) {
-  bat_ads_client_.Bind(std::move(client_info));
-  bat_ads_client_.reset_on_disconnect();
+    mojo::PendingAssociatedRemote<mojom::BatAdsClient>
+        bat_ads_client_pending_associated_remote,
+    mojo::PendingReceiver<mojom::BatAdsClientNotifier>
+        bat_ads_client_notifier_pending_receiver)
+    : bat_ads_client_notifier_impl_(
+          std::move(bat_ads_client_notifier_pending_receiver)) {
+  bat_ads_client_associated_remote_.Bind(
+      std::move(bat_ads_client_pending_associated_remote));
+  bat_ads_client_associated_remote_.reset_on_disconnect();
 }
 
 BatAdsClientMojoBridge::~BatAdsClientMojoBridge() = default;
 
 void BatAdsClientMojoBridge::AddObserver(
     brave_ads::AdsClientNotifierObserver* observer) {
-  notifier_impl_.AddObserver(observer);
+  bat_ads_client_notifier_impl_.AddObserver(observer);
 }
 
 void BatAdsClientMojoBridge::RemoveObserver(
     brave_ads::AdsClientNotifierObserver* observer) {
-  notifier_impl_.RemoveObserver(observer);
+  bat_ads_client_notifier_impl_.RemoveObserver(observer);
 }
 
-void BatAdsClientMojoBridge::BindPendingObservers() {
-  notifier_impl_.BindReceiver();
+void BatAdsClientMojoBridge::NotifyPendingObservers() {
+  bat_ads_client_notifier_impl_.NotifyPendingObservers();
 }
 
 bool BatAdsClientMojoBridge::CanShowNotificationAdsWhileBrowserIsBackgrounded()
     const {
-  if (!bat_ads_client_.is_bound()) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     return false;
   }
 
   bool can_show = false;
-  bat_ads_client_->CanShowNotificationAdsWhileBrowserIsBackgrounded(&can_show);
+  bat_ads_client_associated_remote_
+      ->CanShowNotificationAdsWhileBrowserIsBackgrounded(&can_show);
   return can_show;
 }
 
 bool BatAdsClientMojoBridge::IsNetworkConnectionAvailable() const {
-  if (!bat_ads_client_.is_bound()) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     return false;
   }
 
   bool is_available = false;
-  bat_ads_client_->IsNetworkConnectionAvailable(&is_available);
+  bat_ads_client_associated_remote_->IsNetworkConnectionAvailable(
+      &is_available);
   return is_available;
 }
 
 bool BatAdsClientMojoBridge::IsBrowserActive() const {
-  if (!bat_ads_client_.is_bound()) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     return false;
   }
 
   bool is_browser_active = false;
-  bat_ads_client_->IsBrowserActive(&is_browser_active);
+  bat_ads_client_associated_remote_->IsBrowserActive(&is_browser_active);
   return is_browser_active;
 }
 
 bool BatAdsClientMojoBridge::IsBrowserInFullScreenMode() const {
-  if (!bat_ads_client_.is_bound()) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     return false;
   }
 
   bool is_browser_in_full_screen_mode = false;
-  bat_ads_client_->IsBrowserInFullScreenMode(&is_browser_in_full_screen_mode);
+  bat_ads_client_associated_remote_->IsBrowserInFullScreenMode(
+      &is_browser_in_full_screen_mode);
   return is_browser_in_full_screen_mode;
 }
 
 void BatAdsClientMojoBridge::ShowNotificationAd(
     const brave_ads::NotificationAdInfo& ad) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->ShowNotificationAd(brave_ads::NotificationAdToValue(ad));
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->ShowNotificationAd(
+        brave_ads::NotificationAdToValue(ad));
   }
 }
 
-void BatAdsClientMojoBridge::ShowReminder(
-    const brave_ads::mojom::ReminderType type) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->ShowReminder(type);
-  }
-}
-
-bool BatAdsClientMojoBridge::CanShowNotificationAds() {
-  if (!bat_ads_client_.is_bound()) {
+bool BatAdsClientMojoBridge::CanShowNotificationAds() const {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     return false;
   }
 
   bool can_show = false;
-  bat_ads_client_->CanShowNotificationAds(&can_show);
+  bat_ads_client_associated_remote_->CanShowNotificationAds(&can_show);
   return can_show;
 }
 
 void BatAdsClientMojoBridge::CloseNotificationAd(
     const std::string& placement_id) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->CloseNotificationAd(placement_id);
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->CloseNotificationAd(placement_id);
   }
 }
 
-void BatAdsClientMojoBridge::RecordAdEventForId(
-    const std::string& id,
-    const std::string& ad_type,
-    const std::string& confirmation_type,
-    const base::Time time) const {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->RecordAdEventForId(id, ad_type, confirmation_type, time);
-  }
-}
+void OnUrlRequest(
+    brave_ads::UrlRequestCallback callback,
+    const brave_ads::mojom::UrlResponseInfoPtr mojom_url_response_ptr) {
+  brave_ads::mojom::UrlResponseInfo mojom_url_response;
 
-std::vector<base::Time> BatAdsClientMojoBridge::GetAdEventHistory(
-    const std::string& ad_type,
-    const std::string& confirmation_type) const {
-  if (!bat_ads_client_.is_bound()) {
-    return {};
-  }
-
-  std::vector<base::Time> ad_event_history;
-  bat_ads_client_->GetAdEventHistory(ad_type, confirmation_type,
-                                     &ad_event_history);
-  return ad_event_history;
-}
-
-void BatAdsClientMojoBridge::ResetAdEventHistoryForId(
-    const std::string& id) const {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->ResetAdEventHistoryForId(id);
-  }
-}
-
-void OnUrlRequest(brave_ads::UrlRequestCallback callback,
-                  const brave_ads::mojom::UrlResponseInfoPtr url_response_ptr) {
-  brave_ads::mojom::UrlResponseInfo url_response;
-
-  if (!url_response_ptr) {
-    url_response.status_code = -1;
-    std::move(callback).Run(url_response);
+  if (!mojom_url_response_ptr) {
+    mojom_url_response.status_code = -1;
+    std::move(callback).Run(mojom_url_response);
     return;
   }
 
-  url_response.url = url_response_ptr->url;
-  url_response.status_code = url_response_ptr->status_code;
-  url_response.body = url_response_ptr->body;
-  url_response.headers = url_response_ptr->headers;
-  std::move(callback).Run(url_response);
+  mojom_url_response.url = mojom_url_response_ptr->url;
+  mojom_url_response.status_code = mojom_url_response_ptr->status_code;
+  mojom_url_response.body = mojom_url_response_ptr->body;
+  mojom_url_response.headers = mojom_url_response_ptr->headers;
+  std::move(callback).Run(mojom_url_response);
 }
 
 void BatAdsClientMojoBridge::UrlRequest(
-    brave_ads::mojom::UrlRequestInfoPtr url_request,
+    brave_ads::mojom::UrlRequestInfoPtr mojom_url_request,
     brave_ads::UrlRequestCallback callback) {
-  if (!bat_ads_client_.is_bound()) {
-    brave_ads::mojom::UrlResponseInfo response;
-    response.url = url_request->url;
-    response.status_code = -1;
-    std::move(callback).Run(response);
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    brave_ads::mojom::UrlResponseInfo mojom_url_response;
+    mojom_url_response.url = mojom_url_request->url;
+    mojom_url_response.status_code = -1;
+    std::move(callback).Run(mojom_url_response);
     return;
   }
 
-  bat_ads_client_->UrlRequest(
-      std::move(url_request),
+  bat_ads_client_associated_remote_->UrlRequest(
+      std::move(mojom_url_request),
       base::BindOnce(&OnUrlRequest, std::move(callback)));
 }
 
 void BatAdsClientMojoBridge::Save(const std::string& name,
                                   const std::string& value,
                                   brave_ads::SaveCallback callback) {
-  if (!bat_ads_client_.is_bound()) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     std::move(callback).Run(/*success*/ false);
     return;
   }
 
-  bat_ads_client_->Save(name, value, std::move(callback));
+  bat_ads_client_associated_remote_->Save(name, value, std::move(callback));
 }
 
-void BatAdsClientMojoBridge::LoadFileResource(
+void BatAdsClientMojoBridge::LoadResourceComponent(
     const std::string& id,
-    const int version,
+    int version,
     brave_ads::LoadFileCallback callback) {
-  if (!bat_ads_client_.is_bound()) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     std::move(callback).Run(base::File());
     return;
   }
 
-  bat_ads_client_->LoadFileResource(id, version, std::move(callback));
+  bat_ads_client_associated_remote_->LoadResourceComponent(id, version,
+                                                           std::move(callback));
 }
 
-void BatAdsClientMojoBridge::GetBrowsingHistory(
-    const int max_count,
-    const int days_ago,
-    brave_ads::GetBrowsingHistoryCallback callback) {
-  if (!bat_ads_client_.is_bound()) {
+void BatAdsClientMojoBridge::GetSiteHistory(
+    int max_count,
+    int days_ago,
+    brave_ads::GetSiteHistoryCallback callback) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     std::move(callback).Run({});
     return;
   }
 
-  bat_ads_client_->GetBrowsingHistory(max_count, days_ago, std::move(callback));
+  bat_ads_client_associated_remote_->GetSiteHistory(max_count, days_ago,
+                                                    std::move(callback));
 }
 
-void BatAdsClientMojoBridge::RecordP2AEvent(const std::string& name,
-                                            base::Value::List value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->RecordP2AEvent(name, std::move(value));
-  }
-}
-
-void BatAdsClientMojoBridge::AddTrainingSample(
-    std::vector<brave_federated::mojom::CovariateInfoPtr> training_sample) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->AddTrainingSample(std::move(training_sample));
+void BatAdsClientMojoBridge::RecordP2AEvents(
+    const std::vector<std::string>& events) {
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->RecordP2AEvents(events);
   }
 }
 
 void BatAdsClientMojoBridge::Load(const std::string& name,
                                   brave_ads::LoadCallback callback) {
-  if (!bat_ads_client_.is_bound()) {
-    std::move(callback).Run(/*value*/ absl::nullopt);
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    std::move(callback).Run(/*value*/ std::nullopt);
     return;
   }
 
-  bat_ads_client_->Load(name, std::move(callback));
+  bat_ads_client_associated_remote_->Load(name, std::move(callback));
 }
 
 std::string BatAdsClientMojoBridge::LoadDataResource(const std::string& name) {
-  if (!bat_ads_client_.is_bound()) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
     return {};
   }
 
   std::string value;
-  bat_ads_client_->LoadDataResource(name, &value);
+  bat_ads_client_associated_remote_->LoadDataResource(name, &value);
   return value;
 }
 
-void BatAdsClientMojoBridge::RunDBTransaction(
-    brave_ads::mojom::DBTransactionInfoPtr transaction,
-    brave_ads::RunDBTransactionCallback callback) {
-  if (!bat_ads_client_.is_bound()) {
-    std::move(callback).Run(brave_ads::mojom::DBCommandResponseInfoPtr());
-    return;
-  }
-
-  bat_ads_client_->RunDBTransaction(std::move(transaction),
-                                    std::move(callback));
-}
-
-void BatAdsClientMojoBridge::GetScheduledCaptcha(
-    const std::string& payment_id,
-    brave_ads::GetScheduledCaptchaCallback callback) {
-  if (!bat_ads_client_.is_bound()) {
-    return std::move(callback).Run({});
-  }
-
-  bat_ads_client_->GetScheduledCaptcha(payment_id, std::move(callback));
-}
-
-void BatAdsClientMojoBridge::ShowScheduledCaptchaNotification(
+void BatAdsClientMojoBridge::ShowScheduledCaptcha(
     const std::string& payment_id,
     const std::string& captcha_id) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->ShowScheduledCaptchaNotification(payment_id, captcha_id);
-  }
-}
-
-void BatAdsClientMojoBridge::UpdateAdRewards() {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->UpdateAdRewards();
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->ShowScheduledCaptcha(payment_id,
+                                                            captcha_id);
   }
 }
 
 void BatAdsClientMojoBridge::Log(const char* file,
-                                 const int line,
-                                 const int verbose_level,
+                                 int line,
+                                 int verbose_level,
                                  const std::string& message) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->Log(file, line, verbose_level, message);
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->Log(file, line, verbose_level, message);
   }
 }
 
-bool BatAdsClientMojoBridge::GetBooleanPref(const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return false;
+bool BatAdsClientMojoBridge::FindProfilePref(const std::string& path) const {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    return cached_profile_prefs_.contains(path);
+  }
+
+  bool value;
+  if (!bat_ads_client_associated_remote_->FindProfilePref(path, &value)) {
+    return cached_profile_prefs_.contains(path);
+  }
+
+  return value;
+}
+
+std::optional<base::Value> BatAdsClientMojoBridge::GetProfilePref(
+    const std::string& path) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    return CachedProfilePrefValue(path);
+  }
+
+  std::optional<base::Value> value;
+  if (!bat_ads_client_associated_remote_->GetProfilePref(path, &value)) {
+    return CachedProfilePrefValue(path);
+  }
+
+  if (value) {
+    cached_profile_prefs_[path] = value->Clone();
+  } else {
+    cached_profile_prefs_.erase(path);
+  }
+
+  return value;
+}
+
+void BatAdsClientMojoBridge::SetProfilePref(const std::string& path,
+                                            base::Value value) {
+  cached_profile_prefs_[path] = value.Clone();
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->SetProfilePref(path, std::move(value));
+  }
+}
+
+void BatAdsClientMojoBridge::ClearProfilePref(const std::string& path) {
+  cached_profile_prefs_.erase(path);
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->ClearProfilePref(path);
+  }
+}
+
+bool BatAdsClientMojoBridge::HasProfilePrefPath(const std::string& path) const {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    return cached_profile_prefs_.contains(path);
   }
 
   bool value = false;
-  bat_ads_client_->GetBooleanPref(path, &value);
+  if (!bat_ads_client_associated_remote_->HasProfilePrefPath(path, &value)) {
+    return cached_profile_prefs_.contains(path);
+  }
+
   return value;
 }
 
-void BatAdsClientMojoBridge::SetBooleanPref(const std::string& path,
-                                            const bool value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetBooleanPref(path, value);
-  }
-}
-
-int BatAdsClientMojoBridge::GetIntegerPref(const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return 0;
+bool BatAdsClientMojoBridge::FindLocalStatePref(const std::string& path) const {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    return cached_local_state_prefs_.contains(path);
   }
 
-  int value = 0;
-  bat_ads_client_->GetIntegerPref(path, &value);
+  bool value;
+  if (!bat_ads_client_associated_remote_->FindLocalStatePref(path, &value)) {
+    return cached_local_state_prefs_.contains(path);
+  }
+
   return value;
 }
 
-void BatAdsClientMojoBridge::SetIntegerPref(const std::string& path,
-                                            const int value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetIntegerPref(path, value);
-  }
-}
-
-double BatAdsClientMojoBridge::GetDoublePref(const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return 0.0;
+std::optional<base::Value> BatAdsClientMojoBridge::GetLocalStatePref(
+    const std::string& path) {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    return CachedLocalStatePrefValue(path);
   }
 
-  double value = 0.0;
-  bat_ads_client_->GetDoublePref(path, &value);
+  std::optional<base::Value> value;
+  if (!bat_ads_client_associated_remote_->GetLocalStatePref(path, &value)) {
+    return CachedLocalStatePrefValue(path);
+  }
+
+  if (value) {
+    cached_local_state_prefs_[path] = value->Clone();
+  } else {
+    cached_local_state_prefs_.erase(path);
+  }
+
   return value;
 }
 
-void BatAdsClientMojoBridge::SetDoublePref(const std::string& path,
-                                           const double value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetDoublePref(path, value);
+void BatAdsClientMojoBridge::SetLocalStatePref(const std::string& path,
+                                               base::Value value) {
+  cached_local_state_prefs_[path] = value.Clone();
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->SetLocalStatePref(path,
+                                                         std::move(value));
   }
 }
 
-std::string BatAdsClientMojoBridge::GetStringPref(
+void BatAdsClientMojoBridge::ClearLocalStatePref(const std::string& path) {
+  cached_local_state_prefs_.erase(path);
+  if (bat_ads_client_associated_remote_.is_bound()) {
+    bat_ads_client_associated_remote_->ClearLocalStatePref(path);
+  }
+}
+
+bool BatAdsClientMojoBridge::HasLocalStatePrefPath(
     const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return {};
-  }
-
-  std::string value;
-  bat_ads_client_->GetStringPref(path, &value);
-  return value;
-}
-
-void BatAdsClientMojoBridge::SetStringPref(const std::string& path,
-                                           const std::string& value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetStringPref(path, value);
-  }
-}
-
-int64_t BatAdsClientMojoBridge::GetInt64Pref(const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return 0;
-  }
-
-  int64_t value = 0;
-  bat_ads_client_->GetInt64Pref(path, &value);
-  return value;
-}
-
-void BatAdsClientMojoBridge::SetInt64Pref(const std::string& path,
-                                          const int64_t value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetInt64Pref(path, value);
-  }
-}
-
-uint64_t BatAdsClientMojoBridge::GetUint64Pref(const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return 0;
-  }
-
-  uint64_t value = 0;
-  bat_ads_client_->GetUint64Pref(path, &value);
-  return value;
-}
-
-void BatAdsClientMojoBridge::SetUint64Pref(const std::string& path,
-                                           const uint64_t value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetUint64Pref(path, value);
-  }
-}
-
-base::Time BatAdsClientMojoBridge::GetTimePref(const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return {};
-  }
-
-  base::Time value;
-  bat_ads_client_->GetTimePref(path, &value);
-  return value;
-}
-
-void BatAdsClientMojoBridge::SetTimePref(const std::string& path,
-                                         const base::Time value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetTimePref(path, value);
-  }
-}
-
-absl::optional<base::Value::Dict> BatAdsClientMojoBridge::GetDictPref(
-    const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return absl::nullopt;
-  }
-
-  absl::optional<base::Value::Dict> value;
-  bat_ads_client_->GetDictPref(path, &value);
-  return value;
-}
-
-void BatAdsClientMojoBridge::SetDictPref(const std::string& path,
-                                         base::Value::Dict value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetDictPref(path, std::move(value));
-  }
-}
-
-absl::optional<base::Value::List> BatAdsClientMojoBridge::GetListPref(
-    const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return absl::nullopt;
-  }
-
-  absl::optional<base::Value::List> value;
-  bat_ads_client_->GetListPref(path, &value);
-  return value;
-}
-
-void BatAdsClientMojoBridge::SetListPref(const std::string& path,
-                                         base::Value::List value) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->SetListPref(path, std::move(value));
-  }
-}
-
-void BatAdsClientMojoBridge::ClearPref(const std::string& path) {
-  if (bat_ads_client_.is_bound()) {
-    bat_ads_client_->ClearPref(path);
-  }
-}
-
-bool BatAdsClientMojoBridge::HasPrefPath(const std::string& path) const {
-  if (!bat_ads_client_.is_bound()) {
-    return false;
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    return cached_local_state_prefs_.contains(path);
   }
 
   bool value = false;
-  bat_ads_client_->HasPrefPath(path, &value);
+  if (!bat_ads_client_associated_remote_->HasLocalStatePrefPath(path, &value)) {
+    return cached_local_state_prefs_.contains(path);
+  }
+
   return value;
+}
+
+base::Value::Dict BatAdsClientMojoBridge::GetVirtualPrefs() const {
+  if (!bat_ads_client_associated_remote_.is_bound()) {
+    return {};
+  }
+
+  base::Value::Dict virtual_prefs;
+  bat_ads_client_associated_remote_->GetVirtualPrefs(&virtual_prefs);
+  return virtual_prefs;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+std::optional<base::Value> BatAdsClientMojoBridge::CachedProfilePrefValue(
+    const std::string& path) const {
+  if (!cached_profile_prefs_.contains(path)) {
+    return std::nullopt;
+  }
+
+  return cached_profile_prefs_.at(path).Clone();
+}
+
+std::optional<base::Value> BatAdsClientMojoBridge::CachedLocalStatePrefValue(
+    const std::string& path) const {
+  if (!cached_local_state_prefs_.contains(path)) {
+    return std::nullopt;
+  }
+
+  return cached_local_state_prefs_.at(path).Clone();
 }
 
 }  // namespace bat_ads

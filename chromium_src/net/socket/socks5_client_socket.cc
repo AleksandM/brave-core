@@ -1,7 +1,7 @@
-/* Copyright 2019 The Brave Authors. All rights reserved.
+/* Copyright (c) 2019 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "src/net/socket/socks5_client_socket.cc"
 
@@ -10,12 +10,15 @@
 #include <string>
 #include <utility>
 
+#include "base/compiler_specific.h"
 #include "net/base/io_buffer.h"
 #include "net/socket/socks5_client_socket.h"
 
 namespace net {
 
 namespace {
+
+constexpr size_t kSOCKSAuthUsernamePasswordResponseLen = 2;
 
 HostPortPair ToLegacyDestinationEndpoint(
     const TransportSocketParams::Endpoint& endpoint) {
@@ -78,8 +81,6 @@ uint8_t SOCKS5ClientSocketAuth::auth_method() {
   return 0x02;
 }
 
-static const size_t kSOCKSAuthUsernamePasswordResponseLen = 2;
-
 int SOCKS5ClientSocketAuth::Authenticate(
     int rv,
     NetLogWithSource& net_log,
@@ -111,10 +112,10 @@ int SOCKS5ClientSocketAuth::Authenticate(
       case STATE_WRITE:
         DCHECK_EQ(OK, rv);
         DCHECK_LT(0u, buffer_left_);
-        iobuf_ = new IOBuffer(buffer_left_);
-        memcpy(iobuf_->data(),
-               &buffer_.data()[buffer_.size() - buffer_left_],
-               buffer_left_);
+        iobuf_ = base::MakeRefCounted<IOBufferWithSize>(buffer_left_);
+        UNSAFE_TODO(memcpy(iobuf_->data(),
+                           &buffer_.data()[buffer_.size() - buffer_left_],
+                           buffer_left_));
         next_state_ = STATE_WRITE_COMPLETE;
         net_log.BeginEvent(NetLogEventType::SOCKS5_AUTH_WRITE);
         rv = transport_socket_->Write(iobuf_.get(), buffer_left_, callback,
@@ -139,14 +140,14 @@ int SOCKS5ClientSocketAuth::Authenticate(
         DCHECK_EQ(OK, rv);
         buffer_.clear();
         buffer_left_ = kSOCKSAuthUsernamePasswordResponseLen;
-        iobuf_ = new IOBuffer(buffer_left_);
+        iobuf_ = base::MakeRefCounted<IOBufferWithSize>(buffer_left_);
         next_state_ = STATE_READ;
         rv = OK;
         break;
 
       case STATE_READ:
         DCHECK_EQ(OK, rv);
-        iobuf_ = new IOBuffer(buffer_left_);
+        iobuf_ = base::MakeRefCounted<IOBufferWithSize>(buffer_left_);
         next_state_ = STATE_READ_COMPLETE;
         net_log.BeginEvent(NetLogEventType::SOCKS5_AUTH_READ);
         rv = transport_socket_->Read(iobuf_.get(), buffer_left_, callback);
@@ -181,7 +182,6 @@ int SOCKS5ClientSocketAuth::Authenticate(
       case STATE_BAD:
       default:
         NOTREACHED() << "bad state";
-        return ERR_UNEXPECTED;
     }
   } while (rv != ERR_IO_PENDING);
   return rv;

@@ -8,29 +8,26 @@
 #include "base/strings/stringprintf.h"
 #include "brave/components/brave_rewards/core/database/database_creds_batch.h"
 #include "brave/components/brave_rewards/core/database/database_util.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 
-using std::placeholders::_1;
-
-namespace brave_rewards::internal {
-namespace database {
+namespace brave_rewards::internal::database {
 
 namespace {
 
-const char kTableName[] = "creds_batch";
+constexpr char kTableName[] = "creds_batch";
 
 }  // namespace
 
-DatabaseCredsBatch::DatabaseCredsBatch(LedgerImpl& ledger)
-    : DatabaseTable(ledger) {}
+DatabaseCredsBatch::DatabaseCredsBatch(RewardsEngine& engine)
+    : DatabaseTable(engine) {}
 
 DatabaseCredsBatch::~DatabaseCredsBatch() = default;
 
 void DatabaseCredsBatch::InsertOrUpdate(mojom::CredsBatchPtr creds,
-                                        LegacyResultCallback callback) {
+                                        ResultCallback callback) {
   if (!creds) {
-    BLOG(1, "Creds is null");
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->Log(FROM_HERE) << "Creds is null";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
@@ -59,9 +56,9 @@ void DatabaseCredsBatch::InsertOrUpdate(mojom::CredsBatchPtr creds,
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback = std::bind(&OnResultCallback, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&OnResultCallback, std::move(callback)));
 }
 
 void DatabaseCredsBatch::GetRecordByTrigger(
@@ -96,26 +93,26 @@ void DatabaseCredsBatch::GetRecordByTrigger(
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback =
-      std::bind(&DatabaseCredsBatch::OnGetRecordByTrigger, this, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&DatabaseCredsBatch::OnGetRecordByTrigger,
+                     base::Unretained(this), std::move(callback)));
 }
 
 void DatabaseCredsBatch::OnGetRecordByTrigger(
-    mojom::DBCommandResponsePtr response,
-    GetCredsBatchCallback callback) {
+    GetCredsBatchCallback callback,
+    mojom::DBCommandResponsePtr response) {
   if (!response ||
       response->status != mojom::DBCommandResponse::Status::RESPONSE_OK) {
-    BLOG(0, "Response is wrong");
-    callback(nullptr);
+    engine_->LogError(FROM_HERE) << "Response is wrong";
+    std::move(callback).Run(nullptr);
     return;
   }
 
   if (response->result->get_records().size() != 1) {
-    BLOG(1, "Record size is not correct: "
-                << response->result->get_records().size());
-    callback(nullptr);
+    engine_->Log(FROM_HERE) << "Record size is not correct: "
+                            << response->result->get_records().size();
+    std::move(callback).Run(nullptr);
     return;
   }
 
@@ -124,23 +121,22 @@ void DatabaseCredsBatch::OnGetRecordByTrigger(
   auto info = mojom::CredsBatch::New();
   info->creds_id = GetStringColumn(record, 0);
   info->trigger_id = GetStringColumn(record, 1);
-  info->trigger_type =
-      static_cast<mojom::CredsBatchType>(GetIntColumn(record, 2));
+  info->trigger_type = CredsBatchTypeFromInt(GetIntColumn(record, 2));
   info->creds = GetStringColumn(record, 3);
   info->blinded_creds = GetStringColumn(record, 4);
   info->signed_creds = GetStringColumn(record, 5);
   info->public_key = GetStringColumn(record, 6);
   info->batch_proof = GetStringColumn(record, 7);
-  info->status = static_cast<mojom::CredsBatchStatus>(GetIntColumn(record, 8));
+  info->status = CredsBatchStatusFromInt(GetIntColumn(record, 8));
 
-  callback(std::move(info));
+  std::move(callback).Run(std::move(info));
 }
 
 void DatabaseCredsBatch::SaveSignedCreds(mojom::CredsBatchPtr creds,
-                                         LegacyResultCallback callback) {
+                                         ResultCallback callback) {
   if (!creds) {
-    BLOG(1, "Creds is null");
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->Log(FROM_HERE) << "Creds is null";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
@@ -164,9 +160,9 @@ void DatabaseCredsBatch::SaveSignedCreds(mojom::CredsBatchPtr creds,
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback = std::bind(&OnResultCallback, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&OnResultCallback, std::move(callback)));
 }
 
 void DatabaseCredsBatch::GetAllRecords(GetCredsBatchListCallback callback) {
@@ -193,18 +189,18 @@ void DatabaseCredsBatch::GetAllRecords(GetCredsBatchListCallback callback) {
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback =
-      std::bind(&DatabaseCredsBatch::OnGetRecords, this, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&DatabaseCredsBatch::OnGetRecords, base::Unretained(this),
+                     std::move(callback)));
 }
 
-void DatabaseCredsBatch::OnGetRecords(mojom::DBCommandResponsePtr response,
-                                      GetCredsBatchListCallback callback) {
+void DatabaseCredsBatch::OnGetRecords(GetCredsBatchListCallback callback,
+                                      mojom::DBCommandResponsePtr response) {
   if (!response ||
       response->status != mojom::DBCommandResponse::Status::RESPONSE_OK) {
-    BLOG(0, "Response is wrong");
-    callback({});
+    engine_->LogError(FROM_HERE) << "Response is wrong";
+    std::move(callback).Run({});
     return;
   }
 
@@ -216,28 +212,26 @@ void DatabaseCredsBatch::OnGetRecords(mojom::DBCommandResponsePtr response,
 
     info->creds_id = GetStringColumn(record_pointer, 0);
     info->trigger_id = GetStringColumn(record_pointer, 1);
-    info->trigger_type =
-        static_cast<mojom::CredsBatchType>(GetIntColumn(record_pointer, 2));
+    info->trigger_type = CredsBatchTypeFromInt(GetIntColumn(record_pointer, 2));
     info->creds = GetStringColumn(record_pointer, 3);
     info->blinded_creds = GetStringColumn(record_pointer, 4);
     info->signed_creds = GetStringColumn(record_pointer, 5);
     info->public_key = GetStringColumn(record_pointer, 6);
     info->batch_proof = GetStringColumn(record_pointer, 7);
-    info->status =
-        static_cast<mojom::CredsBatchStatus>(GetIntColumn(record_pointer, 8));
+    info->status = CredsBatchStatusFromInt(GetIntColumn(record_pointer, 8));
     list.push_back(std::move(info));
   }
 
-  callback(std::move(list));
+  std::move(callback).Run(std::move(list));
 }
 
 void DatabaseCredsBatch::UpdateStatus(const std::string& trigger_id,
                                       mojom::CredsBatchType trigger_type,
                                       mojom::CredsBatchStatus status,
-                                      LegacyResultCallback callback) {
+                                      ResultCallback callback) {
   if (trigger_id.empty()) {
-    BLOG(0, "Trigger id is empty");
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->LogError(FROM_HERE) << "Trigger id is empty";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
@@ -257,19 +251,19 @@ void DatabaseCredsBatch::UpdateStatus(const std::string& trigger_id,
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback = std::bind(&OnResultCallback, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&OnResultCallback, std::move(callback)));
 }
 
 void DatabaseCredsBatch::UpdateRecordsStatus(
     const std::vector<std::string>& trigger_ids,
     mojom::CredsBatchType trigger_type,
     mojom::CredsBatchStatus status,
-    LegacyResultCallback callback) {
+    ResultCallback callback) {
   if (trigger_ids.empty()) {
-    BLOG(0, "Trigger id is empty");
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->LogError(FROM_HERE) << "Trigger id is empty";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
@@ -288,9 +282,9 @@ void DatabaseCredsBatch::UpdateRecordsStatus(
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback = std::bind(&OnResultCallback, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&OnResultCallback, std::move(callback)));
 }
 
 void DatabaseCredsBatch::GetRecordsByTriggers(
@@ -320,11 +314,10 @@ void DatabaseCredsBatch::GetRecordsByTriggers(
 
   transaction->commands.push_back(std::move(command));
 
-  auto transaction_callback =
-      std::bind(&DatabaseCredsBatch::OnGetRecords, this, _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&DatabaseCredsBatch::OnGetRecords, base::Unretained(this),
+                     std::move(callback)));
 }
 
-}  // namespace database
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::database

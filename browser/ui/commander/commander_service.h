@@ -12,18 +12,26 @@
 
 #include "base/memory/weak_ptr.h"
 #include "base/observer_list.h"
+#include "base/scoped_observation.h"
+#include "brave/browser/ui/commander/command_source.h"
 #include "brave/browser/ui/commander/ranker.h"
 #include "brave/components/commander/browser/commander_frontend_delegate.h"
 #include "brave/components/commander/browser/commander_item_model.h"
-#include "chrome/browser/ui/commander/command_source.h"
+#include "chrome/browser/ui/browser_list_observer.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class OmniboxView;
 class Profile;
+class BrowserList;
 
 namespace commander {
 
-class CommanderService : public CommanderFrontendDelegate, public KeyedService {
+// Returns true if the commander UI should be made available.
+bool IsEnabled();
+
+class CommanderService : public CommanderFrontendDelegate,
+                         public KeyedService,
+                         public BrowserListObserver {
  public:
   using CommandSources = std::vector<std::unique_ptr<CommandSource>>;
 
@@ -41,7 +49,7 @@ class CommanderService : public CommanderFrontendDelegate, public KeyedService {
   void Hide() override;
   void AddObserver(Observer* observer) override;
   void RemoveObserver(Observer* observer) override;
-  void UpdateText(bool force = false) override;
+  void UpdateText(const std::u16string& text) override;
   void SelectCommand(uint32_t command_index, uint32_t result_set_id) override;
   std::vector<CommandItemModel> GetItems() override;
   int GetResultSetId() override;
@@ -50,7 +58,13 @@ class CommanderService : public CommanderFrontendDelegate, public KeyedService {
   // KeyedService:
   void Shutdown() override;
 
+  // overrides BrowserListObserver:
+  void OnBrowserClosing(Browser* browser) override;
+
  private:
+  void UpdateTextFromCurrentBrowserOmnibox();
+  void UpdateText(const std::u16string& text, bool force);
+
   OmniboxView* GetOmnibox() const;
   void UpdateCommands();
   void NotifyObservers();
@@ -64,7 +78,7 @@ class CommanderService : public CommanderFrontendDelegate, public KeyedService {
   std::u16string prompt_;
   std::vector<std::unique_ptr<CommandItem>> items_;
   uint32_t current_result_set_id_ = 0;
-  raw_ptr<Browser> last_browser_;
+  raw_ptr<Browser, DanglingUntriaged> last_browser_;
   raw_ptr<Profile> profile_;
 
   // Some commands have multiple steps (like move tab to window, pick a
@@ -76,6 +90,8 @@ class CommanderService : public CommanderFrontendDelegate, public KeyedService {
   Ranker ranker_;
 
   base::ObserverList<Observer> observers_;
+  base::ScopedObservation<BrowserList, BrowserListObserver>
+      browser_list_observation_{this};
   base::WeakPtrFactory<CommanderService> weak_ptr_factory_{this};
 };
 }  // namespace commander

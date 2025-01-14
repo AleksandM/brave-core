@@ -1,12 +1,13 @@
 <!-- Add brave-browser issue below that this PR will resolve -->
-Resolves 
+Resolves
 
 <!-- CI-related labels that can be applied to this PR:
 * CI/run-audit-deps (1) - check for known npm/cargo vulnerabilities (audit_deps)
 * CI/run-network-audit (1) - run network-audit
 * CI/run-upstream-tests - run Chromium unit and browser tests on Linux and Windows (otherwise only on Linux)
+* CI/run-linux-arm64, CI/run-macos-x64, CI/run-windows-arm64, CI/run-windows-x86 - run builds that would otherwise be skipped
 * CI/skip - do not run CI builds (except noplatform)
-* CI/skip-linux-arm64, CI/skip-linux-x64, CI/skip-android, CI/skip-macos, CI/skip-ios, CI/skip-windows-arm64, CI/skip-windows-x64, CI/skip-windows-x86 - skip CI builds for specific platforms
+* CI/skip-linux-x64, CI/skip-android, CI/skip-macos-arm64, CI/skip-ios, CI/skip-windows-x64 - skip CI builds for specific platforms
 * CI/skip-upstream-tests - do not run Chromium unit, or browser tests (otherwise only on Linux)
 * CI/skip-all-linters - do not run presubmit and lint checks
 * CI/storybook-url (1) - deploy storybook and provide a unique URL for each build
@@ -16,7 +17,7 @@ Resolves
 
 ## Submitter Checklist:
 
-- [ ] I confirm that no security/privacy review [is needed](https://github.com/brave/brave-browser/wiki/Security-reviews), or that I have [requested](https://github.com/brave/security/issues/new/choose) one
+- [ ] I confirm that no [security/privacy review is needed](https://github.com/brave/brave-browser/wiki/Security-reviews) and no other type of reviews are needed, or that I have [requested](https://github.com/brave/reviews/issues/new/choose) them
 - [ ] There is a [ticket](https://github.com/brave/brave-browser/issues) for my issue
 - [ ] Used Github [auto-closing keywords](https://docs.github.com/en/github/managing-your-work-on-github/linking-a-pull-request-to-an-issue) in the PR description above
 - [ ] Wrote a good [PR/commit description](https://google.github.io/eng-practices/review/developer/cl-descriptions.html)
@@ -24,7 +25,7 @@ Resolves
 - [ ] Added appropriate labels (`QA/Yes` or `QA/No`; `release-notes/include` or `release-notes/exclude`; `OS/...`) to the associated issue
 - [ ] Checked the PR locally:
   * `npm run test -- brave_browser_tests`, `npm run test -- brave_unit_tests` [wiki](https://github.com/brave/brave-browser/wiki/Tests)
-  * `npm run lint`, `npm run presubmit` [wiki](https://github.com/brave/brave-browser/wiki/Presubmit-checks), `npm run gn_check`, `npm run tslint`
+  * `npm run presubmit` [wiki](https://github.com/brave/brave-browser/wiki/Presubmit-checks), `npm run gn_check`, `npm run tslint`
 - [ ] Ran `git rebase master` (if needed)
 
 ## Reviewer Checklist:
@@ -46,7 +47,6 @@ Resolves
   - [ ] https://github.com/brave/brave-browser/wiki/Proxy-redirected-URLs
   - [ ] https://github.com/brave/brave-browser/wiki/Fingerprinting-Protections
   - [ ] https://github.com/brave/brave-browser/wiki/Brave%E2%80%99s-Use-of-Referral-Codes
-  - [ ] https://github.com/brave/brave-browser/wiki/Custom-Headers
   - [ ] https://github.com/brave/brave-browser/wiki/Web-Compatibility-Exceptions-in-Brave
   - [ ] https://github.com/brave/brave-browser/wiki/QA-Guide
   - [ ] https://github.com/brave/brave-browser/wiki/P3A

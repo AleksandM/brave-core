@@ -5,10 +5,17 @@
 
 import re
 
+import brave_chromium_utils
 import override_utils
 
+# pylint: disable=relative-beyond-top-level
+from .code_node import SymbolNode, TextNode
+from .codegen_accumulator import CodeGenAccumulator
+from .codegen_context import CodeGenContext
+from .codegen_format import format_template as _format
+
 # Get gn arg to enable WebAPI probes.
-_IS_PG_WEBAPI_PROBES_ENABLED = override_utils.get_gn_arg(
+_IS_PG_WEBAPI_PROBES_ENABLED = brave_chromium_utils.get_gn_arg(
     "enable_brave_page_graph_webapi_probes")
 
 # Workaround attribute to set when is_observable_array codegen is active. This
@@ -33,6 +40,9 @@ _PAGE_GRAPH_TRACKED_ITEMS = {
         "toBlob",
         "toDataURL",
     },
+    "Geolocation": {"*"},
+    "Location": {"*"},
+    "MediaDevices": {"*"},
     "Navigator": {"*"},
     "Performance": {"*"},
     "PerformanceObserver": {"*"},
@@ -84,12 +94,12 @@ def _should_track_in_page_graph(cg_context):
     return cg_context.property_.identifier in tracked_class_items
 
 
-def _to_page_graph_blink_receiver_data(arg):
-    return "ToPageGraphBlinkReceiverData({})".format(arg)
+def _to_page_graph_object(arg):
+    return "ToPageGraphObject({})".format(arg)
 
 
-def _to_page_graph_blink_arg(arg):
-    return "ToPageGraphBlinkArg({})".format(arg)
+def _to_page_graph_value(arg):
+    return "ToPageGraphValue(${{current_script_state}}, {})".format(arg)
 
 
 ### Helpers end.
@@ -120,9 +130,9 @@ def _make_report_page_graph_binding_event(cg_context):
         assert False, "PageGraph unsupported binding type for: {}.{}".format(
             cg_context.class_like.identifier, cg_context.property_.identifier)
 
-    pattern = ("if (UNLIKELY(${page_graph_enabled})) {{\n"
+    pattern = ("if (${page_graph_enabled}) [[unlikely]] {{\n"
                "  probe::RegisterPageGraphBindingEvent("
-               "${execution_context}, ${page_graph_binding_name}, "
+               "${current_execution_context}, ${page_graph_binding_name}, "
                "PageGraphBindingType::k{_1}, "
                "PageGraphBindingEvent::k{_2});\n"
                "}}")
@@ -156,7 +166,8 @@ def _bind_page_graph_local_vars(code_node, cg_context):
         event_name = "{}.{}".format(event_name, "get")
     elif cg_context.attribute_set:
         event_name = "{}.{}".format(event_name, "set")
-    elif cg_context.constructor_group and not cg_context.is_named_constructor:
+    elif (cg_context.constructor_group
+          and not cg_context.is_legacy_factory_function):
         event_name = "{}.{}".format(cg_context.class_like.identifier,
                                     "constructor")
 
@@ -168,14 +179,13 @@ def _bind_page_graph_local_vars(code_node, cg_context):
 
     code_node.register_code_symbol(page_graph_binding_name_node)
 
+
 # probe::RegisterPageGraphWebAPICallWithResult() generator.
 def _append_report_page_graph_api_call_event(cg_context, expr):
     assert isinstance(cg_context, CodeGenContext)
     if not _should_track_in_page_graph(cg_context):
         return expr
 
-    if cg_context.no_alloc_direct_call_for_testing:
-        return expr
     # `expr`` is a C++ code (a simple string) that contains the call and the
     # return value assignment. Make sure it's a single-lined expression as it's
     # originally implemented in upstream `_make_blink_api_call` function.
@@ -184,7 +194,7 @@ def _append_report_page_graph_api_call_event(cg_context, expr):
     # Extract blink_receiver and args from a string like:
     # ${blink_receiver}->getExtension(${script_state}, ${arg1_name})
     if expr.startswith("${blink_receiver}"):
-        receiver_data = _to_page_graph_blink_receiver_data("${blink_receiver}")
+        receiver_data = _to_page_graph_object("${blink_receiver}")
     else:
         receiver_data = "{}"
 
@@ -192,7 +202,7 @@ def _append_report_page_graph_api_call_event(cg_context, expr):
     args = re.findall((r"(\${(?:"
                        r"arg\d+\w+|blink_property_name|blink_property_value"
                        r")})"), expr)
-    args = ", ".join(map(_to_page_graph_blink_arg, args))
+    args = ", ".join(map(_to_page_graph_value, args))
 
     # Extract exception state.
     if cg_context.may_throw_exception:
@@ -201,20 +211,46 @@ def _append_report_page_graph_api_call_event(cg_context, expr):
         exception_state = "nullptr"
 
     # Extract return value. See `bind_return_value` in upstream interface.py.
-    is_return_type_void = ((not cg_context.return_type
-                            or cg_context.return_type.unwrap().is_void)
-                           and not cg_context.does_override_idl_return_type)
-    if is_return_type_void or hasattr(cg_context, _IS_OBSERVABLE_ARRAY_SETTER):
-        return_value = "absl::nullopt"
+    is_return_type_undefined = (
+        (not cg_context.return_type
+         or cg_context.return_type.unwrap().is_undefined)
+        and not cg_context.does_override_idl_return_type)
+    if is_return_type_undefined or hasattr(cg_context,
+                                           _IS_OBSERVABLE_ARRAY_SETTER):
+        return_value = "std::nullopt"
     else:
-        return_value = _to_page_graph_blink_arg("return_value")
+        return_value = _to_page_graph_value("return_value")
 
-    pattern = (
-        ";\n"
-        "if (UNLIKELY(${page_graph_enabled})) {{\n"
-        "  probe::RegisterPageGraphWebAPICallWithResult(${execution_context}, "
-        "${page_graph_binding_name}, {_1}, {{{_2}}}, {_3}, {_4});\n"
-        "}}")
+    # The odd pattern below:
+    #     auto *pg_v8_receiver = ${v8_receiver};
+    # is to make sure the code generator sets up `v8_receiver` correctly
+    # (which necessarily happens before the PageGraph check block),
+    # but to only interact with it in cases where we know there will be
+    # a context associated with it.
+    pattern = (";\n"
+               "if (${page_graph_enabled}) [[unlikely]] {{\n"
+               "  if (auto pg_scope = ScopedPageGraphCall();"
+               "    pg_scope.has_value()) {{\n"
+               "    auto pg_context = ${current_execution_context};\n"
+               "    auto pg_v8_receiver = ${v8_receiver};\n"
+               "    auto pg_maybe_receiver_context = pg_v8_receiver->"
+               "        GetCreationContext();\n"
+               "    if (!pg_maybe_receiver_context.IsEmpty()) {{\n"
+               "      auto pg_receiver_v8_context = pg_maybe_receiver_context"
+               "          .ToLocalChecked();\n"
+               "      auto pg_maybe_receiver_execution_context = "
+               "          ToExecutionContext(pg_receiver_v8_context);\n"
+               "      if (pg_maybe_receiver_execution_context) {{\n"
+               "        pg_context = pg_maybe_receiver_execution_context;\n"
+               "      }}\n"
+               "    }}\n"
+               "    probe::RegisterPageGraphWebAPICallWithResult("
+               "      pg_context, \n"
+               "      ${page_graph_binding_name}, {_1}, \n"
+               "      CreatePageGraphValues({_2}), \n"
+               "      {_3}, {_4});\n"
+               "  }}"
+               "}}")
     _1 = receiver_data
     _2 = args
     _3 = exception_state

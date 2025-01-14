@@ -6,12 +6,14 @@
 #import "brave/ios/browser/api/sync/brave_sync_api.h"
 
 #import <CoreImage/CoreImage.h>
+
 #include <string>
 #include <vector>
 
 #include "base/compiler_specific.h"
 #include "base/functional/bind.h"
 #include "base/json/json_writer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/sys_string_conversions.h"
@@ -20,26 +22,18 @@
 #include "brave/components/brave_sync/qr_code_validator.h"
 #include "brave/components/brave_sync/time_limited_words.h"
 #include "brave/components/sync_device_info/brave_device_info.h"
-#include "brave/ios/browser/api/sync/brave_sync_internals+private.h"
 #include "brave/ios/browser/api/sync/brave_sync_worker.h"
-
-#include "components/sync/driver/sync_service.h"
-#include "components/sync/driver/sync_service_impl.h"
-#include "components/sync/driver/sync_service_observer.h"
-#include "components/sync/protocol/sync_protocol_error.h"
+#include "components/sync/engine/sync_protocol_error.h"
+#include "components/sync/service/sync_service.h"
+#include "components/sync/service/sync_service_impl.h"
+#include "components/sync/service/sync_service_observer.h"
 #include "components/sync_device_info/device_info.h"
 #include "components/sync_device_info/device_info_sync_service.h"
 #include "components/sync_device_info/device_info_tracker.h"
 #include "components/sync_device_info/local_device_info_provider.h"
-#include "ios/chrome/browser/application_context/application_context.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
-#include "ios/chrome/browser/browser_state/chrome_browser_state_manager.h"
-#include "ios/chrome/browser/sync/device_info_sync_service_factory.h"
-#include "ios/chrome/browser/sync/sync_service_factory.h"
-#include "ios/chrome/browser/sync/sync_setup_service.h"
-#include "ios/chrome/browser/sync/sync_setup_service_factory.h"
-#include "ios/web/public/thread/web_task_traits.h"
-#include "ios/web/public/thread/web_thread.h"
+#include "ios/chrome/browser/shared/model/profile/profile_ios.h"
+#include "ios/chrome/browser/sync/model/device_info_sync_service_factory.h"
+#include "ios/chrome/browser/sync/model/sync_service_factory.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
@@ -56,9 +50,6 @@ BraveSyncAPISyncProtocolErrorResult const
 BraveSyncAPISyncProtocolErrorResult const
     BraveSyncAPISyncProtocolErrorResultThrottled =
         static_cast<NSInteger>(syncer::SyncProtocolErrorType::THROTTLED);
-BraveSyncAPISyncProtocolErrorResult const
-    BraveSyncAPISyncProtocolErrorResultClearPending =
-        static_cast<NSInteger>(syncer::SyncProtocolErrorType::CLEAR_PENDING);
 BraveSyncAPISyncProtocolErrorResult const
     BraveSyncAPISyncProtocolErrorResultTransientError =
         static_cast<NSInteger>(syncer::SyncProtocolErrorType::TRANSIENT_ERROR);
@@ -169,23 +160,23 @@ BraveSyncAPIWordsValidationStatus const
 
 @interface BraveSyncAPI () {
   std::unique_ptr<BraveSyncWorker> _worker;
-  ChromeBrowserState* _chromeBrowserState;
+  raw_ptr<ProfileIOS> _profile;
 }
 @end
 
 @implementation BraveSyncAPI
 
-- (instancetype)initWithBrowserState:(ChromeBrowserState*)mainBrowserState {
+- (instancetype)initWithBrowserState:(ProfileIOS*)mainBrowserState {
   if ((self = [super init])) {
-    _chromeBrowserState = mainBrowserState;
-    _worker.reset(new BraveSyncWorker(_chromeBrowserState));
+    _profile = mainBrowserState;
+    _worker.reset(new BraveSyncWorker(_profile));
   }
   return self;
 }
 
 - (void)dealloc {
   _worker.reset();
-  _chromeBrowserState = NULL;
+  _profile = nullptr;
 }
 
 - (bool)canSyncFeatureStart {
@@ -196,8 +187,8 @@ BraveSyncAPIWordsValidationStatus const
   return _worker->IsSyncFeatureActive();
 }
 
-- (bool)isFirstSetupComplete {
-  return _worker->IsFirstSetupComplete();
+- (bool)isInitialSyncFeatureSetupComplete {
+  return _worker->IsInitialSyncFeatureSetupComplete();
 }
 
 - (void)setSetupComplete {
@@ -261,6 +252,13 @@ BraveSyncAPIWordsValidationStatus const
 - (NSString*)getTimeLimitedWordsFromWords:(NSString*)words {
   return base::SysUTF8ToNSString(
       _worker->GetTimeLimitedWordsFromWords(base::SysNSStringToUTF8(words)));
+}
+
+- (NSDate*)getExpirationFromTimeLimitedWords:(NSString*)timeLimitedWords {
+  base::Time not_after = brave_sync::TimeLimitedWords::GetNotAfter(
+      base::SysNSStringToUTF8(timeLimitedWords));
+
+  return not_after.ToNSDate();
 }
 
 - (NSString*)getHexSeedFromQrCodeJson:(NSString*)json {
@@ -348,23 +346,23 @@ BraveSyncAPIWordsValidationStatus const
 }
 
 - (bool)isSyncAccountDeletedNoticePending {
-  brave_sync::Prefs brave_sync_prefs(_chromeBrowserState->GetPrefs());
+  brave_sync::Prefs brave_sync_prefs(_profile->GetPrefs());
   return brave_sync_prefs.IsSyncAccountDeletedNoticePending();
 }
 
 - (void)setIsSyncAccountDeletedNoticePending:
     (bool)isSyncAccountDeletedNoticePending {
-  brave_sync::Prefs brave_sync_prefs(_chromeBrowserState->GetPrefs());
+  brave_sync::Prefs brave_sync_prefs(_profile->GetPrefs());
   brave_sync_prefs.SetSyncAccountDeletedNoticePending(false);
 }
 
 - (bool)isFailedDecryptSeedNoticeDismissed {
-  brave_sync::Prefs brave_sync_prefs(_chromeBrowserState->GetPrefs());
+  brave_sync::Prefs brave_sync_prefs(_profile->GetPrefs());
   return brave_sync_prefs.IsFailedDecryptSeedNoticeDismissed();
 }
 
 - (void)dismissFailedDecryptSeedNotice {
-  brave_sync::Prefs brave_sync_prefs(_chromeBrowserState->GetPrefs());
+  brave_sync::Prefs brave_sync_prefs(_profile->GetPrefs());
   brave_sync_prefs.DismissFailedDecryptSeedNotice();
 }
 
@@ -372,15 +370,9 @@ BraveSyncAPIWordsValidationStatus const
   _worker->DeleteDevice(base::SysNSStringToUTF8(guid));
 }
 
-- (BraveSyncInternalsController*)createSyncInternalsController {
-  return [[BraveSyncInternalsController alloc]
-      initWithBrowserState:_chromeBrowserState];
-}
-
 - (id)createSyncDeviceObserver:(void (^)())onDeviceInfoChanged {
-  auto* tracker =
-      DeviceInfoSyncServiceFactory::GetForBrowserState(_chromeBrowserState)
-          ->GetDeviceInfoTracker();
+  auto* tracker = DeviceInfoSyncServiceFactory::GetForProfile(_profile)
+                      ->GetDeviceInfoTracker();
   return [[BraveSyncDeviceObserver alloc]
       initWithDeviceInfoTracker:tracker
                        callback:onDeviceInfoChanged];
@@ -389,7 +381,7 @@ BraveSyncAPIWordsValidationStatus const
 - (id)createSyncServiceObserver:(void (^)())onSyncServiceStateChanged
           onSyncServiceShutdown:(void (^)())onSyncServiceShutdown {
   auto* service = static_cast<syncer::SyncServiceImpl*>(
-      SyncServiceFactory::GetForBrowserState(_chromeBrowserState));
+      SyncServiceFactory::GetForProfile(_profile));
   return [[BraveSyncServiceObserver alloc]
       initWithSyncServiceImpl:service
          stateChangedCallback:onSyncServiceStateChanged

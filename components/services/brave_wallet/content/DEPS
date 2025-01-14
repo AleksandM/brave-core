@@ -1,0 +1,4 @@
+include_rules = [
+  "+brave/grit",
+  "+content/public/browser",
+]

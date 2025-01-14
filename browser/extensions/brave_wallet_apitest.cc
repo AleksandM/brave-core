@@ -14,6 +14,8 @@
 #include "brave/components/constants/pref_names.h"
 #include "chrome/browser/extensions/extension_apitest.h"
 #include "chrome/browser/extensions/extension_service.h"
+#include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/test/browser_test.h"
@@ -25,13 +27,11 @@ namespace {
 
 class BraveWalletExtensionApiTest : public ExtensionApiTest {
  public:
-  void SetUp() override {
-    brave::RegisterPathProvider();
+  void SetUpOnMainThread() override {
+    ExtensionApiTest::SetUpOnMainThread();
     base::PathService::Get(brave::DIR_TEST_DATA, &extension_dir_);
     extension_dir_ = extension_dir_.AppendASCII("extensions/api_test");
-    ExtensionApiTest::SetUp();
   }
-  void TearDown() override { ExtensionApiTest::TearDown(); }
   PrefService* GetPrefs() { return browser()->profile()->GetPrefs(); }
   base::FilePath extension_dir_;
 };
@@ -56,8 +56,7 @@ IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest, BraveWalletAPIAvailable) {
       LoadExtension(extension_dir_.AppendASCII("braveWallet"));
   ASSERT_TRUE(extension);
   ASSERT_TRUE(browsertest_util::ExecuteScriptInBackgroundPageNoWait(
-      browser()->profile(), ethereum_remote_client_extension_id,
-      "testBasics()"));
+      browser()->profile(), kEthereumRemoteClientExtensionId, "testBasics()"));
   ASSERT_TRUE(catcher.GetNextResult()) << message_;
 }
 
@@ -72,7 +71,7 @@ IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest,
       LoadExtension(extension_dir_.AppendASCII("braveWallet"));
   ASSERT_TRUE(extension);
   ASSERT_TRUE(browsertest_util::ExecuteScriptInBackgroundPageNoWait(
-      browser()->profile(), ethereum_remote_client_extension_id,
+      browser()->profile(), kEthereumRemoteClientExtensionId,
       "testKnownSeedValuesEndToEnd()"));
   ASSERT_TRUE(catcher.GetNextResult()) << message_;
 }
@@ -86,7 +85,7 @@ IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest,
       LoadExtension(extension_dir_.AppendASCII("braveWallet"));
   ASSERT_TRUE(extension);
   ASSERT_TRUE(browsertest_util::ExecuteScriptInBackgroundPageNoWait(
-      browser()->profile(), ethereum_remote_client_extension_id,
+      browser()->profile(), kEthereumRemoteClientExtensionId,
       "testProviderIsCryptoWallets()"));
   ASSERT_TRUE(catcher.GetNextResult()) << message_;
 }
@@ -101,7 +100,7 @@ IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest,
       LoadExtension(extension_dir_.AppendASCII("braveWallet"));
   ASSERT_TRUE(extension);
   ASSERT_TRUE(browsertest_util::ExecuteScriptInBackgroundPageNoWait(
-      browser()->profile(), ethereum_remote_client_extension_id,
+      browser()->profile(), kEthereumRemoteClientExtensionId,
       "testProviderIsBraveWalletPreferExtension()"));
   ASSERT_TRUE(catcher.GetNextResult()) << message_;
 }
@@ -115,7 +114,7 @@ IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest,
       LoadExtension(extension_dir_.AppendASCII("braveWallet"));
   ASSERT_TRUE(extension);
   ASSERT_TRUE(browsertest_util::ExecuteScriptInBackgroundPageNoWait(
-      browser()->profile(), ethereum_remote_client_extension_id,
+      browser()->profile(), kEthereumRemoteClientExtensionId,
       "testProviderIsNone()"));
   ASSERT_TRUE(catcher.GetNextResult()) << message_;
 }
@@ -129,7 +128,7 @@ IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest,
       LoadExtension(extension_dir_.AppendASCII("braveWallet"));
   ASSERT_TRUE(extension);
   ASSERT_TRUE(browsertest_util::ExecuteScriptInBackgroundPageNoWait(
-      browser()->profile(), ethereum_remote_client_extension_id,
+      browser()->profile(), kEthereumRemoteClientExtensionId,
       "testProviderIsBraveWallet()"));
   ASSERT_TRUE(catcher.GetNextResult()) << message_;
 }
@@ -157,12 +156,11 @@ IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest,
   extensions::ExtensionService* service =
       extensions::ExtensionSystem::Get(browser()->profile())
           ->extension_service();
-  ASSERT_TRUE(service->IsExtensionEnabled(ethereum_remote_client_extension_id));
+  ASSERT_TRUE(service->IsExtensionEnabled(kEthereumRemoteClientExtensionId));
   brave_wallet::SetDefaultEthereumWallet(
       browser()->profile()->GetPrefs(),
       brave_wallet::mojom::DefaultWallet::BraveWallet);
-  ASSERT_FALSE(
-      service->IsExtensionEnabled(ethereum_remote_client_extension_id));
+  ASSERT_FALSE(service->IsExtensionEnabled(kEthereumRemoteClientExtensionId));
 }
 
 IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest,
@@ -179,12 +177,11 @@ IN_PROC_BROWSER_TEST_F(BraveWalletExtensionApiTest,
   extensions::ExtensionService* service =
       extensions::ExtensionSystem::Get(browser()->profile())
           ->extension_service();
-  ASSERT_TRUE(service->IsExtensionEnabled(ethereum_remote_client_extension_id));
+  ASSERT_TRUE(service->IsExtensionEnabled(kEthereumRemoteClientExtensionId));
   brave_wallet::SetDefaultEthereumWallet(
       browser()->profile()->GetPrefs(),
       brave_wallet::mojom::DefaultWallet::BraveWalletPreferExtension);
-  ASSERT_FALSE(
-      service->IsExtensionEnabled(ethereum_remote_client_extension_id));
+  ASSERT_FALSE(service->IsExtensionEnabled(kEthereumRemoteClientExtensionId));
 }
 
 }  // namespace

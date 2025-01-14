@@ -17,16 +17,8 @@ export const StyledWrapper = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
+  padding: 15px 0px 0px 0px;
   background-color: ${(p) => p.theme.color.background01};
-`
-
-export const TopRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-direction: row;
-  width: 100%;
-  padding: 15px 15px 0px 15px;
 `
 
 export const AccountCircle = styled.div<Partial<StyleProps>>`
@@ -49,14 +41,6 @@ export const AccountNameText = styled.span`
   margin-bottom: 2px;
 `
 
-export const NetworkText = styled.span`
-  font-family: Poppins;
-  font-size: 12px;
-  line-height: 18px;
-  letter-spacing: 0.01em;
-  color: ${(p) => p.theme.color.text03};
-`
-
 export const PanelTitle = styled.span`
   width: 80%;
   font-family: Poppins;
@@ -71,8 +55,8 @@ export const PanelTitle = styled.span`
 
 export const MessageBox = styled.div<Partial<StyleProps>>`
   display: flex;
-  align-items: ${(p) => p.needsCenterAlignment ? 'center' : 'flex-start'};
-  justify-content: ${(p) => p.needsCenterAlignment ? 'center' : 'flex-start'};
+  align-items: ${(p) => (p.needsCenterAlignment ? 'center' : 'flex-start')};
+  justify-content: ${(p) => (p.needsCenterAlignment ? 'center' : 'flex-start')};
   flex-direction: column;
   border: 1px solid ${(p) => p.theme.color.divider01};
   box-sizing: border-box;
@@ -102,6 +86,7 @@ export const ButtonRow = styled.div`
   flex-direction: row;
   width: 100%;
   margin-bottom: 14px;
+  gap: 8px;
 `
 
 export const DecryptButton = styled(WalletButton)`

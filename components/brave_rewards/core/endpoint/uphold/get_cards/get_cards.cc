@@ -5,46 +5,51 @@
 
 #include "brave/components/brave_rewards/core/endpoint/uphold/get_cards/get_cards.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/json/json_reader.h"
-#include "base/strings/stringprintf.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/common/environment_config.h"
+#include "brave/components/brave_rewards/core/common/url_loader.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/uphold/uphold_card.h"
-#include "brave/components/brave_rewards/core/uphold/uphold_util.h"
 #include "net/http/http_status_code.h"
 
 namespace brave_rewards::internal::endpoint::uphold {
 
-GetCards::GetCards(LedgerImpl& ledger) : ledger_(ledger) {}
+GetCards::GetCards(RewardsEngine& engine) : engine_(engine) {}
 
 GetCards::~GetCards() = default;
 
-std::string GetCards::GetUrl() {
-  return GetServerUrl("/v0/me/cards?q=currency:BAT");
+std::string GetCards::GetUrl() const {
+  return engine_->Get<EnvironmentConfig>()
+      .uphold_api_url()
+      .Resolve("/v0/me/cards?q=currency:BAT")
+      .spec();
 }
 
-mojom::Result GetCards::CheckStatusCode(int status_code) {
+mojom::Result GetCards::CheckStatusCode(int status_code) const {
   if (status_code == net::HTTP_UNAUTHORIZED) {
-    BLOG(0, "Unauthorized access");
+    engine_->LogError(FROM_HERE) << "Unauthorized access";
     return mojom::Result::EXPIRED_TOKEN;
   }
 
-  if (status_code != net::HTTP_OK) {
-    BLOG(0, "Unexpected HTTP status: " << status_code);
-    return mojom::Result::LEDGER_ERROR;
+  if (!URLLoader::IsSuccessCode(status_code)) {
+    engine_->LogError(FROM_HERE) << "Unexpected HTTP status: " << status_code;
+    return mojom::Result::FAILED;
   }
 
-  return mojom::Result::LEDGER_OK;
+  return mojom::Result::OK;
 }
 
-mojom::Result GetCards::ParseBody(const std::string& body, std::string* id) {
+mojom::Result GetCards::ParseBody(const std::string& body,
+                                  std::string* id) const {
   DCHECK(id);
 
-  absl::optional<base::Value> value = base::JSONReader::Read(body);
+  std::optional<base::Value> value = base::JSONReader::Read(body);
   if (!value || !value->is_list()) {
-    BLOG(0, "Invalid JSON");
-    return mojom::Result::LEDGER_ERROR;
+    engine_->LogError(FROM_HERE) << "Invalid JSON";
+    return mojom::Result::FAILED;
   }
 
   auto& list = value->GetList();
@@ -63,30 +68,31 @@ mojom::Result GetCards::ParseBody(const std::string& body, std::string* id) {
       }
 
       *id = *id_str;
-      return mojom::Result::LEDGER_OK;
+      return mojom::Result::OK;
     }
   }
 
-  return mojom::Result::LEDGER_ERROR;
+  return mojom::Result::FAILED;
 }
 
-void GetCards::Request(const std::string& token, GetCardsCallback callback) {
+void GetCards::Request(const std::string& token,
+                       GetCardsCallback callback) const {
   auto request = mojom::UrlRequest::New();
   request->url = GetUrl();
-  request->headers = RequestAuthorization(token);
+  request->headers = {"Authorization: Bearer " + token};
 
-  ledger_->LoadURL(std::move(request),
-                   base::BindOnce(&GetCards::OnRequest, base::Unretained(this),
-                                  std::move(callback)));
+  engine_->Get<URLLoader>().Load(
+      std::move(request), URLLoader::LogLevel::kDetailed,
+      base::BindOnce(&GetCards::OnRequest, base::Unretained(this),
+                     std::move(callback)));
 }
 
 void GetCards::OnRequest(GetCardsCallback callback,
-                         mojom::UrlResponsePtr response) {
+                         mojom::UrlResponsePtr response) const {
   DCHECK(response);
-  LogUrlResponse(__func__, *response);
 
   mojom::Result result = CheckStatusCode(response->status_code);
-  if (result != mojom::Result::LEDGER_OK) {
+  if (result != mojom::Result::OK) {
     return std::move(callback).Run(result, "");
   }
 

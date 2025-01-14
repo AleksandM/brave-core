@@ -1,8 +1,8 @@
 diff --git a/third_party/blink/renderer/core/frame/dom_window.h b/third_party/blink/renderer/core/frame/dom_window.h
-index 0cd489707efdbbd5e64cdfe8007394377f922852..2127f2a2801513072e7bfbaa64e1463eaf88f852 100644
+index d67c587e9830f08613bc9930f83ec673b43b206e..86c27bed2fbf0d0c86491b90cc54a87290dcaf6d 100644
 --- a/third_party/blink/renderer/core/frame/dom_window.h
 +++ b/third_party/blink/renderer/core/frame/dom_window.h
-@@ -182,6 +182,7 @@ class CORE_EXPORT DOMWindow : public EventTargetWithInlineData {
+@@ -201,6 +201,7 @@ class CORE_EXPORT DOMWindow : public WindowProperties {
  
    void DisconnectFromFrame() { frame_ = nullptr; }
  

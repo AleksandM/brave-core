@@ -6,7 +6,10 @@
 #ifndef BRAVE_BROWSER_UI_BRAVE_ICON_WITH_BADGE_IMAGE_SOURCE_H_
 #define BRAVE_BROWSER_UI_BRAVE_ICON_WITH_BADGE_IMAGE_SOURCE_H_
 
+#include <optional>
+
 #include "chrome/browser/ui/extensions/icon_with_badge_image_source.h"
+#include "third_party/skia/include/core/SkColor.h"
 
 namespace gfx {
 class Canvas;
@@ -15,8 +18,8 @@ class Rect;
 
 namespace brave {
 
-extern const SkColor kBadgeNotificationBG;
-extern const SkColor kBadgeTextColor;
+inline constexpr SkColor kBadgeNotificationBG = SkColorSetRGB(0xfb, 0x54, 0x2b);
+inline constexpr SkColor kBadgeTextColor = SK_ColorWHITE;
 
 // The purpose of this subclass is to:
 // - Paint the BraveAction badge in a custom location and with a different size
@@ -48,9 +51,9 @@ class BraveIconWithBadgeImageSource : public IconWithBadgeImageSource {
   gfx::Rect GetIconAreaRect() const override;
   gfx::Rect GetBadgeRect(size_t badge_width) const;
 
-  absl::optional<int> GetCustomGraphicSize() override;
-  absl::optional<int> GetCustomGraphicXOffset() override;
-  absl::optional<int> GetCustomGraphicYOffset() override;
+  std::optional<int> GetCustomGraphicSize() override;
+  std::optional<int> GetCustomGraphicXOffset() override;
+  std::optional<int> GetCustomGraphicYOffset() override;
 
   bool allow_empty_text_ = false;
   size_t content_image_size_;

@@ -5,11 +5,14 @@
 
 #include "brave/browser/ui/commander/commander_service_factory.h"
 
+#include <memory>
+
 #include "base/no_destructor.h"
 #include "brave/browser/ui/commander/commander_service.h"
 #include "brave/components/commander/common/pref_names.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_keyed_service_factory.h"
+#include "chrome/browser/profiles/profile_selections.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "content/public/browser/browser_context.h"
@@ -30,13 +33,20 @@ CommanderService* CommanderServiceFactory::GetForBrowserContext(
 }
 
 CommanderServiceFactory::CommanderServiceFactory()
-    : ProfileKeyedServiceFactory("CommanderService",
-                                 ProfileSelections::BuildForAllProfiles()) {}
+    : ProfileKeyedServiceFactory(
+          "CommanderService",
+          ProfileSelections::Builder()
+              .WithRegular(ProfileSelection::kOwnInstance)
+              .WithGuest(ProfileSelection::kOwnInstance)
+              .WithSystem(ProfileSelection::kNone)
+              .Build()) {}
 CommanderServiceFactory::~CommanderServiceFactory() = default;
 
-KeyedService* CommanderServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+CommanderServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new CommanderService(Profile::FromBrowserContext(context));
+  return std::make_unique<CommanderService>(
+      Profile::FromBrowserContext(context));
 }
 
 void CommanderServiceFactory::RegisterProfilePrefs(

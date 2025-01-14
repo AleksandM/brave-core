@@ -1,16 +1,27 @@
+-keep class org.chromium.components.media_router.caf.CastOptionsProvider { *; }
+
 -keep class com.google.android.material.bottomsheet.BottomSheetBehavior { *; }
+
+-keep class com.google.android.material.behavior.HideBottomViewOnScrollBehavior { *; }
 
 -keep class org.chromium.chrome.browser.BraveSyncWorker { *; }
 
--keep class org.chromium.chrome.browser.BraveSyncInformers { *; }
-
 # Add methods for invocation below
 -keep class org.chromium.chrome.browser.ChromeTabbedActivity {
+    *** mLayoutManager;
+    *** mMultiInstanceManager;
     *** hideOverview(...);
+    *** maybeHandleUrlIntent(...);
 }
 
 -keep class org.chromium.chrome.browser.omnibox.suggestions.AutocompleteCoordinator {
     *** createViewProvider(...);
+}
+
+-keep class org.chromium.chrome.browser.omnibox.suggestions.AutocompleteMediator {
+    *** mContext;
+    *** mDataProvider;
+    *** loadUrlForOmniboxMatch(...);
 }
 
 -keep class org.chromium.components.browser_ui.site_settings.ContentSettingsResources {
@@ -19,7 +30,7 @@
 
 -keep class org.chromium.components.browser_ui.site_settings.SingleCategorySettings {
     *** mCategory;
-    *** getAddExceptionDialogMessage(...);
+    *** getAddExceptionDialogMessageResourceId(...);
     *** resetList(...);
 }
 
@@ -43,5 +54,45 @@
 }
 
 -keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
--keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
 
+-keep class org.chromium.chrome.browser.tabmodel.TabGroupModelFilterImpl {
+    *** shouldUseParentIds(...);
+    *** isTabModelRestored(...);
+}
+
+-keep class org.chromium.chrome.browser.password_manager.settings.ExportFlow {
+    *** runCreateFileOnDiskIntent(...);
+}
+
+-keep class org.chromium.chrome.browser.omnibox.suggestions.editurl.EditUrlSuggestionProcessor {
+    *** onCopyLink(...);
+}
+
+-keep class org.chromium.chrome.browser.toolbar.top.ToolbarPhone {
+    *** mLocationBarBackgroundColorForNtp;
+    *** mToolbarBackgroundColorForNtp;
+}
+
+-keep class org.chromium.chrome.browser.hub.HubManagerImpl {
+    *** ensureHubCoordinatorIsInitialized(...);
+}
+
+-keep class org.chromium.chrome.browser.tasks.tab_management.IncognitoTabSwitcherPane {
+    *** mReferenceButtonData;
+}
+
+-keep class org.chromium.chrome.browser.undo_tab_close_snackbar.UndoBarController {
+    *** showUndoBar(...);
+}
+
+-keep class org.chromium.chrome.browser.tabbed_mode.TabbedNavigationBarColorController {
+    *** getNavigationBarColor(...);
+}
+
+-keep class org.chromium.components.browser_ui.media.MediaSessionHelper {
+    *** mWebContents;
+    *** mNotificationInfoBuilder;
+    *** mMediaSessionActions;
+    *** showNotification(...);
+    *** createMediaSessionObserver(...);
+}

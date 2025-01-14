@@ -6,13 +6,14 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_CREATIVES_NOTIFICATION_ADS_NOTIFICATION_AD_MANAGER_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_CREATIVES_NOTIFICATION_ADS_NOTIFICATION_AD_MANAGER_H_
 
+#include <optional>
 #include <string>
 
 #include "base/containers/circular_deque.h"
-#include "brave/components/brave_ads/core/notification_ad_info.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace brave_ads {
+
+struct NotificationAdInfo;
 
 class NotificationAdManager final {
  public:
@@ -21,22 +22,17 @@ class NotificationAdManager final {
   NotificationAdManager(const NotificationAdManager&) = delete;
   NotificationAdManager& operator=(const NotificationAdManager&) = delete;
 
-  NotificationAdManager(NotificationAdManager&&) noexcept = delete;
-  NotificationAdManager& operator=(NotificationAdManager&&) noexcept = delete;
-
   ~NotificationAdManager();
 
   static NotificationAdManager& GetInstance();
 
-  absl::optional<NotificationAdInfo> MaybeGetForPlacementId(
+  std::optional<NotificationAdInfo> MaybeGetForPlacementId(
       const std::string& placement_id) const;
 
   void Add(const NotificationAdInfo& ad);
 
-  bool Remove(const std::string& placement_id);
-  void RemoveAll();
-
-  void CloseAll();
+  void Remove(const std::string& placement_id, bool should_close);
+  void RemoveAll(bool should_close);
 
   bool Exists(const std::string& placement_id) const;
 

@@ -5,51 +5,58 @@
 
 import TransportWebHID from '@ledgerhq/hw-transport-webhid'
 import Sol from '@ledgerhq/hw-app-solana'
+import { TransportStatusError } from '@ledgerhq/errors'
 import {
   LedgerCommand,
-  UnlockResponse
-} from './ledger-messages'
-import {
+  UnlockResponse,
   SolGetAccountCommand,
   SolGetAccountResponse,
-  SolGetAccountResponsePayload,
   SolSignTransactionCommand,
-  SolSignTransactionResponsePayload,
   SolSignTransactionResponse
-} from './sol-ledger-messages'
+} from './ledger-messages'
 import { LedgerUntrustedMessagingTransport } from './ledger-untrusted-transport'
 
-// SolanaLedgerUntrustedMessagingTransport makes calls to the Solana app on a Ledger device
-export class SolanaLedgerUntrustedMessagingTransport extends LedgerUntrustedMessagingTransport {
-  constructor (targetWindow: Window, targetUrl: string) {
+/** makes calls to the Solana app on a Ledger device */
+export class SolanaLedgerUntrustedMessagingTransport //
+  extends LedgerUntrustedMessagingTransport
+{
+  constructor(targetWindow: Window, targetUrl: string) {
     super(targetWindow, targetUrl)
-    this.addCommandHandler<UnlockResponse>(LedgerCommand.Unlock, this.handleUnlock)
-    this.addCommandHandler<SolGetAccountResponse>(LedgerCommand.GetAccount, this.handleGetAccount)
-    this.addCommandHandler<SolSignTransactionResponse>(LedgerCommand.SignTransaction, this.handleSignTransaction)
+    this.addCommandHandler<UnlockResponse>(
+      LedgerCommand.Unlock,
+      this.handleUnlock
+    )
+    this.addCommandHandler<SolGetAccountResponse>(
+      LedgerCommand.GetAccount,
+      this.handleGetAccount
+    )
+    this.addCommandHandler<SolSignTransactionResponse>(
+      LedgerCommand.SignTransaction,
+      this.handleSignTransaction
+    )
   }
 
-  private handleGetAccount = async (command: SolGetAccountCommand): Promise<SolGetAccountResponse> => {
+  private handleGetAccount = async (
+    command: SolGetAccountCommand
+  ): Promise<SolGetAccountResponse> => {
     const transport = await TransportWebHID.create()
     const app = new Sol(transport)
     try {
       const result = await app.getAddress(command.path)
-      const getAccountResponsePayload: SolGetAccountResponsePayload = {
-        success: true,
-        address: result.address
-      }
       const response: SolGetAccountResponse = {
-        id: command.id,
-        command: command.command,
-        payload: getAccountResponsePayload,
-        origin: command.origin
+        ...command,
+        payload: { success: true, address: result.address }
       }
       return response
     } catch (error) {
       const response: SolGetAccountResponse = {
-        id: command.id,
-        command: command.command,
-        payload: error,
-        origin: command.origin
+        ...command,
+        payload: {
+          success: false,
+          error: (error as Error).message,
+          code:
+            error instanceof TransportStatusError ? error.statusCode : undefined
+        }
       }
       return response
     } finally {
@@ -57,28 +64,34 @@ export class SolanaLedgerUntrustedMessagingTransport extends LedgerUntrustedMess
     }
   }
 
-  private handleSignTransaction = async (command: SolSignTransactionCommand): Promise<SolSignTransactionResponse> => {
+  private handleSignTransaction = async (
+    command: SolSignTransactionCommand
+  ): Promise<SolSignTransactionResponse> => {
     const transport = await TransportWebHID.create()
     const app = new Sol(transport)
     try {
-      const result = await app.signTransaction(command.path, Buffer.from(command.rawTxBytes))
-      const signTransactionResponsePayload: SolSignTransactionResponsePayload = {
-        success: true,
-        signature: result.signature
-      }
+      const result = await app.signTransaction(
+        command.path,
+        Buffer.from(command.rawTxBytes)
+      )
+
       const response: SolSignTransactionResponse = {
-        id: command.id,
-        command: command.command,
-        payload: signTransactionResponsePayload,
-        origin: command.origin
+        ...command,
+        payload: {
+          success: true,
+          untrustedSignatureBytes: result.signature
+        }
       }
       return response
     } catch (error) {
       const response: SolSignTransactionResponse = {
-        id: command.id,
-        command: command.command,
-        payload: error,
-        origin: command.origin
+        ...command,
+        payload: {
+          success: false,
+          error: (error as Error).message,
+          code:
+            error instanceof TransportStatusError ? error.statusCode : undefined
+        }
       }
       return response
     } finally {

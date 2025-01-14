@@ -5,15 +5,15 @@
 
 package org.chromium.chrome.browser.sync;
 
+import org.jni_zero.CalledByNative;
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import org.chromium.base.Log;
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.CalledByNative;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -38,7 +38,7 @@ public class BraveSyncDevices {
     }
 
     public BraveSyncDevices() {
-        Init();
+        init();
     }
 
     @CalledByNative
@@ -47,18 +47,23 @@ public class BraveSyncDevices {
         mNativeBraveSyncDevicesAndroid = nativePtr;
     }
 
-    private void Init() {
+    private void init() {
         if (mNativeBraveSyncDevicesAndroid == 0) {
             BraveSyncDevicesJni.get().init(BraveSyncDevices.this);
         }
     }
 
+    /**
+     * A finalizer is required to ensure that the native object associated with this descriptor gets
+     * torn down, otherwise there would be a memory leak.
+     */
+    @SuppressWarnings("Finalize")
     @Override
     protected void finalize() {
-        Destroy();
+        destroy();
     }
 
-    private void Destroy() {
+    private void destroy() {
         if (mNativeBraveSyncDevicesAndroid != 0) {
             BraveSyncDevicesJni.get().destroy(mNativeBraveSyncDevicesAndroid);
             mNativeBraveSyncDevicesAndroid = 0;
@@ -98,7 +103,7 @@ public class BraveSyncDevices {
         }
     }
 
-    public class SyncDeviceInfo {
+    public static class SyncDeviceInfo {
         public String mName;
         public boolean mIsCurrentDevice;
         public boolean mSupportsSelfDelete;
@@ -107,7 +112,7 @@ public class BraveSyncDevices {
         public String mGuid;
     }
 
-    public ArrayList<SyncDeviceInfo> GetSyncDeviceList() {
+    public ArrayList<SyncDeviceInfo> getSyncDeviceList() {
         ArrayList<SyncDeviceInfo> deviceList = new ArrayList<SyncDeviceInfo>();
         String json =
                 BraveSyncDevicesJni.get().getSyncDeviceListJson(mNativeBraveSyncDevicesAndroid);
@@ -116,7 +121,7 @@ public class BraveSyncDevices {
         try {
             JSONObject result = new JSONObject(json);
             JSONArray devices = result.getJSONArray("devices");
-            Log.i(TAG, "GetSyncDeviceList devices length is " + devices.length());
+            Log.i(TAG, "getSyncDeviceList devices length is " + devices.length());
             for (int i = 0; i < devices.length(); i++) {
                 SyncDeviceInfo deviceInfo = new SyncDeviceInfo();
                 JSONObject device = devices.getJSONObject(i);
@@ -130,14 +135,14 @@ public class BraveSyncDevices {
                 deviceList.add(deviceInfo);
             }
         } catch (JSONException e) {
-            Log.e(TAG, "GetSyncDeviceList JSONException error " + e);
+            Log.e(TAG, "getSyncDeviceList JSONException error " + e);
         } catch (IllegalStateException e) {
-            Log.e(TAG, "GetSyncDeviceList IllegalStateException error " + e);
+            Log.e(TAG, "getSyncDeviceList IllegalStateException error " + e);
         }
         return deviceList;
     }
 
-    public void DeleteDevice(String deviceGuid) {
+    public void deleteDevice(String deviceGuid) {
         BraveSyncDevicesJni.get().deleteDevice(mNativeBraveSyncDevicesAndroid, deviceGuid);
     }
 

@@ -8,14 +8,14 @@
 
 namespace brave_wallet {
 
-constexpr int kSolanaKeypairSize = 64;
-constexpr int kSolanaSignatureSize = 64;
-constexpr int kSolanaPrikeySize = 32;
-constexpr int kSolanaPubkeySize = 32;
-constexpr int kSolanaBlockhashSize = 32;
+inline constexpr size_t kSolanaKeypairSize = 64;
+inline constexpr size_t kSolanaSignatureSize = 64;
+inline constexpr size_t kSolanaPrikeySize = 32;
+inline constexpr size_t kSolanaPubkeySize = 32;
+inline constexpr size_t kSolanaHashSize = 32;
 // 1232 = 1280(IPv6 minimum MTU) - 40(size of the IPv6 header) - 8(size of the
 // fragment header)
-constexpr size_t kSolanaMaxTxSize = 1232;
+inline constexpr size_t kSolanaMaxTxSize = 1232;
 
 }  // namespace brave_wallet
 

@@ -3,147 +3,110 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
-// @ts-nocheck TODO(petemill): Define types and remove ts-nocheck
-
-import {sendWithPromise} from 'chrome://resources/js/cr.js';
-
-// @ts-nocheck TODO(petemill): Define types and remove ts-nocheck
+import {sendWithPromise} from 'chrome://resources/js/cr.js'
 
 export interface DefaultBraveShieldsBrowserProxy {
-  /**
-   * @return {!Promise<boolean>}
-   */
-  isAdControlEnabled()
-  /**
-   * @param {string} value name.
-   */
-  setAdControlType(value)
+  isAdControlEnabled: () => Promise<boolean>
+  setAdControlType: (value: boolean) => void
 
-  /**
-   * @return {!Promise<boolean>}
-   */
-  isFirstPartyCosmeticFilteringEnabled()
-  /**
-   * @param {string} value name.
-   */
-  setCosmeticFilteringControlType(value)
+  isFirstPartyCosmeticFilteringEnabled: () => Promise<boolean>
+  setCosmeticFilteringControlType: (value: string) => void
 
-  /**
-   * @return {!Promise<string>}
-   */
-  getCookieControlType()
-  /**
-   * @param {string} value name.
-   */
-  setCookieControlType(value)
+  getCookieControlType: () => Promise<string>
+  setCookieControlType: (value: string) => void
 
-  /**
-   * @return {!Promise<string>}
-   */
-  getFingerprintingControlType()
-  /**
-   * @param {string} value name.
-   */
-  setFingerprintingControlType(value)
+  getFingerprintingControlType: () => Promise<string>
+  setFingerprintingControlType: (value: string) => void
 
-  /**
-   * @param {string} value name.
-   */
-  setHTTPSEverywhereEnabled(value)
+  getFingerprintingBlockEnabled: () => Promise<boolean>
+  setFingerprintingBlockEnabled: (value: boolean) => void
 
-  /**
-   * @return {!Promise<string>}
-   */
-  getHttpsUpgradeControlType()
-  /**
-   * @param {string} value name.
-   */
-  setHttpsUpgradeControlType(value)
+  getHttpsUpgradeControlType: () => Promise<string>
+  setHttpsUpgradeControlType: (value: string) => void
 
-  /**
-   * @param {string} value name.
-   */
-  setNoScriptControlType(value)
+  setNoScriptControlType: (value: boolean) => void
 
-  /**
-   * @return {!Promise<Boolean>}
-   */
-  getForgetFirstPartyStorageEnabled()
-  /**
-   * @param {Boolean} value name.
-   */
-  setForgetFirstPartyStorageEnabled(value)
+  getForgetFirstPartyStorageEnabled: () => Promise<boolean>
+  setForgetFirstPartyStorageEnabled: (value: boolean) => void
+
+  setContactInfoSaveFlag: (value: boolean) => void
+  getContactInfoSaveFlag: () => Promise<boolean>
+
+  getHideBlockAllCookieTogle: () => Promise<boolean>
 }
 
-export class DefaultBraveShieldsBrowserProxyImpl implements DefaultBraveShieldsBrowserProxy {
-  /** @override */
-  isAdControlEnabled() {
-    return sendWithPromise('isAdControlEnabled');
+export class DefaultBraveShieldsBrowserProxyImpl
+implements DefaultBraveShieldsBrowserProxy {
+  isAdControlEnabled () {
+    return sendWithPromise('isAdControlEnabled')
   }
 
-  /** @override */
-  setAdControlType(value) {
-    chrome.send('setAdControlType', [value]);
+  setAdControlType (value: boolean) {
+    chrome.send('setAdControlType', [value])
   }
 
-  /** @override */
-  isFirstPartyCosmeticFilteringEnabled() {
-    return sendWithPromise('isFirstPartyCosmeticFilteringEnabled');
+  isFirstPartyCosmeticFilteringEnabled () {
+    return sendWithPromise('isFirstPartyCosmeticFilteringEnabled')
   }
 
-  /** @override */
-  setCosmeticFilteringControlType(value) {
-    chrome.send('setCosmeticFilteringControlType', [value]);
+  setCosmeticFilteringControlType (value: string) {
+    chrome.send('setCosmeticFilteringControlType', [value])
   }
 
-  /** @override */
-  getCookieControlType() {
-    return sendWithPromise('getCookieControlType');
+  getCookieControlType () {
+    return sendWithPromise('getCookieControlType')
   }
 
-  /** @override */
-  setCookieControlType(value) {
-    chrome.send('setCookieControlType', [value]);
+  setCookieControlType (value: string) {
+    chrome.send('setCookieControlType', [value])
   }
 
-  /** @override */
-  getFingerprintingControlType() {
-    return sendWithPromise('getFingerprintingControlType');
+  getFingerprintingControlType () {
+    return sendWithPromise('getFingerprintingControlType')
   }
 
-  /** @override */
-  setFingerprintingControlType(value) {
-    chrome.send('setFingerprintingControlType', [value]);
+  setFingerprintingControlType (value: string) {
+    chrome.send('setFingerprintingControlType', [value])
   }
 
-  /** @override */
-  setHTTPSEverywhereEnabled(value) {
-    chrome.send('setHTTPSEverywhereEnabled', [value]);
+  getFingerprintingBlockEnabled () {
+    return sendWithPromise('getFingerprintingBlockEnabled')
   }
 
-  /** @override */
-  getHttpsUpgradeControlType() {
-    return sendWithPromise('getHttpsUpgradeControlType');
+  setFingerprintingBlockEnabled (value: boolean) {
+    chrome.send('setFingerprintingBlockEnabled', [value])
   }
 
-  /** @override */
-  setHttpsUpgradeControlType(value) {
-    chrome.send('setHttpsUpgradeControlType', [value]);
+  getHttpsUpgradeControlType () {
+    return sendWithPromise('getHttpsUpgradeControlType')
   }
 
-  /** @override */
-  setNoScriptControlType(value) {
-    chrome.send('setNoScriptControlType', [value]);
+  setHttpsUpgradeControlType (value: string) {
+    chrome.send('setHttpsUpgradeControlType', [value])
   }
 
-  /** @override */
-  getForgetFirstPartyStorageEnabled() {
-    return sendWithPromise('getForgetFirstPartyStorageEnabled');
+  setNoScriptControlType (value: boolean) {
+    chrome.send('setNoScriptControlType', [value])
   }
 
-  /** @override */
-  setForgetFirstPartyStorageEnabled(value) {
-    chrome.send('setForgetFirstPartyStorageEnabled', [value]);
+  getForgetFirstPartyStorageEnabled () {
+    return sendWithPromise('getForgetFirstPartyStorageEnabled')
+  }
+
+  setForgetFirstPartyStorageEnabled (value: boolean) {
+    chrome.send('setForgetFirstPartyStorageEnabled', [value])
+  }
+
+  setContactInfoSaveFlag (value: boolean) {
+    chrome.send('setContactInfoSaveFlag', [value])
+  }
+
+  getContactInfoSaveFlag () {
+    return sendWithPromise('getContactInfoSaveFlag')
+  }
+
+  getHideBlockAllCookieTogle () {
+    return sendWithPromise('getHideBlockAllCookieTogle')
   }
 
   static getInstance(): DefaultBraveShieldsBrowserProxy {

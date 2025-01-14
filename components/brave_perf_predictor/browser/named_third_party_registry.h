@@ -6,8 +6,10 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_PERF_PREDICTOR_BROWSER_NAMED_THIRD_PARTY_REGISTRY_H_
 #define BRAVE_COMPONENTS_BRAVE_PERF_PREDICTOR_BROWSER_NAMED_THIRD_PARTY_REGISTRY_H_
 
+#include <optional>
 #include <string>
-#include <tuple>
+#include <string_view>
+#include <utility>
 
 #include "base/containers/flat_map.h"
 #include "base/memory/weak_ptr.h"
@@ -30,18 +32,17 @@ class NamedThirdPartyRegistry : public KeyedService {
   // Parse the provided mappings (in JSON format), potentially discarding
   // entities not relevant to the bandwith prediction model (i.e. those not
   // seen in training the model).
-  bool LoadMappings(const base::StringPiece entities, bool discard_irrelevant);
+  bool LoadMappings(std::string_view entities, bool discard_irrelevant);
   // Default initialization - asynchronously load from bundled resource
   void InitializeDefault();
-  absl::optional<std::string> GetThirdParty(
-      const base::StringPiece domain) const;
+  std::optional<std::string> GetThirdParty(std::string_view domain) const;
 
  private:
   bool IsInitialized() const { return initialized_; }
   void MarkInitialized(bool initialized) { initialized_ = initialized; }
   void UpdateMappings(
-      std::tuple<base::flat_map<std::string, std::string>,
-                 base::flat_map<std::string, std::string>> entity_mappings);
+      std::pair<base::flat_map<std::string, std::string>,
+                base::flat_map<std::string, std::string>> entity_mappings);
 
   bool initialized_ = false;
   base::flat_map<std::string, std::string> entity_by_domain_;

@@ -13,8 +13,9 @@
 #include "brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/html/node_html_element.h"
 #include "brave/third_party/blink/renderer/core/brave_page_graph/graph_item/node/html/node_html_text.h"
 #include "brave/third_party/blink/renderer/core/brave_page_graph/graphml.h"
+#include "brave/third_party/blink/renderer/core/brave_page_graph/types.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
-#include "third_party/blink/renderer/platform/wtf/text/text_stream.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder_stream.h"
 
 using ::blink::DOMNodeId;
 
@@ -23,9 +24,10 @@ namespace brave_page_graph {
 EdgeNodeInsert::EdgeNodeInsert(GraphItemContext* context,
                                NodeActor* out_node,
                                NodeHTML* in_node,
+                               const FrameId& frame_id,
                                NodeHTMLElement* parent_node,
                                NodeHTML* prior_sibling_node)
-    : EdgeNode(context, out_node, in_node),
+    : EdgeNode(context, out_node, in_node, frame_id),
       parent_node_(parent_node),
       prior_sibling_node_(prior_sibling_node) {}
 
@@ -49,7 +51,7 @@ ItemDesc EdgeNodeInsert::GetItemDesc() const {
 
   const GraphNode* prior_sibling_node = GetPriorSiblingNode();
 
-  WTF::TextStream ts;
+  StringBuilder ts;
   ts << EdgeNode::GetItemDesc();
   ts << " [parent: " << parent_node->GetItemDesc() << "]";
 
@@ -57,7 +59,7 @@ ItemDesc EdgeNodeInsert::GetItemDesc() const {
     ts << " [prior sibling: " << prior_sibling_node->GetItemDesc() << "]";
   }
 
-  return ts.Release();
+  return ts.ReleaseString();
 }
 
 void EdgeNodeInsert::AddGraphMLAttributes(xmlDocPtr doc,

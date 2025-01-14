@@ -4,16 +4,24 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
+import { PanelWrapper } from '../../../panel/style'
+import { LongWrapper } from '../../../stories/style'
 import WalletPanelStory from '../../../stories/wrappers/wallet-panel-story-wrapper'
 
 import { ConfirmTransactionPanel } from './confirm-transaction-panel'
 
-export const _ConfirmTransactionPanel = () => {
-  return <WalletPanelStory>
-    <ConfirmTransactionPanel />
-  </WalletPanelStory>
+export const _ConfirmTransactionPanel = {
+  render: () => {
+    return (
+      <WalletPanelStory>
+        <PanelWrapper>
+          <LongWrapper>
+            <ConfirmTransactionPanel retrySimulation={() => {}} />
+          </LongWrapper>
+        </PanelWrapper>
+      </WalletPanelStory>
+    )
+  }
 }
 
-_ConfirmTransactionPanel.storyName = 'Confirm Transaction Panel'
-
-export default _ConfirmTransactionPanel
+export default { component: ConfirmTransactionPanel }

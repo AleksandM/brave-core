@@ -19,8 +19,9 @@ namespace brave_vpn {
 
 class BraveVpnDnsSettingsNotificiationDialogView
     : public views::DialogDelegateView {
+  METADATA_HEADER(BraveVpnDnsSettingsNotificiationDialogView,
+                  views::DialogDelegateView)
  public:
-  METADATA_HEADER(BraveVpnDnsSettingsNotificiationDialogView);
 
   static void Show(Browser* browser);
 
@@ -39,7 +40,7 @@ class BraveVpnDnsSettingsNotificiationDialogView
   void OnLearnMoreLinkClicked();
 
   // views::DialogDelegate overrides:
-  ui::ModalType GetModalType() const override;
+  ui::mojom::ModalType GetModalType() const override;
   bool ShouldShowCloseButton() const override;
   bool ShouldShowWindowTitle() const override;
 

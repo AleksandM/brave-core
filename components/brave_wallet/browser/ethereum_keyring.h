@@ -7,18 +7,21 @@
 #define BRAVE_COMPONENTS_BRAVE_WALLET_BROWSER_ETHEREUM_KEYRING_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "brave/components/brave_wallet/browser/hd_keyring.h"
+#include "base/containers/span.h"
+#include "brave/components/brave_wallet/browser/secp256k1_hd_keyring.h"
 #include "brave/components/brave_wallet/common/brave_wallet_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace brave_wallet {
 
-class EthereumKeyring : public HDKeyring {
+class EthTransaction;
+
+class EthereumKeyring : public Secp256k1HDKeyring {
  public:
-  EthereumKeyring() = default;
+  explicit EthereumKeyring(base::span<const uint8_t> seed);
   ~EthereumKeyring() override = default;
   EthereumKeyring(const EthereumKeyring&) = delete;
   EthereumKeyring& operator=(const EthereumKeyring&) = delete;
@@ -27,12 +30,12 @@ class EthereumKeyring : public HDKeyring {
   // message: The keccak256 hash of the message (33 bytes = 04 prefix + 32
   // bytes)
   // signature: The 64 byte signature + v parameter (0 chain id assumed)
-  static bool RecoverAddress(const std::vector<uint8_t>& message,
-                             const std::vector<uint8_t>& signature,
-                             std::string* address);
+  static std::optional<std::string> RecoverAddress(
+      base::span<const uint8_t> message,
+      base::span<const uint8_t> signature);
 
   std::vector<uint8_t> SignMessage(const std::string& address,
-                                   const std::vector<uint8_t>& message,
+                                   base::span<const uint8_t> message,
                                    uint256_t chain_id,
                                    bool is_eip712);
 
@@ -42,17 +45,20 @@ class EthereumKeyring : public HDKeyring {
 
   bool GetPublicKeyFromX25519_XSalsa20_Poly1305(const std::string& address,
                                                 std::string* key);
-  absl::optional<std::vector<uint8_t>>
-  DecryptCipherFromX25519_XSalsa20_Poly1305(
+  std::optional<std::vector<uint8_t>> DecryptCipherFromX25519_XSalsa20_Poly1305(
       const std::string& version,
-      const std::vector<uint8_t>& nonce,
-      const std::vector<uint8_t>& ephemeral_public_key,
-      const std::vector<uint8_t>& ciphertext,
+      base::span<const uint8_t> nonce,
+      base::span<const uint8_t> ephemeral_public_key,
+      base::span<const uint8_t> ciphertext,
       const std::string& address);
 
+  std::string EncodePrivateKeyForExport(const std::string& address) override;
+
  private:
-  std::string GetAddressInternal(HDKeyBase* hd_key) const override;
-  std::unique_ptr<HDKeyBase> DeriveAccount(uint32_t index) const override;
+  FRIEND_TEST_ALL_PREFIXES(EthereumKeyringUnitTest, ConstructRootHDKey);
+
+  std::string GetAddressInternal(const HDKey& hd_key) const override;
+  std::unique_ptr<HDKey> DeriveAccount(uint32_t index) const override;
 };
 
 }  // namespace brave_wallet

@@ -11,14 +11,18 @@
 
 #include "base/functional/bind.h"
 #include "brave/app/brave_command_ids.h"
+#include "brave/browser/ai_chat/ai_chat_utils.h"
 #include "brave/browser/brave_wallet/brave_wallet_context_utils.h"
 #include "brave/browser/ui/tabs/brave_tab_prefs.h"
-#include "brave/browser/ui/tabs/features.h"
 #include "brave/browser/ui/views/tabs/vertical_tab_utils.h"
+#include "brave/browser/ui/views/toolbar/ai_chat_button.h"
 #include "brave/browser/ui/views/toolbar/bookmark_button.h"
+#include "brave/browser/ui/views/toolbar/side_panel_button.h"
 #include "brave/browser/ui/views/toolbar/wallet_button.h"
+#include "brave/components/ai_chat/core/common/pref_names.h"
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
-#include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
+#include "brave/components/brave_wallet/browser/pref_names.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/constants/pref_names.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/browser_process.h"
@@ -28,18 +32,21 @@
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/layout_constants.h"
+#include "chrome/browser/ui/ui_features.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_bubble_view.h"
+#include "chrome/browser/ui/views/toolbar/pinned_toolbar_actions_container.h"
+#include "chrome/browser/ui/views/toolbar/toolbar_view.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "ui/base/hit_test.h"
+#include "ui/base/metadata/metadata_impl_macros.h"
 #include "ui/base/window_open_disposition_utils.h"
 #include "ui/events/event.h"
 #include "ui/views/window/hit_test_utils.h"
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
-#include "brave/browser/brave_vpn/vpn_utils.h"
+#include "brave/browser/brave_vpn/brave_vpn_service_factory.h"
 #include "brave/browser/ui/views/toolbar/brave_vpn_button.h"
-#include "brave/components/brave_vpn/common/brave_vpn_utils.h"
 #include "brave/components/brave_vpn/common/pref_names.h"
 #endif
 
@@ -52,12 +59,13 @@ constexpr int kLocationBarMaxWidth = 1080;
 
 double GetLocationBarMarginHPercent(int toolbar_width) {
   double location_bar_margin_h_pc = 0.07;
-  if (toolbar_width < 700)
+  if (toolbar_width < 700) {
     location_bar_margin_h_pc = 0;
-  else if (toolbar_width < 850)
+  } else if (toolbar_width < 850) {
     location_bar_margin_h_pc = 0.03;
-  else if (toolbar_width < 1000)
+  } else if (toolbar_width < 1000) {
     location_bar_margin_h_pc = 0.05;
+  }
   return location_bar_margin_h_pc;
 }
 
@@ -129,6 +137,14 @@ void BraveToolbarView::Init() {
   // See brave_non_client_hit_test_helper.h
   views::SetHitTestComponent(this, HTCAPTION);
 
+  DCHECK(location_bar_);
+  // Get ToolbarView's container_view as a parent of location_bar_ because
+  // container_view's type in ToolbarView is internal to toolbar_view.cc.
+  views::View* container_view = location_bar_->parent();
+  DCHECK(container_view);
+
+  views::SetHitTestComponent(container_view, HTCAPTION);
+
   // For non-normal mode, we don't have to more.
   if (display_mode_ != DisplayMode::NORMAL) {
     brave_initialized_ = true;
@@ -136,6 +152,14 @@ void BraveToolbarView::Init() {
   }
 
   Profile* profile = browser()->profile();
+
+  // We don't use divider between extensions container and other toolbar
+  // buttons. Upstream conditionally creates |toolbar_divider_|, they check
+  // whether it's null or not. So safe to make remove here.
+  if (toolbar_divider_) {
+    container_view->RemoveChildView(toolbar_divider_.get());
+    toolbar_divider_ = nullptr;
+  }
 
   // Track changes in profile count
   if (IsAvatarButtonHideable(profile)) {
@@ -151,14 +175,27 @@ void BraveToolbarView::Init() {
       kShowBookmarksButton, browser_->profile()->GetPrefs(),
       base::BindRepeating(&BraveToolbarView::OnShowBookmarksButtonChanged,
                           base::Unretained(this)));
+
+  show_wallet_button_.Init(
+      kShowWalletIconOnToolbar, browser_->profile()->GetPrefs(),
+      base::BindRepeating(&BraveToolbarView::UpdateWalletButtonVisibility,
+                          base::Unretained(this)));
+
+  if (browser_->profile()->IsIncognitoProfile() &&
+      !browser_->profile()->IsTor()) {
+    wallet_private_window_enabled_.Init(
+        kBraveWalletPrivateWindowsEnabled, browser_->profile()->GetPrefs(),
+        base::BindRepeating(&BraveToolbarView::UpdateWalletButtonVisibility,
+                            base::Unretained(this)));
+  }
+
   // track changes in wide locationbar setting
   location_bar_is_wide_.Init(
       kLocationBarIsWide, profile->GetPrefs(),
       base::BindRepeating(&BraveToolbarView::OnLocationBarIsWideChanged,
                           base::Unretained(this)));
 
-  if (base::FeatureList::IsEnabled(tabs::features::kBraveVerticalTabs) &&
-      tabs::utils::SupportsVerticalTabs(browser_)) {
+  if (tabs::utils::SupportsVerticalTabs(browser_)) {
     show_vertical_tabs_.Init(
         brave_tabs::kVerticalTabsEnabled,
         profile->GetOriginalProfile()->GetPrefs(),
@@ -175,7 +212,6 @@ void BraveToolbarView::Init() {
         base::BindRepeating(&BraveToolbarView::UpdateHorizontalPadding,
                             base::Unretained(this)));
 #endif  // BUILDFLAG(IS_LINUX)
-    UpdateHorizontalPadding();
   }
 
   const auto callback = [](Browser* browser, int command,
@@ -184,29 +220,50 @@ void BraveToolbarView::Init() {
         browser, command, ui::DispositionFromEventFlags(event.flags()));
   };
 
-  DCHECK(location_bar_);
-  bookmark_ =
-      AddChildViewAt(std::make_unique<BookmarkButton>(base::BindRepeating(
-                         callback, browser_, IDC_BOOKMARK_THIS_TAB)),
-                     *GetIndexOf(location_bar_));
+  bookmark_ = container_view->AddChildViewAt(
+      std::make_unique<BraveBookmarkButton>(
+          base::BindRepeating(callback, browser_, IDC_BOOKMARK_THIS_TAB)),
+      *container_view->GetIndexOf(location_bar_));
   bookmark_->SetTriggerableEventFlags(ui::EF_LEFT_MOUSE_BUTTON |
                                       ui::EF_MIDDLE_MOUSE_BUTTON);
   bookmark_->UpdateImageAndText();
 
-  if (brave_wallet::IsNativeWalletEnabled() &&
-      brave_wallet::IsAllowedForContext(profile)) {
-    wallet_ = AddChildViewAt(
-        std::make_unique<WalletButton>(GetAppMenuButton(), profile),
-        *GetIndexOf(GetAppMenuButton()) - 1);
-    wallet_->SetTriggerableEventFlags(ui::EF_LEFT_MOUSE_BUTTON |
-                                      ui::EF_MIDDLE_MOUSE_BUTTON);
-    wallet_->UpdateImageAndText();
+  side_panel_ = container_view->AddChildViewAt(
+      std::make_unique<SidePanelButton>(browser()),
+      *container_view->GetIndexOf(GetAppMenuButton()) - 1);
+
+  wallet_ = container_view->AddChildViewAt(
+      std::make_unique<WalletButton>(GetAppMenuButton(), profile),
+      *container_view->GetIndexOf(GetAppMenuButton()) - 1);
+  wallet_->SetTriggerableEventFlags(ui::EF_LEFT_MOUSE_BUTTON |
+                                    ui::EF_MIDDLE_MOUSE_BUTTON);
+  wallet_->UpdateImageAndText();
+
+  UpdateWalletButtonVisibility();
+
+  // Don't check policy status since we're going to
+  // setup a watcher for policy pref.
+  if (ai_chat::IsAllowedForContext(browser_->profile(), false)) {
+    ai_chat_button_ = container_view->AddChildViewAt(
+        std::make_unique<AIChatButton>(browser()),
+        *container_view->GetIndexOf(GetAppMenuButton()) - 1);
+    show_ai_chat_button_.Init(
+        ai_chat::prefs::kBraveAIChatShowToolbarButton,
+        browser_->profile()->GetPrefs(),
+        base::BindRepeating(&BraveToolbarView::UpdateAIChatButtonVisibility,
+                            base::Unretained(this)));
+    hide_ai_chat_button_by_policy_.Init(
+        ai_chat::prefs::kEnabledByPolicy, profile->GetPrefs(),
+        base::BindRepeating(&BraveToolbarView::UpdateAIChatButtonVisibility,
+                            base::Unretained(this)));
+    UpdateAIChatButtonVisibility();
   }
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
-  if (brave_vpn::IsAllowedForContext(profile)) {
-    brave_vpn_ = AddChildViewAt(std::make_unique<BraveVPNButton>(browser()),
-                                *GetIndexOf(GetAppMenuButton()) - 1);
+  if (brave_vpn::BraveVpnServiceFactory::GetForProfile(profile)) {
+    brave_vpn_ = container_view->AddChildViewAt(
+        std::make_unique<BraveVPNButton>(browser()),
+        *container_view->GetIndexOf(GetAppMenuButton()) - 1);
     show_brave_vpn_button_.Init(
         brave_vpn::prefs::kBraveVPNShowButton, profile->GetPrefs(),
         base::BindRepeating(&BraveToolbarView::OnVPNButtonVisibilityChanged,
@@ -219,7 +276,24 @@ void BraveToolbarView::Init() {
   }
 #endif
 
+  // Make sure that avatar button should be located right before the app menu.
+  if (auto* avatar = GetAvatarToolbarButton()) {
+    container_view->ReorderChildView(
+        avatar, *container_view->GetIndexOf(GetAppMenuButton()) - 1);
+  }
+
   brave_initialized_ = true;
+  UpdateHorizontalPadding();
+
+  // We want to hide pin action buttons(side panel's pin button) in toolbar.
+  // As toolbar is shared for different types of windows, this action button
+  // container could be null. So Upstream code has assumption that
+  // |pinned_toolbar_actions_container_| could be null.
+  // If it's changed, we should check again.
+  if (pinned_toolbar_actions_container_) {
+    RemoveChildView(pinned_toolbar_actions_container_.get());
+    pinned_toolbar_actions_container_ = nullptr;
+  }
 }
 
 #if BUILDFLAG(ENABLE_BRAVE_VPN)
@@ -239,8 +313,9 @@ void BraveToolbarView::OnEditBookmarksEnabledChanged() {
 }
 
 void BraveToolbarView::OnShowBookmarksButtonChanged() {
-  if (!bookmark_)
+  if (!bookmark_) {
     return;
+  }
 
   UpdateBookmarkVisibility();
 }
@@ -248,20 +323,28 @@ void BraveToolbarView::OnShowBookmarksButtonChanged() {
 void BraveToolbarView::OnLocationBarIsWideChanged() {
   DCHECK_EQ(DisplayMode::NORMAL, display_mode_);
 
-  Layout();
+  DeprecatedLayoutImmediately();
   SchedulePaint();
 }
 
 void BraveToolbarView::OnThemeChanged() {
   ToolbarView::OnThemeChanged();
 
-  if (!brave_initialized_)
+  if (!brave_initialized_) {
     return;
+  }
 
-  if (display_mode_ == DisplayMode::NORMAL && bookmark_)
+  if (display_mode_ == DisplayMode::NORMAL && bookmark_) {
     bookmark_->UpdateImageAndText();
-  if (display_mode_ == DisplayMode::NORMAL && wallet_)
+  }
+  if (display_mode_ == DisplayMode::NORMAL && wallet_) {
     wallet_->UpdateImageAndText();
+  }
+}
+
+views::View* BraveToolbarView::GetAnchorView(
+    std::optional<PageActionIconType> type) {
+  return ToolbarView::GetAnchorView(type);
 }
 
 void BraveToolbarView::OnProfileAdded(const base::FilePath& profile_path) {
@@ -275,10 +358,12 @@ void BraveToolbarView::OnProfileWasRemoved(const base::FilePath& profile_path,
 
 void BraveToolbarView::LoadImages() {
   ToolbarView::LoadImages();
-  if (bookmark_)
+  if (bookmark_) {
     bookmark_->UpdateImageAndText();
-  if (wallet_)
+  }
+  if (wallet_) {
     wallet_->UpdateImageAndText();
+  }
 }
 
 void BraveToolbarView::Update(content::WebContents* tab) {
@@ -299,8 +384,9 @@ void BraveToolbarView::Update(content::WebContents* tab) {
 }
 
 void BraveToolbarView::UpdateBookmarkVisibility() {
-  if (!bookmark_)
+  if (!bookmark_) {
     return;
+  }
 
   DCHECK_EQ(DisplayMode::NORMAL, display_mode_);
   bookmark_->SetVisible(browser_defaults::bookmarks_enabled &&
@@ -309,16 +395,23 @@ void BraveToolbarView::UpdateBookmarkVisibility() {
 }
 
 void BraveToolbarView::UpdateHorizontalPadding() {
-  DCHECK(base::FeatureList::IsEnabled(tabs::features::kBraveVerticalTabs));
+  if (!brave_initialized_) {
+    return;
+  }
+
+  // Get ToolbarView's container_view as a parent of location_bar_ because
+  // container_view's type in ToolbarView is internal to toolbar_view.cc.
+  DCHECK(location_bar_ && location_bar_->parent());
+  views::View* container_view = location_bar_->parent();
 
   if (!tabs::utils::ShouldShowVerticalTabs(browser()) ||
       tabs::utils::ShouldShowWindowTitleForVerticalTabs(browser())) {
-    SetBorder(nullptr);
+    container_view->SetBorder(nullptr);
   } else {
     auto [leading, trailing] =
         tabs::utils::GetLeadingTrailingCaptionButtonWidth(
             browser_view_->frame());
-    SetBorder(views::CreateEmptyBorder(
+    container_view->SetBorder(views::CreateEmptyBorder(
         gfx::Insets().set_left(leading).set_right(trailing)));
   }
 }
@@ -329,10 +422,11 @@ void BraveToolbarView::ShowBookmarkBubble(const GURL& url,
   // or the location bar if there is no bookmark button
   // (i.e. in non-normal display mode).
   views::View* anchor_view = location_bar_;
-  if (bookmark_ && bookmark_->GetVisible())
+  if (bookmark_ && bookmark_->GetVisible()) {
     anchor_view = bookmark_;
+  }
 
-  std::unique_ptr<BubbleSyncPromoDelegate> delegate;
+  std::unique_ptr<BubbleSignInPromoDelegate> delegate;
   delegate =
       std::make_unique<BookmarkBubbleSignInDelegate>(browser()->profile());
   BookmarkBubbleView::ShowBubble(anchor_view, GetWebContents(), bookmark_,
@@ -344,19 +438,24 @@ void BraveToolbarView::ViewHierarchyChanged(
     const views::ViewHierarchyChangedDetails& details) {
   ToolbarView::ViewHierarchyChanged(details);
 
-  if (details.is_add && details.parent == this) {
-    // Mark children of this view as client area so that they are not perceived
-    // as client area.
-    // See brave_non_client_hit_test_helper.h
+  // Upstream has two more children |background_view_left_| and
+  // |background_view_right_| behind the container view.
+  const int container_view_index = 2;
+
+  if (details.is_add && children().size() > container_view_index &&
+      details.parent == children()[container_view_index]) {
+    // Mark children of the container view as client area so that they are not
+    // perceived as caption area. See brave_non_client_hit_test_helper.h
     views::SetHitTestComponent(details.child, HTCLIENT);
   }
 }
 
-void BraveToolbarView::Layout() {
-  ToolbarView::Layout();
+void BraveToolbarView::Layout(PassKey) {
+  LayoutSuperclass<ToolbarView>(this);
 
-  if (!brave_initialized_)
+  if (!brave_initialized_) {
     return;
+  }
 
   // ToolbarView::Layout() handles below modes. So just return.
   if (display_mode_ == DisplayMode::CUSTOM_TAB ||
@@ -395,3 +494,34 @@ void BraveToolbarView::ResetButtonBounds() {
     bookmark_->SetX(bookmark_x);
   }
 }
+
+void BraveToolbarView::UpdateAIChatButtonVisibility() {
+  bool should_show = ai_chat::IsAllowedForContext(browser()->profile()) &&
+                     show_ai_chat_button_.GetValue();
+  ai_chat_button_->SetVisible(should_show);
+}
+
+void BraveToolbarView::UpdateWalletButtonVisibility() {
+  Profile* profile = browser()->profile();
+  if (brave_wallet::IsNativeWalletEnabled() &&
+      brave_wallet::IsAllowedForContext(profile)) {
+    // Hide all if user wants to hide.
+    if (!show_wallet_button_.GetValue()) {
+      wallet_->SetVisible(false);
+      return;
+    }
+
+    if (!profile->IsIncognitoProfile()) {
+      wallet_->SetVisible(true);
+      return;
+    }
+
+    wallet_->SetVisible(wallet_private_window_enabled_.GetValue());
+    return;
+  }
+
+  wallet_->SetVisible(false);
+}
+
+BEGIN_METADATA(BraveToolbarView)
+END_METADATA

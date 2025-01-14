@@ -6,25 +6,19 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_REWARDS_BROWSER_REWARDS_SERVICE_H_
 #define BRAVE_COMPONENTS_BRAVE_REWARDS_BROWSER_REWARDS_SERVICE_H_
 
-#include <memory>
 #include <string>
 #include <vector>
 
 #include "base/containers/flat_map.h"
 #include "base/functional/callback_forward.h"
 #include "base/observer_list.h"
-#include "base/types/expected.h"
-#include "base/version.h"
 #include "brave/components/brave_rewards/browser/rewards_notification_service.h"
-#include "brave/components/brave_rewards/common/mojom/ledger_types.mojom.h"
-#include "brave/components/brave_rewards/core/mojom_structs.h"
+#include "brave/components/brave_rewards/common/mojom/rewards.mojom.h"
+#include "brave/components/brave_rewards/common/mojom/rewards_engine.mojom.h"
 #include "build/build_config.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/sessions/core/session_id.h"
 #include "url/gurl.h"
-
-class PrefRegistrySimple;
-class PrefService;
 
 namespace content {
 class NavigationHandle;
@@ -41,12 +35,8 @@ class RewardsServiceObserver;
 
 using GetPublisherInfoListCallback =
     base::OnceCallback<void(std::vector<mojom::PublisherInfoPtr> list)>;
-using GetAutoContributionAmountCallback = base::OnceCallback<void(double)>;
-using GetAutoContributePropertiesCallback =
-    base::OnceCallback<void(mojom::AutoContributePropertiesPtr)>;
 using GetPublisherMinVisitTimeCallback = base::OnceCallback<void(int)>;
 using GetPublisherMinVisitsCallback = base::OnceCallback<void(int)>;
-using GetAutoContributeEnabledCallback = base::OnceCallback<void(bool)>;
 using GetReconcileStampCallback = base::OnceCallback<void(uint64_t)>;
 using GetRewardsInternalsInfoCallback =
     base::OnceCallback<void(mojom::RewardsInternalsInfoPtr info)>;
@@ -61,42 +51,19 @@ using RefreshPublisherCallback =
 using GetPublisherInfoCallback =
     base::OnceCallback<void(const mojom::Result, mojom::PublisherInfoPtr)>;
 using SavePublisherInfoCallback = base::OnceCallback<void(const mojom::Result)>;
-using GetInlineTippingPlatformEnabledCallback = base::OnceCallback<void(bool)>;
 using GetShareURLCallback = base::OnceCallback<void(const std::string&)>;
-using ConnectExternalWalletResult =
-    base::expected<void, mojom::ConnectExternalWalletError>;
 using ConnectExternalWalletCallback =
-    base::OnceCallback<void(ConnectExternalWalletResult)>;
-using FetchBalanceResult =
-    base::expected<mojom::BalancePtr, mojom::FetchBalanceError>;
-using FetchBalanceCallback = base::OnceCallback<void(FetchBalanceResult)>;
-using GetExternalWalletResult =
-    base::expected<mojom::ExternalWalletPtr, mojom::GetExternalWalletError>;
+    base::OnceCallback<void(mojom::ConnectExternalWalletResult)>;
+using FetchBalanceCallback = base::OnceCallback<void(mojom::BalancePtr)>;
 using GetExternalWalletCallback =
-    base::OnceCallback<void(GetExternalWalletResult)>;
-using ClaimPromotionCallback = base::OnceCallback<void(const mojom::Result,
-                                                       const std::string&,
-                                                       const std::string&,
-                                                       const std::string&)>;
-using AttestPromotionCallback =
-    base::OnceCallback<void(const mojom::Result result,
-                            mojom::PromotionPtr promotion)>;
+    base::OnceCallback<void(mojom::ExternalWalletPtr)>;
 
 using GetBalanceReportCallback =
     base::OnceCallback<void(const mojom::Result,
                             mojom::BalanceReportInfoPtr report)>;
 
-using GetMonthlyReportCallback =
-    base::OnceCallback<void(mojom::MonthlyReportInfoPtr report)>;
-
-using GetAllMonthlyReportIdsCallback =
-    base::OnceCallback<void(const std::vector<std::string>&)>;
-
 using GetAllContributionsCallback = base::OnceCallback<void(
     std::vector<mojom::ContributionInfoPtr> contributions)>;
-
-using GetAllPromotionsCallback =
-    base::OnceCallback<void(std::vector<mojom::PromotionPtr> list)>;
 
 using GetRewardsParametersCallback =
     base::OnceCallback<void(mojom::RewardsParametersPtr)>;
@@ -143,6 +110,13 @@ class RewardsService : public KeyedService {
   virtual void GetUserType(
       base::OnceCallback<void(mojom::UserType)> callback) = 0;
 
+  // Returns a value indicating whether the Rewards Terms of Service has been
+  // updated and the user should be notified.
+  virtual bool IsTermsOfServiceUpdateRequired() = 0;
+
+  // Updates the user's TOS version to the current server-specified TOS version.
+  virtual void AcceptTermsOfServiceUpdate() = 0;
+
   using GetAvailableCountriesCallback =
       base::OnceCallback<void(std::vector<std::string>)>;
 
@@ -152,6 +126,10 @@ class RewardsService : public KeyedService {
       GetAvailableCountriesCallback callback) const = 0;
 
   virtual void GetRewardsParameters(GetRewardsParametersCallback callback) = 0;
+
+  using FetchUICardsCallback = mojom::RewardsEngine::FetchUICardsCallback;
+  virtual void FetchUICards(FetchUICardsCallback callback) = 0;
+
   virtual void GetActivityInfoList(const uint32_t start,
                                    const uint32_t limit,
                                    mojom::ActivityInfoFilterPtr filter,
@@ -165,23 +143,8 @@ class RewardsService : public KeyedService {
 
   virtual void GetExcludedList(GetPublisherInfoListCallback callback) = 0;
 
-  using FetchPromotionsCallback =
-      base::OnceCallback<void(std::vector<mojom::PromotionPtr>)>;
-
-  virtual void FetchPromotions(FetchPromotionsCallback callback) = 0;
-
-  // Used by desktop
-  virtual void ClaimPromotion(
-      const std::string& promotion_id,
-      ClaimPromotionCallback callback) = 0;
-  // Used by Android
-  virtual void ClaimPromotion(
-      const std::string& promotion_id,
-      AttestPromotionCallback callback) = 0;
-  virtual void AttestPromotion(const std::string& promotion_id,
-                               const std::string& solution,
-                               AttestPromotionCallback callback) = 0;
   virtual void RestorePublishers() = 0;
+  virtual void OnLoad(mojom::VisitDataPtr visit_data) = 0;
   virtual void OnLoad(SessionID tab_id, const GURL& gurl) = 0;
   virtual void OnUnload(SessionID tab_id) = 0;
   virtual void OnShow(SessionID tab_id) = 0;
@@ -200,22 +163,18 @@ class RewardsService : public KeyedService {
   virtual void GetPublisherMinVisits(
       GetPublisherMinVisitsCallback callback) = 0;
   virtual void SetPublisherMinVisits(int visits) const = 0;
-  virtual void SetAutoContributionAmount(double amount) const = 0;
-  virtual void GetAutoContributeEnabled(
-      GetAutoContributeEnabledCallback callback) = 0;
-  virtual void SetAutoContributeEnabled(bool enabled) = 0;
 
   virtual void GetBalanceReport(
       const uint32_t month,
       const uint32_t year,
       GetBalanceReportCallback callback) = 0;
+  virtual void GetPublisherActivityFromVisitData(
+      mojom::VisitDataPtr visit_data) = 0;
   virtual void GetPublisherActivityFromUrl(
-      uint64_t windowId,
+      uint64_t tab_id,
       const std::string& url,
       const std::string& favicon_url,
       const std::string& publisher_blob) = 0;
-  virtual void GetAutoContributionAmount(
-      GetAutoContributionAmountCallback callback) = 0;
   virtual void GetPublisherBanner(const std::string& publisher_id,
                                   GetPublisherBannerCallback callback) = 0;
 
@@ -238,9 +197,6 @@ class RewardsService : public KeyedService {
       const std::string& publisher_key,
       bool exclude) = 0;
   virtual RewardsNotificationService* GetNotificationService() const = 0;
-  virtual void GetAutoContributeProperties(
-      GetAutoContributePropertiesCallback callback) = 0;
-
   virtual void GetRewardsInternalsInfo(
       GetRewardsInternalsInfoCallback callback) = 0;
 
@@ -251,9 +207,6 @@ class RewardsService : public KeyedService {
   void AddObserver(RewardsServiceObserver* observer);
   void RemoveObserver(RewardsServiceObserver* observer);
 
-  static void RegisterProfilePrefs(PrefRegistrySimple* registry);
-  static void RegisterProfilePrefsForMigration(PrefRegistrySimple* registry);
-
   // DEPRECATED: Use `SetMonthlyContribution`.
   virtual void SaveRecurringTip(const std::string& publisher_key,
                                 double amount,
@@ -261,12 +214,6 @@ class RewardsService : public KeyedService {
 
   virtual const RewardsNotificationService::RewardsNotificationsMap&
   GetAllNotifications() = 0;
-
-  virtual void UpdateMediaDuration(
-      const uint64_t window_id,
-      const std::string& publisher_key,
-      const uint64_t duration,
-      const bool firstVisit) = 0;
 
   virtual void IsPublisherRegistered(
       const std::string& publisher_id,
@@ -284,21 +231,11 @@ class RewardsService : public KeyedService {
                                  mojom::PublisherInfoPtr publisher_info,
                                  SavePublisherInfoCallback callback) = 0;
 
-  virtual void SetInlineTippingPlatformEnabled(
-      const std::string& key,
-      bool enabled) = 0;
-
-  virtual void GetInlineTippingPlatformEnabled(
-      const std::string& key,
-      GetInlineTippingPlatformEnabledCallback callback) = 0;
-
   virtual void GetShareURL(
       const base::flat_map<std::string, std::string>& args,
       GetShareURLCallback callback) = 0;
 
   virtual void FetchBalance(FetchBalanceCallback callback) = 0;
-
-  virtual bool IsAutoContributeSupported() const = 0;
 
   virtual void GetExternalWallet(GetExternalWalletCallback callback) = 0;
 
@@ -306,29 +243,30 @@ class RewardsService : public KeyedService {
 
   virtual std::vector<std::string> GetExternalWalletProviders() const = 0;
 
+  using BeginExternalWalletLoginCallback =
+      base::OnceCallback<void(mojom::ExternalWalletLoginParamsPtr)>;
+
+  virtual void BeginExternalWalletLogin(
+      const std::string& wallet_type,
+      BeginExternalWalletLoginCallback callback) = 0;
+
   // Connects Rewards with a custodial wallet service (e.g. bitFlyer, Gemini,
   // Uphold).
   // |path| is the authorization URL's path
   // |query| is the authorization URL's query
-  // The callback is called with a ConnectExternalWalletError on failure,
-  // and with an empty result on success.
   virtual void ConnectExternalWallet(const std::string& path,
                                      const std::string& query,
                                      ConnectExternalWalletCallback) = 0;
 
-  virtual void GetMonthlyReport(
-      const uint32_t month,
-      const uint32_t year,
-      GetMonthlyReportCallback callback) = 0;
-
-  virtual void GetAllMonthlyReportIds(
-      GetAllMonthlyReportIdsCallback callback) = 0;
+  // Completes an external wallet login flow for the specified wallet provider
+  // using a collection of parameters returned from the provider's login page.
+  virtual void ConnectExternalWallet(
+      const std::string& provider,
+      const base::flat_map<std::string, std::string>& args,
+      ConnectExternalWalletCallback) = 0;
 
   virtual void GetAllContributions(
       GetAllContributionsCallback callback) = 0;
-
-  virtual void GetAllPromotions(
-      GetAllPromotionsCallback callback) = 0;
 
   virtual void WriteDiagnosticLog(const std::string& file,
                                   const int line,
@@ -348,11 +286,11 @@ class RewardsService : public KeyedService {
 
   virtual void GetRewardsWallet(GetRewardsWalletCallback callback) = 0;
 
-  virtual void SetExternalWalletType(const std::string& wallet_type) = 0;
-
   virtual void GetEnvironment(GetEnvironmentCallback callback) = 0;
 
   virtual p3a::ConversionMonitor* GetP3AConversionMonitor() = 0;
+
+  virtual void OnRewardsPageShown() = 0;
 
  protected:
   base::ObserverList<RewardsServiceObserver> observers_;

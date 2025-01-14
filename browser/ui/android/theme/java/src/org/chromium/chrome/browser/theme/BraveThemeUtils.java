@@ -9,17 +9,14 @@ import android.content.Context;
 
 import androidx.annotation.ColorInt;
 
-import org.chromium.base.ApiCompatibilityUtils;
-
 public class BraveThemeUtils {
     public static @ColorInt int getTextBoxColorForToolbarBackgroundInNonNativePage(
-            Context context, @ColorInt int color, boolean isIncognito) {
+            Context context, @ColorInt int color, boolean isIncognito, boolean isCustomTab) {
         if (isIncognito) {
-            return ApiCompatibilityUtils.getColor(
-                    context.getResources(), R.color.toolbar_text_box_background_incognito);
+            return context.getColor(R.color.toolbar_text_box_background_incognito);
         }
 
         return ThemeUtils.getTextBoxColorForToolbarBackgroundInNonNativePage(
-                context, color, isIncognito);
+                context, color, isIncognito, isCustomTab);
     }
 }

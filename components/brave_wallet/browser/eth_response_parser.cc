@@ -5,6 +5,7 @@
 
 #include "brave/components/brave_wallet/browser/eth_response_parser.h"
 
+#include <optional>
 #include <tuple>
 #include <utility>
 
@@ -18,9 +19,7 @@
 #include "net/base/data_url.h"
 #include "tools/json_schema_compiler/util.h"
 
-namespace brave_wallet {
-
-namespace eth {
+namespace brave_wallet::eth {
 
 bool ParseStringResult(const base::Value& json_value, std::string* value) {
   DCHECK(value);
@@ -99,7 +98,17 @@ bool ParseEthGetFeeHistory(const base::Value& json_value,
     return false;
   }
 
-  *base_fee_per_gas = fee_item_value->base_fee_per_gas;
+  for (const auto& base_fee_item_value : fee_item_value->base_fee_per_gas) {
+    // BASEFEE of 0x0 indicates pre-EIP-1559 blocks. Some chains like Scroll
+    // may have null values too.
+    if (base_fee_item_value.is_none()) {
+      base_fee_per_gas->push_back("0x0");
+    } else if (base_fee_item_value.is_string()) {
+      base_fee_per_gas->push_back(base_fee_item_value.GetString());
+    } else {
+      return false;
+    }
+  }
 
   for (const auto& gas_used_value : fee_item_value->gas_used_ratio) {
     if (!base::StringToDouble(gas_used_value,
@@ -110,8 +119,15 @@ bool ParseEthGetFeeHistory(const base::Value& json_value,
 
   *oldest_block = fee_item_value->oldest_block;
 
-  if (fee_item_value->reward) {
-    for (const auto& reward_list_value : *fee_item_value->reward) {
+  // Reward can be missing or null, if reward percentiles param is not
+  // specified.
+  if (fee_item_value->reward && !fee_item_value->reward->is_none()) {
+    const auto* reward_list_values = fee_item_value->reward->GetIfList();
+    if (!reward_list_values) {
+      return false;
+    }
+
+    for (const auto& reward_list_value : *reward_list_values) {
       const auto* reward_list = reward_list_value.GetIfList();
       if (!reward_list) {
         return false;
@@ -206,68 +222,75 @@ bool ParseEthGetTransactionReceipt(const base::Value& json_value,
   return true;
 }
 
-absl::optional<std::string> ParseEthSendRawTransaction(
+std::optional<std::string> ParseEthSendRawTransaction(
     const base::Value& json_value) {
   return ParseSingleStringResult(json_value);
 }
 
-absl::optional<std::string> ParseEthCall(const base::Value& json_value) {
+std::optional<std::string> ParseEthCall(const base::Value& json_value) {
   return ParseSingleStringResult(json_value);
 }
 
-absl::optional<std::vector<std::string>> DecodeEthCallResponse(
+std::optional<std::vector<std::string>> DecodeEthCallResponse(
     const std::string& data,
-    const std::vector<std::string>& abi_types) {
+    const eth_abi::Type& abi_type) {
   std::vector<uint8_t> response_bytes;
   if (!PrefixedHexStringToBytes(data, &response_bytes)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
-  auto decoded = ABIDecode(abi_types, response_bytes);
-  if (decoded == absl::nullopt) {
-    return absl::nullopt;
+  auto decoded = ABIDecode(abi_type, response_bytes);
+  if (decoded == std::nullopt) {
+    return std::nullopt;
   }
 
-  const auto& args = std::get<1>(*decoded);
-  if (args.size() != abi_types.size()) {
-    return absl::nullopt;
+  if (decoded->size() != abi_type.tuple_types.size()) {
+    return std::nullopt;
+  }
+
+  std::vector<std::string> args;
+  for (const auto& arg : *decoded) {
+    // Ignore non-string values
+    if (arg.is_string()) {
+      args.push_back(arg.GetString());
+    }
   }
 
   return args;
 }
 
-absl::optional<std::vector<absl::optional<std::string>>>
+std::optional<std::vector<std::optional<std::string>>>
 DecodeGetERC20TokenBalancesEthCallResponse(const std::string& data) {
   std::vector<uint8_t> response_bytes;
   if (!PrefixedHexStringToBytes(data, &response_bytes)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   auto decoded = eth_abi::ExtractBoolBytesArrayFromTuple(response_bytes, 0);
-  if (decoded == absl::nullopt) {
-    return absl::nullopt;
+  if (decoded == std::nullopt) {
+    return std::nullopt;
   }
 
   // Loop through the decoded values, and add the balance
   // if successful, otherwise null optional
-  std::vector<absl::optional<std::string>> balances;
+  std::vector<std::optional<std::string>> balances;
   for (const auto& tuple : *decoded) {
     if (tuple.first) {
       // Convert bytes to hex
       balances.push_back(ToHex(tuple.second));
     } else {
-      balances.push_back(absl::nullopt);
+      balances.push_back(std::nullopt);
     }
   }
 
   return balances;
 }
 
-absl::optional<std::string> ParseEthEstimateGas(const base::Value& json_value) {
+std::optional<std::string> ParseEthEstimateGas(const base::Value& json_value) {
   return ParseSingleStringResult(json_value);
 }
 
-absl::optional<std::string> ParseEthGasPrice(const base::Value& json_value) {
+std::optional<std::string> ParseEthGasPrice(const base::Value& json_value) {
   return ParseSingleStringResult(json_value);
 }
 
@@ -282,7 +305,7 @@ bool ParseEthGetLogs(const base::Value& json_value, std::vector<Log>* logs) {
 
   for (const auto& logs_list_it : *result) {
     auto log_item_value =
-        json_rpc_responses::EthGetLogsResult::FromValueDeprecated(logs_list_it);
+        json_rpc_responses::EthGetLogsResult::FromValue(logs_list_it);
     if (!log_item_value) {
       return false;
     }
@@ -319,33 +342,21 @@ bool ParseEthGetLogs(const base::Value& json_value, std::vector<Log>* logs) {
   return true;
 }
 
-bool ParseEnsResolverContentHash(const base::Value& json_value,
-                                 std::vector<uint8_t>* content_hash) {
-  content_hash->clear();
-
-  std::string string_content_hash;
-  if (!ParseStringResult(json_value, &string_content_hash)) {
-    return false;
-  }
-  content_hash->assign(string_content_hash.begin(), string_content_hash.end());
-  return true;
-}
-
-absl::optional<std::vector<std::string>>
+std::optional<std::vector<std::string>>
 ParseUnstoppableDomainsProxyReaderGetMany(const base::Value& json_value) {
   auto bytes_result = ParseDecodedBytesResult(json_value);
   if (!bytes_result) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return eth_abi::ExtractStringArrayFromTuple(*bytes_result, 0);
 }
 
-absl::optional<std::string> ParseUnstoppableDomainsProxyReaderGet(
+std::optional<std::string> ParseUnstoppableDomainsProxyReaderGet(
     const base::Value& json_value) {
   std::string value;
   if (!ParseStringResult(json_value, &value)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return value;
@@ -380,6 +391,4 @@ bool ParseDataURIAndExtractJSON(const GURL url, std::string* json) {
   return true;
 }
 
-}  // namespace eth
-
-}  // namespace brave_wallet
+}  // namespace brave_wallet::eth

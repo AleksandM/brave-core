@@ -6,7 +6,6 @@
 package org.chromium.chrome.browser.omnibox.status;
 
 import android.content.Context;
-import android.content.res.Resources;
 
 import androidx.annotation.Nullable;
 
@@ -14,7 +13,6 @@ import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.merchant_viewer.MerchantTrustSignalsCoordinator;
 import org.chromium.chrome.browser.omnibox.LocationBarDataProvider;
-import org.chromium.chrome.browser.omnibox.SearchEngineLogoUtils;
 import org.chromium.chrome.browser.omnibox.UrlBarEditingTextStateProvider;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.permissions.PermissionDialogController;
@@ -26,20 +24,31 @@ public class BraveStatusMediator extends StatusMediator {
     // To delete in bytecode, members from parent class will be used instead.
     private boolean mUrlHasFocus;
 
-    public BraveStatusMediator(PropertyModel model, Resources resources, Context context,
-            UrlBarEditingTextStateProvider urlBarEditingTextStateProvider, boolean isTablet,
+    public BraveStatusMediator(
+            PropertyModel model,
+            Context context,
+            UrlBarEditingTextStateProvider urlBarEditingTextStateProvider,
+            boolean isTablet,
             LocationBarDataProvider locationBarDataProvider,
             PermissionDialogController permissionDialogController,
-            SearchEngineLogoUtils searchEngineLogoUtils,
             OneshotSupplier<TemplateUrlService> templateUrlServiceSupplier,
-            Supplier<Profile> profileSupplier, PageInfoIPHController pageInfoIPHController,
+            Supplier<Profile> profileSupplier,
+            PageInfoIphController pageInfoIphController,
             WindowAndroid windowAndroid,
-            @Nullable Supplier<MerchantTrustSignalsCoordinator>
-                    merchantTrustSignalsCoordinatorSupplier) {
-        super(model, resources, context, urlBarEditingTextStateProvider, isTablet,
-                locationBarDataProvider, permissionDialogController, searchEngineLogoUtils,
-                templateUrlServiceSupplier, profileSupplier, pageInfoIPHController, windowAndroid,
-
+            @Nullable
+                    Supplier<MerchantTrustSignalsCoordinator>
+                            merchantTrustSignalsCoordinatorSupplier) {
+        super(
+                model,
+                context,
+                urlBarEditingTextStateProvider,
+                isTablet,
+                locationBarDataProvider,
+                permissionDialogController,
+                templateUrlServiceSupplier,
+                profileSupplier,
+                pageInfoIphController,
+                windowAndroid,
                 merchantTrustSignalsCoordinatorSupplier);
     }
 

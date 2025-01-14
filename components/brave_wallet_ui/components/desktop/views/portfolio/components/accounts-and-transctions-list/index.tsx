@@ -5,62 +5,89 @@
 
 import * as React from 'react'
 import { skipToken } from '@reduxjs/toolkit/query/react'
+import { useLocation } from 'react-router-dom'
+
+// Constants
+import {
+  LOCAL_STORAGE_KEYS //
+} from '../../../../../../common/constants/local-storage-keys'
+import {
+  emptyRewardsInfo //
+} from '../../../../../../common/async/base-query-cache'
 
 // Types
 import {
   BraveWallet,
-  AddAccountNavTypes,
-  WalletAccountType,
-  SerializableTransactionInfo
+  SerializableTransactionInfo,
+  SpotPriceRegistry,
+  WalletRoutes
 } from '../../../../../../constants/types'
 
 // Utils
 import { getLocale } from '../../../../../../../common/locale'
 import Amount from '../../../../../../utils/amount'
-import { WalletSelectors } from '../../../../../../common/selectors'
 import { getBalance } from '../../../../../../utils/balance-utils'
+import { computeFiatAmount } from '../../../../../../utils/pricing-utils'
+import { getIsRewardsToken } from '../../../../../../utils/rewards_utils'
+
+// Options
+import { PortfolioAssetOptions } from '../../../../../../options/nav-options'
 
 // Components
 import {
-  PortfolioTransactionItem,
-  PortfolioAccountItem,
-  AddButton,
-  WithHideBalancePlaceholder
-} from '../../../../'
-
-import { SellAssetModal } from '../../../../popup-modals/sell-asset-modal/sell-asset-modal'
+  PortfolioTransactionItem //
+} from '../../../../portfolio_transaction_item/portfolio_transaction_item'
+import { PortfolioAccountItem } from '../../../../portfolio-account-item/index'
+import {
+  SegmentedControl //
+} from '../../../../../shared/segmented_control/segmented_control'
+import {
+  SellAssetModal //
+} from '../../../../popup-modals/sell-asset-modal/sell-asset-modal'
+import { LoadingSkeleton } from '../../../../../shared/loading-skeleton/index'
 
 // Hooks
-import { useUnsafeWalletSelector } from '../../../../../../common/hooks/use-safe-selector'
-import { useMultiChainSellAssets } from '../../../../../../common/hooks/use-multi-chain-sell-assets'
 import {
+  useMultiChainSellAssets //
+} from '../../../../../../common/hooks/use-multi-chain-sell-assets'
+import {
+  useGetDefaultFiatCurrencyQuery,
   useGetNetworkQuery,
-  useGetSelectedChainQuery //
+  useGetRewardsInfoQuery,
+  useGetSelectedChainQuery
 } from '../../../../../../common/slices/api.slice'
+import {
+  TokenBalancesRegistry //
+} from '../../../../../../common/slices/entities/token-balance.entity'
+import {
+  useSyncedLocalStorage //
+} from '../../../../../../common/hooks/use_local_storage'
 
 // Styled Components
 import {
-  ButtonRow,
-  DividerText,
-  SubDivider,
-  EmptyTransactionContainer,
-  TransactionPlaceholderText,
-  AssetBalanceDisplay,
-  DividerRow
+  ToggleVisibilityButton,
+  EmptyTransactionsIcon,
+  EmptyAccountsIcon,
+  EyeIcon
 } from '../../style'
 import {
   Column,
-  HorizontalSpace,
+  Text,
   Row,
-  ToggleVisibilityButton
+  VerticalDivider,
+  VerticalSpacer,
+  HorizontalSpace
 } from '../../../../../shared/style'
 
-export interface Props {
+interface Props {
   selectedAsset: BraveWallet.BlockchainToken | undefined
   fullAssetFiatBalance: Amount
   formattedFullAssetBalance: string
   selectedAssetTransactions: SerializableTransactionInfo[]
-  onClickAddAccount: (tabId: AddAccountNavTypes) => () => void
+  accounts: BraveWallet.AccountInfo[]
+  tokenBalancesRegistry: TokenBalancesRegistry | undefined | null
+  isLoadingBalances: boolean
+  spotPriceRegistry: SpotPriceRegistry | undefined
 }
 
 export const AccountsAndTransactionsList = ({
@@ -68,24 +95,30 @@ export const AccountsAndTransactionsList = ({
   fullAssetFiatBalance,
   formattedFullAssetBalance,
   selectedAssetTransactions,
-  onClickAddAccount
+  accounts,
+  tokenBalancesRegistry,
+  isLoadingBalances,
+  spotPriceRegistry
 }: Props) => {
-  // redux
-  // unsafe selectors
-  const accounts = useUnsafeWalletSelector(WalletSelectors.accounts)
-  const defaultCurrencies = useUnsafeWalletSelector(WalletSelectors.defaultCurrencies)
+  // routing
+  const { hash } = useLocation()
+
+  // local-storage
+  const [hidePortfolioBalances, setHidePortfolioBalances] =
+    useSyncedLocalStorage(LOCAL_STORAGE_KEYS.HIDE_PORTFOLIO_BALANCES, false)
 
   // queries
+  const { data: defaultFiatCurrency = 'usd' } = useGetDefaultFiatCurrencyQuery()
   const { data: selectedNetwork } = useGetSelectedChainQuery()
   const { data: selectedAssetNetwork } = useGetNetworkQuery(
     selectedAsset ?? skipToken
   )
-
+  const {
+    data: { balance: rewardsBalance, rewardsAccount } = emptyRewardsInfo
+  } = useGetRewardsInfoQuery()
 
   // hooks
   const {
-    allSellAssetOptions,
-    getAllSellAssetOptions,
     checkIsAssetSellSupported,
     sellAmount,
     setSellAmount,
@@ -93,141 +126,359 @@ export const AccountsAndTransactionsList = ({
   } = useMultiChainSellAssets()
 
   // state
-  const [hideBalances, setHideBalances] = React.useState<boolean>(false)
-  const [selectedSellAccount, setSelectedSellAccount] = React.useState<WalletAccountType>()
+  const [selectedSellAccount, setSelectedSellAccount] =
+    React.useState<BraveWallet.AccountInfo>()
   const [showSellModal, setShowSellModal] = React.useState<boolean>(false)
 
-  // computed
-  const isNonFungibleToken = selectedAsset?.isErc721 || selectedAsset?.isNft
+  // Memos & Computed
+  const isRewardsToken = getIsRewardsToken(selectedAsset)
 
-  // memos
+  const externalRewardsAccount = isRewardsToken ? rewardsAccount : undefined
+
   const filteredAccountsByCoinType = React.useMemo(() => {
     if (!selectedAsset) {
       return []
     }
-    return accounts.filter((account) => account.accountId.coin === selectedAsset.coin)
+    return accounts.filter(
+      (account) => account.accountId.coin === selectedAsset.coin
+    )
   }, [accounts, selectedAsset])
 
   const accountsList = React.useMemo(() => {
-    return filteredAccountsByCoinType.filter((account) => new Amount(getBalance(account, selectedAsset)).gt(0))
-  }, [selectedAsset, filteredAccountsByCoinType])
+    if (!selectedAsset) {
+      return []
+    }
+    if (isRewardsToken) {
+      return externalRewardsAccount ? [externalRewardsAccount] : []
+    }
+    return filteredAccountsByCoinType
+      .filter((account) =>
+        new Amount(
+          getBalance(account.accountId, selectedAsset, tokenBalancesRegistry)
+        ).gt(0)
+      )
+      .sort((a, b) => {
+        const aBalance = computeFiatAmount({
+          spotPriceRegistry,
+          value: getBalance(a.accountId, selectedAsset, tokenBalancesRegistry),
+          token: selectedAsset
+        })
+
+        const bBalance = computeFiatAmount({
+          spotPriceRegistry,
+          value: getBalance(b.accountId, selectedAsset, tokenBalancesRegistry),
+          token: selectedAsset
+        })
+
+        return bBalance.minus(aBalance).toNumber()
+      })
+  }, [
+    selectedAsset,
+    isRewardsToken,
+    filteredAccountsByCoinType,
+    externalRewardsAccount,
+    tokenBalancesRegistry,
+    spotPriceRegistry
+  ])
 
   const nonRejectedTransactions = React.useMemo(() => {
-    return selectedAssetTransactions
-      .filter(t => t.txStatus !== BraveWallet.TransactionStatus.Rejected)
+    return selectedAssetTransactions.filter(
+      (t) => t.txStatus !== BraveWallet.TransactionStatus.Rejected
+    )
   }, [selectedAssetTransactions])
 
   // Methods
-  const onShowSellModal = React.useCallback((account: WalletAccountType) => {
-    setSelectedSellAccount(account)
-    setShowSellModal(true)
-  }, [])
+  const onShowSellModal = React.useCallback(
+    (account: BraveWallet.AccountInfo) => {
+      setSelectedSellAccount(account)
+      setShowSellModal(true)
+    },
+    []
+  )
 
   const onOpenSellAssetLink = React.useCallback(() => {
-    openSellAssetLink({ sellAddress: selectedSellAccount?.address ?? '', sellAsset: selectedAsset })
-  }, [selectedAsset, selectedSellAccount?.address, openSellAssetLink])
+    openSellAssetLink({
+      sellAsset: selectedAsset
+    })
+  }, [selectedAsset, openSellAssetLink])
 
-  // Effects
-  React.useEffect(() => {
-    if (allSellAssetOptions.length === 0) {
-      getAllSellAssetOptions()
-    }
-  }, [allSellAssetOptions.length, getAllSellAssetOptions])
+  const onToggleHideBalances = React.useCallback(() => {
+    setHidePortfolioBalances((prev) => !prev)
+  }, [setHidePortfolioBalances])
+
+  if (
+    hash !== WalletRoutes.TransactionsHash &&
+    isLoadingBalances &&
+    accountsList.length === 0
+  ) {
+    return (
+      <>
+        {!isRewardsToken && (
+          <Row padding='24px 0px'>
+            <SegmentedControl
+              navOptions={PortfolioAssetOptions}
+              maxWidth='384px'
+            />
+          </Row>
+        )}
+        <Row
+          width='100%'
+          justifyContent='space-between'
+          alignItems='center'
+          marginBottom={18}
+          padding='0px 8px'
+        >
+          <Text
+            isBold={true}
+            textColor='text01'
+            textSize='16px'
+          >
+            {getLocale('braveWalletAccounts')}
+          </Text>
+          <div>
+            <LoadingSkeleton
+              width={60}
+              height={22}
+            />
+          </div>
+        </Row>
+        <VerticalDivider />
+        <VerticalSpacer space={8} />
+        <Row
+          padding='8px'
+          justifyContent='space-between'
+        >
+          <Row
+            width='unset'
+            justifyContent='flex-start'
+          >
+            <LoadingSkeleton
+              width={44}
+              height={44}
+              borderRadius={8}
+            />
+            <Column
+              padding='0px 0px 0px 12px'
+              alignItems='flex-start'
+            >
+              <LoadingSkeleton
+                width={80}
+                height={18}
+                borderRadius={8}
+              />
+              <VerticalSpacer space={4} />
+              <LoadingSkeleton
+                width={80}
+                height={16}
+                borderRadius={8}
+              />
+            </Column>
+          </Row>
+          <Column alignItems='flex-end'>
+            <LoadingSkeleton
+              width={80}
+              height={18}
+              borderRadius={8}
+            />
+            <VerticalSpacer space={4} />
+            <LoadingSkeleton
+              width={80}
+              height={16}
+              borderRadius={8}
+            />
+          </Column>
+        </Row>
+      </>
+    )
+  }
 
   return (
     <>
-      {selectedAsset &&
+      {selectedAsset && (
         <>
-          <Column fullWidth={true} alignItems='flex-start'>
-            <DividerRow>
-              <DividerText>
-                {
-                  isNonFungibleToken
-                    ? getLocale('braveWalletOwner')
-                    : getLocale('braveWalletAccounts')
-                }
-              </DividerText>
-              <Row justifyContent='flex-end'>
-                {!isNonFungibleToken &&
-                  <WithHideBalancePlaceholder
-                    size='small'
-                    hideBalances={hideBalances}
-                  >
-                    <AssetBalanceDisplay>
-                      {
-                        fullAssetFiatBalance
-                          .formatAsFiat(defaultCurrencies.fiat)
-                      } {formattedFullAssetBalance}
-                    </AssetBalanceDisplay>
-                  </WithHideBalancePlaceholder>
-                }
-                <HorizontalSpace space='16px' />
-                <ToggleVisibilityButton
-                  isVisible={!hideBalances}
-                  onClick={() => setHideBalances(prev => !prev)}
-                />
-              </Row>
-            </DividerRow>
-            <SubDivider />
-          </Column>
-          {accountsList.map((account) =>
-            <PortfolioAccountItem
-              defaultCurrencies={defaultCurrencies}
-              key={account.address}
-              asset={selectedAsset}
-              name={account.name}
-              address={account.address}
-              assetBalance={getBalance(account, selectedAsset)}
-              selectedNetwork={selectedAssetNetwork || selectedNetwork}
-              hideBalances={hideBalances}
-              isNft={isNonFungibleToken}
-              showSellModal={() => onShowSellModal(account)}
-              isSellSupported={checkIsAssetSellSupported(selectedAsset)}
-            />
+          {!isRewardsToken && (
+            <Row padding='24px 0px'>
+              <SegmentedControl
+                navOptions={PortfolioAssetOptions}
+                maxWidth='384px'
+              />
+            </Row>
           )}
-          <ButtonRow>
-            <AddButton
-              buttonType='secondary'
-              onSubmit={onClickAddAccount('create')}
-              text={getLocale('braveWalletAddAccount')}
-            />
-          </ButtonRow>
-
-          <Column fullWidth={true} alignItems='flex-start'>
-            <DividerText>{getLocale('braveWalletTransactions')}</DividerText>
-            <SubDivider />
-          </Column>
-
-          {nonRejectedTransactions.length !== 0 ? (
+          {hash !== WalletRoutes.TransactionsHash && (
             <>
-              {nonRejectedTransactions.map((transaction) =>
-                <PortfolioTransactionItem
-                  key={transaction.id}
-                  transaction={transaction}
-                  displayAccountName={true}
-                />
+              {accountsList.length !== 0 ? (
+                <>
+                  <Row
+                    width='100%'
+                    justifyContent='space-between'
+                    alignItems='center'
+                    marginBottom={18}
+                    padding='0px 8px'
+                  >
+                    <Text
+                      isBold={true}
+                      textColor='text01'
+                      textSize='16px'
+                    >
+                      {getLocale('braveWalletAccounts')}
+                    </Text>
+                    {!isRewardsToken && (
+                      <Row
+                        width='unset'
+                        justifyContent='flex-end'
+                      >
+                        {!hidePortfolioBalances ? (
+                          <>
+                            <Text
+                              isBold={true}
+                              textColor='text01'
+                              textSize='14px'
+                            >
+                              {formattedFullAssetBalance}
+                            </Text>
+                            <HorizontalSpace space='4px' />
+                            <Text
+                              isBold={false}
+                              textColor='text03'
+                              textSize='14px'
+                            >
+                              {'(' +
+                                fullAssetFiatBalance.formatAsFiat(
+                                  defaultFiatCurrency
+                                ) +
+                                ')'}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text
+                            isBold={true}
+                            textColor='text01'
+                            textSize='14px'
+                          >
+                            ******
+                          </Text>
+                        )}
+                        <HorizontalSpace space='16px' />
+                        <ToggleVisibilityButton onClick={onToggleHideBalances}>
+                          <EyeIcon
+                            name={hidePortfolioBalances ? 'eye-off' : 'eye-on'}
+                          />
+                        </ToggleVisibilityButton>
+                      </Row>
+                    )}
+                  </Row>
+                  <VerticalDivider />
+                  <VerticalSpacer space={8} />
+                  {accountsList.map((account) => (
+                    <PortfolioAccountItem
+                      key={account.accountId.uniqueKey}
+                      asset={selectedAsset}
+                      account={account}
+                      assetBalance={
+                        isRewardsToken && rewardsBalance
+                          ? new Amount(rewardsBalance)
+                              .multiplyByDecimals(selectedAsset.decimals)
+                              .format()
+                          : getBalance(
+                              account.accountId,
+                              selectedAsset,
+                              tokenBalancesRegistry
+                            )
+                      }
+                      selectedNetwork={selectedAssetNetwork || selectedNetwork}
+                      showSellModal={() => onShowSellModal(account)}
+                      isSellSupported={checkIsAssetSellSupported(selectedAsset)}
+                      hideBalances={hidePortfolioBalances}
+                    />
+                  ))}
+                </>
+              ) : (
+                <Column
+                  margin='20px 0px 40px 0px'
+                  alignItems='center'
+                  justifyContent='center'
+                >
+                  <EmptyAccountsIcon />
+                  <Text
+                    textColor='text01'
+                    textSize='16px'
+                    isBold={true}
+                  >
+                    {getLocale('braveWalletNoAccountsWithABalance')}
+                  </Text>
+                  <VerticalSpacer space={10} />
+                  <Text
+                    textSize='14px'
+                    textColor='text03'
+                    isBold={false}
+                  >
+                    {getLocale('braveWalletNoAccountsWithABalanceDescription')}
+                  </Text>
+                </Column>
               )}
             </>
-          ) : (
-            <EmptyTransactionContainer>
-              <TransactionPlaceholderText>{getLocale('braveWalletTransactionPlaceholder')}</TransactionPlaceholderText>
-            </EmptyTransactionContainer>
+          )}
+
+          {hash === WalletRoutes.TransactionsHash && (
+            <>
+              {nonRejectedTransactions.length !== 0 ? (
+                <Column
+                  fullWidth={true}
+                  alignItems='flex-start'
+                  justifyContent='flex-start'
+                  gap='16px'
+                >
+                  {nonRejectedTransactions.map((transaction) => (
+                    <PortfolioTransactionItem
+                      key={transaction.id}
+                      transaction={transaction}
+                    />
+                  ))}
+                </Column>
+              ) : (
+                <Column
+                  margin='20px 0px 40px 0px'
+                  alignItems='center'
+                  justifyContent='center'
+                >
+                  <EmptyTransactionsIcon />
+                  <Text
+                    textColor='text01'
+                    textSize='16px'
+                    isBold={true}
+                  >
+                    {getLocale('braveWalletNoTransactionsYet')}
+                  </Text>
+                  <VerticalSpacer space={10} />
+                  <Text
+                    textSize='14px'
+                    textColor='text03'
+                    isBold={false}
+                  >
+                    {getLocale('braveWalletNoTransactionsYetDescription')}
+                  </Text>
+                </Column>
+              )}
+            </>
           )}
         </>
-      }
-      {showSellModal && selectedAsset &&
+      )}
+      {showSellModal && selectedAsset && (
         <SellAssetModal
           selectedAsset={selectedAsset}
-          selectedAssetsNetwork={selectedAssetNetwork || selectedNetwork}
           onClose={() => setShowSellModal(false)}
           sellAmount={sellAmount}
           setSellAmount={setSellAmount}
           openSellAssetLink={onOpenSellAssetLink}
           showSellModal={showSellModal}
           account={selectedSellAccount}
-          sellAssetBalance={getBalance(selectedSellAccount, selectedAsset)}
+          sellAssetBalance={getBalance(
+            selectedSellAccount?.accountId,
+            selectedAsset,
+            tokenBalancesRegistry
+          )}
         />
-      }
+      )}
     </>
   )
 }

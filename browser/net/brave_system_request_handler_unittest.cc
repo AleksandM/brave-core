@@ -7,6 +7,7 @@
 
 #include <string>
 
+#include "brave/components/constants/network_constants.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -18,9 +19,9 @@ TEST(BraveSystemRequestHandlerTest, AddBraveServiceKeyHeaderForBrave) {
 
   request.url = url;
   brave::AddBraveServicesKeyHeader(&request);
-  std::string key;
-  EXPECT_TRUE(request.headers.GetHeader(kBraveServicesKeyHeader, &key));
-  EXPECT_EQ(key, BraveServicesKeyForTesting());
+  auto key = request.headers.GetHeader(kBraveServicesKeyHeader);
+  ASSERT_TRUE(key);
+  EXPECT_EQ(*key, BraveServicesKeyForTesting());
 }
 
 TEST(BraveSystemRequestHandlerTest, AddBraveServiceKeyHeaderForBraveSoftware) {
@@ -29,9 +30,9 @@ TEST(BraveSystemRequestHandlerTest, AddBraveServiceKeyHeaderForBraveSoftware) {
 
   request.url = url;
   brave::AddBraveServicesKeyHeader(&request);
-  std::string key;
-  EXPECT_TRUE(request.headers.GetHeader(kBraveServicesKeyHeader, &key));
-  EXPECT_EQ(key, BraveServicesKeyForTesting());
+  auto key = request.headers.GetHeader(kBraveServicesKeyHeader);
+  ASSERT_TRUE(key);
+  EXPECT_EQ(*key, BraveServicesKeyForTesting());
 }
 
 TEST(BraveSystemRequestHandlerTest, DontAddBraveServiceKeyHeader) {
@@ -40,8 +41,8 @@ TEST(BraveSystemRequestHandlerTest, DontAddBraveServiceKeyHeader) {
 
   request.url = url;
   brave::AddBraveServicesKeyHeader(&request);
-  std::string key;
-  EXPECT_FALSE(request.headers.GetHeader(kBraveServicesKeyHeader, &key));
+  auto key = request.headers.GetHeader(kBraveServicesKeyHeader);
+  ASSERT_FALSE(key);
 }
 
 }  // namespace brave

@@ -8,26 +8,56 @@
 
 class PrefService;
 
-namespace brave_search_conversion {
-namespace prefs {
+namespace brave_search_conversion::prefs {
 
-constexpr char kDismissed[] = "brave.brave_search_conversion.dismissed";
+inline constexpr char kDismissed[] = "brave.brave_search_conversion.dismissed";
+inline constexpr char kMaybeLaterClickedTime[] =
+    "brave.brave_search_conversion.maybe_later_clicked_time";
 
-constexpr char kP3ABannerShown[] = "brave.brave_search_conversion.banner_shown";
-constexpr char kP3AButtonShown[] = "brave.brave_search_conversion.button_shown";
-constexpr char kP3ANTPShown[] = "brave.brave_search_conversion.ntp_shown";
+// Index ranges from 0 to 1 and it's matched DDGTypeC to DDGTypeD.
+// It's the type index for now.
+inline constexpr char kDDGBannerTypeIndex[] =
+    "brave.brave_search_conversion.ddg_banner_type_index";
 
-constexpr char kP3ABannerTriggered[] =
-    "brave.brave_search_conversion.banner_triggered";
-constexpr char kP3AButtonTriggered[] =
-    "brave.brave_search_conversion.button_triggered";
-constexpr char kP3ANTPTriggered[] =
-    "brave.brave_search_conversion.ntp_triggered";
+// It's the time that current index type is shown first.
+// We rotate 4 types when specific time is passed.
+inline constexpr char kLatestDDGBannerTypeFirstShownTime[] =
+    "brave.brave_search_conversion.latest_ddg_banner_type_first_shown_time";
 
-constexpr char kP3ADefaultEngineChanged[] =
+inline constexpr char kShowNTPSearchBox[] =
+    "brave.brave_search.show-ntp-search";
+
+inline constexpr char kLastUsedNTPSearchEngine[] =
+    "brave.brave_search.last-used-ntp-search-engine";
+
+// Determines whether the search box on the NTP prompts the user to enable
+// search suggestions.
+inline constexpr char kPromptEnableSuggestions[] =
+    "brave.brave_search.ntp-search_prompt_enable_suggestions";
+
+inline constexpr char kP3AActionStatuses[] =
+    "brave.brave_search_conversion.action_statuses";
+
+inline constexpr char kP3ADefaultEngineConverted[] =
     "brave.brave_search_conversion.default_changed";
+inline constexpr char kP3AQueryCountBeforeChurn[] =
+    "brave.brave_search_conversion.query_count";
+inline constexpr char kP3AAlreadyChurned[] =
+    "brave.brave_search_conversion.already_churned";
 
-}  // namespace prefs
-}  // namespace brave_search_conversion
+inline constexpr char kP3ABannerShown[] =
+    "brave.brave_search_conversion.banner_shown";  // DEPRECATED
+inline constexpr char kP3ABannerTriggered[] =
+    "brave.brave_search_conversion.banner_triggered";  // DEPRECATED
+inline constexpr char kP3AButtonShown[] =
+    "brave.brave_search_conversion.button_shown";  // DEPRECATED
+inline constexpr char kP3ANTPShown[] =
+    "brave.brave_search_conversion.ntp_shown";  // DEPRECATED
+inline constexpr char kP3AButtonTriggered[] =
+    "brave.brave_search_conversion.button_triggered";  // DEPRECATED
+inline constexpr char kP3ANTPTriggered[] =
+    "brave.brave_search_conversion.ntp_triggered";  // DEPRECATED
+
+}  // namespace brave_search_conversion::prefs
 
 #endif  // BRAVE_COMPONENTS_BRAVE_SEARCH_CONVERSION_PREF_NAMES_H_

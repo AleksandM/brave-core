@@ -7,23 +7,22 @@
 #define BRAVE_COMPONENTS_BRAVE_WALLET_COMMON_BRAVE_WALLET_TYPES_H_
 
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/values.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace brave_wallet {
 
 namespace mojom {
 // TODO(apaymyshev): Remove these aliases eventually.
-constexpr KeyringId kDefaultKeyringId = KeyringId::kDefault;
-constexpr KeyringId kSolanaKeyringId = KeyringId::kSolana;
-constexpr KeyringId kFilecoinKeyringId = KeyringId::kFilecoin;
-constexpr KeyringId kFilecoinTestnetKeyringId = KeyringId::kFilecoinTestnet;
-constexpr KeyringId kBitcoinKeyring84Id = KeyringId::kBitcoin84;
-constexpr KeyringId kBitcoinKeyring84TestId = KeyringId::kBitcoin84Testnet;
+inline constexpr KeyringId kDefaultKeyringId = KeyringId::kDefault;
+inline constexpr KeyringId kSolanaKeyringId = KeyringId::kSolana;
+inline constexpr KeyringId kFilecoinKeyringId = KeyringId::kFilecoin;
+inline constexpr KeyringId kFilecoinTestnetKeyringId =
+    KeyringId::kFilecoinTestnet;
 }  // namespace mojom
 
 using uint256_t = unsigned _BitInt(256);
@@ -33,16 +32,16 @@ using uint128_t = unsigned _BitInt(128);
 using int128_t = _BitInt(128);
 
 // 2^255 - 1
-constexpr int256_t kMax256BitInt = std::numeric_limits<int256_t>::max();
+inline constexpr int256_t kMax256BitInt = std::numeric_limits<int256_t>::max();
 // -(2^255 -1)
-constexpr int256_t kMin256BitInt = std::numeric_limits<int256_t>::min();
+inline constexpr int256_t kMin256BitInt = std::numeric_limits<int256_t>::min();
 
 // 2^127 - 1
-constexpr int128_t kMax128BitInt = std::numeric_limits<int128_t>::max();
+inline constexpr int128_t kMax128BitInt = std::numeric_limits<int128_t>::max();
 // -(2^127 -1)
-constexpr int128_t kMin128BitInt = std::numeric_limits<int128_t>::min();
+inline constexpr int128_t kMin128BitInt = std::numeric_limits<int128_t>::min();
 
-constexpr uint64_t kMaxSafeIntegerUint64 = 9007199254740991;  // 2^53-1
+inline constexpr uint64_t kMaxSafeIntegerUint64 = 9007199254740991;  // 2^53-1
 
 // Determines the min/max value for Solidity types such as uint56
 // uintN where 0 < N <= 256; N % 8 == 0
@@ -51,9 +50,9 @@ constexpr uint64_t kMaxSafeIntegerUint64 = 9007199254740991;  // 2^53-1
 // This is being used for sign typed data where values are not passed
 // around.
 bool ValidSolidityBits(size_t bits);
-absl::optional<uint256_t> MaxSolidityUint(size_t bits);
-absl::optional<int256_t> MaxSolidityInt(size_t bits);
-absl::optional<int256_t> MinSolidityInt(size_t bits);
+std::optional<uint256_t> MaxSolidityUint(size_t bits);
+std::optional<int256_t> MaxSolidityInt(size_t bits);
+std::optional<int256_t> MinSolidityInt(size_t bits);
 
 struct Log {
   Log();
@@ -91,21 +90,18 @@ struct TransactionReceipt {
   std::string contract_address;
   std::vector<Log> logs;
   std::string logs_bloom;
-  bool status;
+  bool status = false;
 };
 
 struct ImportInfo {
   std::string mnemonic;
   bool is_legacy_crypto_wallets;
   size_t number_of_accounts;
+
+  bool operator==(const ImportInfo&) const = default;
 };
 
-enum class ImportError {
-  kNone = 0,
-  kJsonError,
-  kPasswordError,
-  kInternalError
-};
+enum class ImportError { kJsonError = 1, kPasswordError, kInternalError };
 
 struct SolanaSignatureStatus {
   SolanaSignatureStatus() = default;
@@ -119,7 +115,7 @@ struct SolanaSignatureStatus {
   bool operator!=(const SolanaSignatureStatus&) const;
 
   base::Value::Dict ToValue() const;
-  static absl::optional<SolanaSignatureStatus> FromValue(
+  static std::optional<SolanaSignatureStatus> FromValue(
       const base::Value::Dict& value);
 
   // The slot the transaction was processed.
@@ -160,11 +156,6 @@ struct SolanaAccountInfo {
   // The epoch at which this account will next owe rent.
   uint64_t rent_epoch;
 };
-
-mojom::AccountIdPtr MakeAccountId(mojom::CoinType coin,
-                                  mojom::KeyringId keyring_id,
-                                  mojom::AccountKind kind,
-                                  const std::string& address);
 
 }  // namespace brave_wallet
 

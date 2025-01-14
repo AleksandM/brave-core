@@ -6,13 +6,14 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_DEPOSITS_DEPOSIT_BUILDER_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_DEPOSITS_DEPOSIT_BUILDER_H_
 
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom-forward.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom-forward.h"
 
 namespace brave_ads {
 
 struct DepositInfo;
 
-DepositInfo BuildDeposit(const mojom::SearchResultAdInfoPtr& ad_mojom);
+DepositInfo FromMojomBuildDeposit(
+    const mojom::CreativeSearchResultAdInfoPtr& mojom_creative_ad);
 
 }  // namespace brave_ads
 

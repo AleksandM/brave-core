@@ -3,18 +3,26 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "brave/components/brave_wallet/common/eth_request_helper.h"
+
 #include <memory>
 #include <utility>
 #include <vector>
 
 #include "base/base64.h"
+#include "base/json/json_reader.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/values_test_util.h"
+#include "base/values.h"
 #include "brave/components/brave_wallet/common/brave_wallet_types.h"
-#include "brave/components/brave_wallet/common/eth_request_helper.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/brave_wallet/common/hex_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
+
+using base::test::ParseJsonDict;
+using base::test::ParseJsonList;
 
 namespace brave_wallet {
 
@@ -32,9 +40,7 @@ TEST(EthRequestHelperUnitTest, CommonParseErrors) {
     EXPECT_FALSE(ParseEthSignParams(error_case, &address, &message));
     std::string chain_id;
     EXPECT_FALSE(ParseSwitchEthereumChainParams(error_case, &chain_id));
-    mojom::BlockchainTokenPtr token;
-    EXPECT_FALSE(ParseWalletWatchAssetParams(
-        error_case, "0x1", mojom::CoinType::ETH, &token, &message));
+    EXPECT_FALSE(ParseWalletWatchAssetParams(error_case, "0x1", &message));
     std::string signature;
     EXPECT_FALSE(
         ParsePersonalEcRecoverParams(error_case, &message, &signature));
@@ -45,8 +51,11 @@ TEST(EthRequestHelperUnitTest, CommonParseErrors) {
     std::vector<uint8_t> nonce;
     std::vector<uint8_t> ephemeral_public_key;
     std::vector<uint8_t> ciphertext;
-    EXPECT_FALSE(ParseEthDecryptData(error_case, &version, &nonce,
-                                     &ephemeral_public_key, &ciphertext));
+    const auto json = base::JSONReader::Read(error_case);
+    if (json) {
+      EXPECT_FALSE(ParseEthDecryptData(*json, &version, &nonce,
+                                       &ephemeral_public_key, &ciphertext));
+    }
   }
 }
 
@@ -168,38 +177,6 @@ TEST(EthResponseHelperUnitTest, ParseEthTransaction1559Params) {
 }
 
 TEST(EthResponseHelperUnitTest, ShouldCreate1559Tx) {
-  const std::string ledger_address =
-      "0x7f84E0DfF3ffd0af78770cF86c1b1DdFF99d51C9";
-  const std::string trezor_address =
-      "0x7f84E0DfF3ffd0af78770cF86c1b1DdFF99d51CA";
-  const std::string hw_address = "0x7f84E0DfF3ffd0af78770cF86c1b1DdFF99d51CC";
-
-  mojom::AccountInfoPtr primary_account = mojom::AccountInfo::New(
-      MakeAccountId(mojom::CoinType::ETH, mojom::kDefaultKeyringId,
-                    mojom::AccountKind::kDerived,
-                    "0x7f84E0DfF3ffd0af78770cF86c1b1DdFF99d51C8"),
-      "0x7f84E0DfF3ffd0af78770cF86c1b1DdFF99d51C8", "primary", nullptr);
-  mojom::AccountInfoPtr ledger_account = mojom::AccountInfo::New(
-      MakeAccountId(mojom::CoinType::ETH, mojom::kDefaultKeyringId,
-                    mojom::AccountKind::kHardware, ledger_address),
-      ledger_address, "ledger",
-      mojom::HardwareInfo::New("m/44'/60'/1'/0/0", "Ledger", "123"));
-  mojom::AccountInfoPtr trezor_account = mojom::AccountInfo::New(
-      MakeAccountId(mojom::CoinType::ETH, mojom::kDefaultKeyringId,
-                    mojom::AccountKind::kHardware, trezor_address),
-      trezor_address, "trezor",
-      mojom::HardwareInfo::New("m/44'/60'/1'/0/0", "Trezor", "123"));
-  mojom::AccountInfoPtr hw_account = mojom::AccountInfo::New(
-      MakeAccountId(mojom::CoinType::ETH, mojom::kDefaultKeyringId,
-                    mojom::AccountKind::kHardware, hw_address),
-      hw_address, "hw",
-      mojom::HardwareInfo::New("m/44'/60'/1'/0/0", "Hardware", "123"));
-  std::vector<mojom::AccountInfoPtr> account_infos;
-  account_infos.push_back(std::move(primary_account));
-  account_infos.push_back(std::move(ledger_account));
-  account_infos.push_back(std::move(trezor_account));
-  account_infos.push_back(std::move(hw_account));
-
   // Test both EIP1559 and legacy gas fee fields are specified.
   std::string json(
       R"({
@@ -219,27 +196,7 @@ TEST(EthResponseHelperUnitTest, ShouldCreate1559Tx) {
   auto tx_data = ParseEthTransaction1559Params(json, &from);
 
   ASSERT_TRUE(tx_data);
-  EXPECT_TRUE(ShouldCreate1559Tx(tx_data.Clone(),
-                                 true /* network_supports_eip1559 */,
-                                 account_infos, from));
-  EXPECT_TRUE(
-      ShouldCreate1559Tx(tx_data.Clone(), true, account_infos, ledger_address));
-  EXPECT_TRUE(ShouldCreate1559Tx(tx_data.Clone(), true, account_infos,
-                                 base::ToLowerASCII(ledger_address)));
-  EXPECT_TRUE(
-      ShouldCreate1559Tx(tx_data.Clone(), true, account_infos, trezor_address));
-  EXPECT_TRUE(ShouldCreate1559Tx(tx_data.Clone(), true, account_infos,
-                                 base::ToLowerASCII(trezor_address)));
-  // From is not found in the account infos, can happen when keyring is locked.
-  EXPECT_TRUE(ShouldCreate1559Tx(
-      tx_data.Clone(), true /* network_supports_eip1559 */, {}, from));
-  // Network doesn't support EIP1559
-  EXPECT_FALSE(ShouldCreate1559Tx(tx_data.Clone(), false, account_infos, from));
-  // Keyring doesn't support EIP1559
-  EXPECT_FALSE(
-      ShouldCreate1559Tx(tx_data.Clone(), true, account_infos, hw_address));
-  EXPECT_FALSE(ShouldCreate1559Tx(tx_data.Clone(), true, account_infos,
-                                  base::ToLowerASCII(hw_address)));
+  EXPECT_TRUE(ShouldCreate1559Tx(*tx_data));
 
   // Test only EIP1559 gas fee fields are specified.
   json =
@@ -258,10 +215,7 @@ TEST(EthResponseHelperUnitTest, ShouldCreate1559Tx) {
 
   tx_data = ParseEthTransaction1559Params(json, &from);
   ASSERT_TRUE(tx_data);
-  EXPECT_TRUE(ShouldCreate1559Tx(tx_data.Clone(),
-                                 true /* network_supports_eip1559 */,
-                                 account_infos, from));
-  EXPECT_FALSE(ShouldCreate1559Tx(tx_data.Clone(), false, account_infos, from));
+  EXPECT_TRUE(ShouldCreate1559Tx(*tx_data));
 
   // Test only legacy gas field is specified.
   json =
@@ -278,10 +232,7 @@ TEST(EthResponseHelperUnitTest, ShouldCreate1559Tx) {
       })";
   tx_data = ParseEthTransaction1559Params(json, &from);
   ASSERT_TRUE(tx_data);
-  EXPECT_FALSE(ShouldCreate1559Tx(tx_data.Clone(),
-                                  true /* network_supports_eip1559 */,
-                                  account_infos, from));
-  EXPECT_FALSE(ShouldCreate1559Tx(tx_data.Clone(), false, account_infos, from));
+  EXPECT_FALSE(ShouldCreate1559Tx(*tx_data));
 
   // Test no gas fee fields are specified.
   json =
@@ -296,28 +247,7 @@ TEST(EthResponseHelperUnitTest, ShouldCreate1559Tx) {
       })";
   tx_data = ParseEthTransaction1559Params(json, &from);
   ASSERT_TRUE(tx_data);
-  EXPECT_TRUE(ShouldCreate1559Tx(tx_data.Clone(), true, account_infos, from));
-  EXPECT_TRUE(ShouldCreate1559Tx(tx_data.Clone(), true, account_infos,
-                                 base::ToLowerASCII(from)));
-  EXPECT_TRUE(
-      ShouldCreate1559Tx(tx_data.Clone(), true, account_infos, ledger_address));
-  EXPECT_TRUE(ShouldCreate1559Tx(tx_data.Clone(), true, account_infos,
-                                 base::ToLowerASCII(ledger_address)));
-  EXPECT_TRUE(
-      ShouldCreate1559Tx(tx_data.Clone(), true, account_infos, trezor_address));
-  EXPECT_TRUE(ShouldCreate1559Tx(tx_data.Clone(), true, account_infos,
-                                 base::ToLowerASCII(trezor_address)));
-  // From is not found in the account infos, can happen when keyring is locked.
-  EXPECT_TRUE(ShouldCreate1559Tx(
-      tx_data.Clone(), true /* network_supports_eip1559 */, {}, from));
-
-  EXPECT_FALSE(ShouldCreate1559Tx(tx_data.Clone(), false, account_infos, from));
-  EXPECT_FALSE(ShouldCreate1559Tx(tx_data.Clone(), false, account_infos, from));
-  // Keyring does't support EIP1559
-  EXPECT_FALSE(
-      ShouldCreate1559Tx(tx_data.Clone(), true, account_infos, hw_address));
-  EXPECT_FALSE(ShouldCreate1559Tx(tx_data.Clone(), true, account_infos,
-                                  base::ToLowerASCII(hw_address)));
+  EXPECT_TRUE(ShouldCreate1559Tx(*tx_data));
 }
 
 TEST(EthResponseHelperUnitTest, ParseEthSignParams) {
@@ -595,8 +525,8 @@ TEST(EthResponseHelperUnitTest, ParseEthDecryptData) {
   std::vector<uint8_t> nonce;
   std::vector<uint8_t> ephemeral_public_key;
   std::vector<uint8_t> ciphertext;
-  ASSERT_TRUE(ParseEthDecryptData(json, &version, &nonce, &ephemeral_public_key,
-                                  &ciphertext));
+  ASSERT_TRUE(ParseEthDecryptData(base::test::ParseJson(json), &version, &nonce,
+                                  &ephemeral_public_key, &ciphertext));
   EXPECT_EQ(version, "x25519-xsalsa20-poly1305");
   EXPECT_EQ(base::Base64Encode(nonce), "Op/sSbbAETtPmpLB3zI3hd0i9iHnbh/8");
   EXPECT_EQ(base::Base64Encode(ephemeral_public_key),
@@ -614,11 +544,12 @@ TEST(EthResponseHelperUnitTest, GetEthJsonRequestInfo) {
     "params": []
   })";
   base::Value id;
-  std::string method, params;
+  std::string method;
+  base::Value::List params;
   EXPECT_TRUE(GetEthJsonRequestInfo(json, &id, &method, &params));
   EXPECT_EQ(id, base::Value("1"));
   EXPECT_EQ(method, "eth_blockNumber");
-  EXPECT_EQ(params, "[]");
+  EXPECT_EQ(params, ParseJsonList("[]"));
 
   json = R"({
     "id": null,
@@ -631,7 +562,7 @@ TEST(EthResponseHelperUnitTest, GetEthJsonRequestInfo) {
   EXPECT_TRUE(GetEthJsonRequestInfo(json, &id, &method, &params));
   EXPECT_EQ(id, base::Value());
   EXPECT_EQ(method, "eth_getBlockByNumber");
-  EXPECT_EQ(params, "[\"0x5BaD55\",true]");
+  EXPECT_EQ(params, ParseJsonList("[\"0x5BaD55\",true]"));
 
   json = R"({
     "id": 2,
@@ -645,21 +576,21 @@ TEST(EthResponseHelperUnitTest, GetEthJsonRequestInfo) {
   EXPECT_TRUE(GetEthJsonRequestInfo(json, &id, &method, &params));
   EXPECT_EQ(id, base::Value(2));
   EXPECT_EQ(method, "eth_getBlockByNumber");
-  EXPECT_EQ(params, "[\"0x5BaD55\",true]");
+  EXPECT_EQ(params, ParseJsonList("[\"0x5BaD55\",true]"));
 
   // Can pass nullptr for id
   method.clear();
   params.clear();
   EXPECT_TRUE(GetEthJsonRequestInfo(json, nullptr, &method, &params));
   EXPECT_EQ(method, "eth_getBlockByNumber");
-  EXPECT_EQ(params, "[\"0x5BaD55\",true]");
+  EXPECT_EQ(params, ParseJsonList("[\"0x5BaD55\",true]"));
 
   // Can pass nullptr for method
   id = base::Value();
   params.clear();
   EXPECT_TRUE(GetEthJsonRequestInfo(json, &id, nullptr, &params));
   EXPECT_EQ(id, base::Value(2));
-  EXPECT_EQ(params, "[\"0x5BaD55\",true]");
+  EXPECT_EQ(params, ParseJsonList("[\"0x5BaD55\",true]"));
 
   // Can pass nullptr for params
   id = base::Value();
@@ -682,7 +613,7 @@ TEST(EthResponseHelperUnitTest, GetEthJsonRequestInfo) {
   EXPECT_TRUE(GetEthJsonRequestInfo(missing_id_json, &id, &method, &params));
   EXPECT_EQ(id, base::Value());
   EXPECT_EQ(method, "eth_getBlockByNumber");
-  EXPECT_EQ(params, "[\"0x5BaD55\",true]");
+  EXPECT_EQ(params, ParseJsonList("[\"0x5BaD55\",true]"));
 
   // Missing method
   std::string missing_method_json = R"({
@@ -764,8 +695,7 @@ TEST(EthResponseHelperUnitTest, ParseSwitchEthereumChainParams) {
 }
 
 TEST(EthRequestHelperUnitTest, ParseEthSignTypedDataParams) {
-  const std::string json = R"({
-    "params": [
+  constexpr char kJson[] = R"([
       "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826",
       "{
         \"types\" :{
@@ -792,60 +722,106 @@ TEST(EthRequestHelperUnitTest, ParseEthSignTypedDataParams) {
           \"chainId\": 1,
           \"verifyingContract\": \"0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC\",
         },
-        \"message\": {
-          \"from\": {
-            \"name\":\"Cow\", \"wallet\":\"0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826\"
-          },
-          \"to\": {
-            \"name\":\"Bob\", \"wallet\":\"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB\"
-          },
-          \"contents\":\"Hello, Bob!\"
-        }
+        \"message\": %s
       }"
-    ]
-  })";
+    ])";
 
-  std::string address;
-  std::string message;
-  base::Value::Dict domain;
-  std::vector<uint8_t> domain_hash;
-  std::vector<uint8_t> primary_hash;
+  std::string json = base::StringPrintf(kJson, R"({
+    \"from\": {
+      \"name\":\"Cow\",
+      \"wallet\":\"0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826\"
+    },
+    \"to\": {
+      \"name\":\"Bob\",
+      \"wallet\":\"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB\"
+    },
+    \"contents\":\"Hello, Bob!\"
+  })");
 
-  EXPECT_TRUE(ParseEthSignTypedDataParams(json, &address, &message, &domain,
-                                          EthSignTypedDataHelper::Version::kV4,
-                                          &domain_hash, &primary_hash));
+  const auto& expected_domain =
+      R"({
+        "name": "Ether Mail",
+        "version": "1",
+        "chainId": 1,
+        "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
+      })";
 
-  EXPECT_EQ(address, "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826");
-  EXPECT_EQ(
-      message,
+  const auto& expected_message =
       "{\"contents\":\"Hello, "
       "Bob!\",\"from\":{\"name\":\"Cow\",\"wallet\":"
       "\"0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826\"},\"to\":{\"name\":"
-      "\"Bob\",\"wallet\":\"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB\"}}");
+      "\"Bob\",\"wallet\":\"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB\"}}";
+  const auto& expected_message_to_sign =
+      "be609aee343fb3c4b28e1df9e632fca64fcfaede20f02e86244efddf30957bd2";
+  const auto& expected_primary_hash =
+      "c52c0ee5d84264471806290a3f2c4cecfc5490626bf912d01f240d7a274b371e";
+  const auto& expected_domain_hash =
+      "f2cee375fa42b42143804025fc449deafd50cc031ca257e0b194a650a912090f";
 
-  std::string* ds_name = domain.FindString("name");
-  ASSERT_TRUE(ds_name);
-  EXPECT_EQ(*ds_name, "Ether Mail");
-  std::string* ds_version = domain.FindString("version");
-  ASSERT_TRUE(ds_version);
-  EXPECT_EQ(*ds_version, "1");
-  auto chain_id = domain.FindInt("chainId");
-  ASSERT_TRUE(chain_id);
-  EXPECT_EQ(*chain_id, 1);
-  std::string* ds_verifying_contract = domain.FindString("verifyingContract");
-  ASSERT_TRUE(ds_verifying_contract);
-  EXPECT_EQ(*ds_verifying_contract,
-            "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC");
+  auto params_list = ParseJsonList(json);
+  auto eth_sign_typed_data = ParseEthSignTypedDataParams(
+      params_list, EthSignTypedDataHelper::Version::kV4);
 
-  EXPECT_EQ(base::ToLowerASCII(base::HexEncode(domain_hash)),
-            "f2cee375fa42b42143804025fc449deafd50cc031ca257e0b194a650a912090f");
-  EXPECT_EQ(base::ToLowerASCII(base::HexEncode(primary_hash)),
-            "c52c0ee5d84264471806290a3f2c4cecfc5490626bf912d01f240d7a274b371e");
+  ASSERT_TRUE(eth_sign_typed_data);
+
+  EXPECT_EQ(eth_sign_typed_data->address_param,
+            "0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826");
+  EXPECT_EQ(eth_sign_typed_data->message_json, expected_message);
+
+  EXPECT_EQ(ParseJsonDict(eth_sign_typed_data->domain_json),
+            ParseJsonDict(expected_domain));
+
+  EXPECT_EQ(eth_sign_typed_data->chain_id, "0x1");
+
+  EXPECT_EQ(
+      base::ToLowerASCII(base::HexEncode(eth_sign_typed_data->domain_hash)),
+      expected_domain_hash);
+  EXPECT_EQ(
+      base::ToLowerASCII(base::HexEncode(eth_sign_typed_data->primary_hash)),
+      expected_primary_hash);
   auto message_to_sign = EthSignTypedDataHelper::GetTypedDataMessageToSign(
-      domain_hash, primary_hash);
-  ASSERT_TRUE(message_to_sign);
-  EXPECT_EQ(base::ToLowerASCII(base::HexEncode(*message_to_sign)),
-            "be609aee343fb3c4b28e1df9e632fca64fcfaede20f02e86244efddf30957bd2");
+      eth_sign_typed_data->domain_hash, eth_sign_typed_data->primary_hash);
+  EXPECT_EQ(base::ToLowerASCII(base::HexEncode(message_to_sign)),
+            expected_message_to_sign);
+  EXPECT_FALSE(eth_sign_typed_data->meta);
+
+  // Test with extra fields in the message.
+  json = base::StringPrintf(kJson, R"({
+    \"from\": {
+      \"name\":\"Cow\",
+      \"wallet\":\"0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826\"
+    },
+    \"to\": {
+      \"name\":\"Bob\",
+      \"wallet\":\"0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB\"
+    },
+    \"contents\":\"Hello, Bob!\",
+    \"foo\":\"bar\"
+  })");
+
+  params_list = ParseJsonList(json);
+  eth_sign_typed_data = ParseEthSignTypedDataParams(
+      params_list, EthSignTypedDataHelper::Version::kV4);
+  ASSERT_TRUE(eth_sign_typed_data);
+  // OK: extraneous message properties are sanitized.
+  EXPECT_EQ(eth_sign_typed_data->message_json, expected_message);
+
+  // OK: primary type message hash is unchanged.
+  EXPECT_EQ(
+      base::ToLowerASCII(base::HexEncode(eth_sign_typed_data->primary_hash)),
+      expected_primary_hash);
+
+  // OK: domain hash is unchanged.
+  EXPECT_EQ(
+      base::ToLowerASCII(base::HexEncode(eth_sign_typed_data->domain_hash)),
+      expected_domain_hash);
+
+  // OK: message bytes to sign are unchanged.
+  message_to_sign = EthSignTypedDataHelper::GetTypedDataMessageToSign(
+      eth_sign_typed_data->domain_hash, eth_sign_typed_data->primary_hash);
+  EXPECT_EQ(base::ToLowerASCII(base::HexEncode(message_to_sign)),
+            expected_message_to_sign);
+  EXPECT_FALSE(eth_sign_typed_data->meta);
 }
 
 TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
@@ -866,13 +842,14 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
 
   mojom::BlockchainTokenPtr expected_token = mojom::BlockchainToken::New(
       "0x0D8775F648430679A709E98d2b0Cb6250d2887EF", "BAT",
-      "https://test.com/test.png", true, false, false, false, "BAT", 18, true,
-      "", "", "0x1", mojom::CoinType::ETH);
+      "https://test.com/test.png", false, true, false, false,
+      mojom::SPLTokenProgram::kUnsupported, false, false, "BAT", 18, true, "",
+      "", "0x1", mojom::CoinType::ETH, false);
 
   mojom::BlockchainTokenPtr token;
   std::string error_message;
-  EXPECT_TRUE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                          &token, &error_message));
+  token = ParseWalletWatchAssetParams(json, "0x1", &error_message);
+  EXPECT_TRUE(token);
   EXPECT_EQ(token, expected_token);
   EXPECT_TRUE(error_message.empty());
 
@@ -892,12 +869,12 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_TRUE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                          &token, &error_message));
+  token = ParseWalletWatchAssetParams(json, "0x1", &error_message);
+  EXPECT_TRUE(token);
   EXPECT_EQ(token, expected_token);
   EXPECT_TRUE(error_message.empty());
 
-  // Decimals as string is allowed for web compability.
+  // Decimals as string is allowed for web compatibility.
   json = R"({
     "id": "1",
     "jsonrpc": "2.0",
@@ -911,8 +888,8 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_TRUE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                          &token, &error_message));
+  token = ParseWalletWatchAssetParams(json, "0x1", &error_message);
+  EXPECT_TRUE(token);
   EXPECT_EQ(token, expected_token);
   EXPECT_TRUE(error_message.empty());
 
@@ -929,8 +906,7 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       }
     }
   })";
-  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                           &token, &error_message));
+  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", &error_message));
   EXPECT_FALSE(error_message.empty());
 
   // Missing address
@@ -946,8 +922,7 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                           &token, &error_message));
+  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", &error_message));
   EXPECT_FALSE(error_message.empty());
 
   // Invalid address
@@ -964,8 +939,7 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                           &token, &error_message));
+  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", &error_message));
   EXPECT_FALSE(error_message.empty());
 
   // Missing symbol
@@ -981,8 +955,7 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                           &token, &error_message));
+  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", &error_message));
   EXPECT_FALSE(error_message.empty());
 
   // Invalid symbol, len = 12
@@ -999,8 +972,7 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                           &token, &error_message));
+  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", &error_message));
   EXPECT_FALSE(error_message.empty());
 
   // Missing decimals
@@ -1016,8 +988,7 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                           &token, &error_message));
+  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", &error_message));
   EXPECT_FALSE(error_message.empty());
 
   // Invalid decimals, negative number or larger than 36.
@@ -1034,8 +1005,7 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                           &token, &error_message));
+  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", &error_message));
   EXPECT_FALSE(error_message.empty());
 
   json = R"({
@@ -1051,8 +1021,7 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "type": "ERC20"
     }
   })";
-  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                           &token, &error_message));
+  EXPECT_FALSE(ParseWalletWatchAssetParams(json, "0x1", &error_message));
   EXPECT_FALSE(error_message.empty());
 
   // Params in an array should work for legacy send.
@@ -1070,8 +1039,8 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
     }]
   })";
 
-  EXPECT_TRUE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                          &token, &error_message));
+  token = ParseWalletWatchAssetParams(json, "0x1", &error_message);
+  EXPECT_TRUE(token);
   EXPECT_EQ(token, expected_token);
   EXPECT_TRUE(error_message.empty());
 
@@ -1091,8 +1060,8 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
     }
   })";
   expected_token->logo = "http://test.com/test.png";
-  EXPECT_TRUE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                          &token, &error_message));
+  token = ParseWalletWatchAssetParams(json, "0x1", &error_message);
+  EXPECT_TRUE(token);
   EXPECT_EQ(token, expected_token);
   EXPECT_TRUE(error_message.empty());
 
@@ -1115,8 +1084,8 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
       "png;base64,"
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4z8AAAAMBAQD3"
       "A0FDAAAAAElFTkSuQmCC";
-  EXPECT_TRUE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                          &token, &error_message));
+  token = ParseWalletWatchAssetParams(json, "0x1", &error_message);
+  EXPECT_TRUE(token);
   EXPECT_EQ(token, expected_token);
   EXPECT_TRUE(error_message.empty());
 
@@ -1136,8 +1105,8 @@ TEST(EthRequestHelperUnitTest, ParseWalletWatchAssetParams) {
     }
   })";
   expected_token->logo = "";
-  EXPECT_TRUE(ParseWalletWatchAssetParams(json, "0x1", mojom::CoinType::ETH,
-                                          &token, &error_message));
+  token = ParseWalletWatchAssetParams(json, "0x1", &error_message);
+  EXPECT_TRUE(token);
   EXPECT_EQ(token, expected_token);
   EXPECT_TRUE(error_message.empty());
 }

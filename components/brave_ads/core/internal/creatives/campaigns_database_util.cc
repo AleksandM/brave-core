@@ -13,9 +13,9 @@ namespace brave_ads::database {
 
 void DeleteCampaigns() {
   const table::Campaigns database_table;
-  database_table.Delete(base::BindOnce([](const bool success) {
+  database_table.Delete(base::BindOnce([](bool success) {
     if (!success) {
-      return BLOG(0, "Failed to delete campaigns");
+      BLOG(0, "Failed to delete campaigns");
     }
   }));
 }

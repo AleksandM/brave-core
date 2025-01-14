@@ -17,11 +17,15 @@
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
+#if BUILDFLAG(IS_ANDROID)
+#include "components/sync/service/sync_prefs.h"
+#endif
+
 namespace brave_sync {
 
 namespace {
 
-const char kValidSyncCode[] =
+constexpr char kValidSyncCode[] =
     "fringe digital begin feed equal output proof cheap "
     "exotic ill sure question trial squirrel glove celery "
     "awkward push jelly logic broccoli almost grocery drift";
@@ -33,6 +37,10 @@ class BraveSyncPrefsTest : public testing::Test {
   BraveSyncPrefsTest() {
     brave_sync::Prefs::RegisterProfilePrefs(pref_service_.registry());
     brave_sync_prefs_ = std::make_unique<brave_sync::Prefs>(&pref_service_);
+#if BUILDFLAG(IS_ANDROID)
+    syncer::SyncPrefs::RegisterProfilePrefs(pref_service_.registry());
+    sync_prefs_ = std::make_unique<syncer::SyncPrefs>(&pref_service_);
+#endif
   }
 
   brave_sync::Prefs* brave_sync_prefs() { return brave_sync_prefs_.get(); }
@@ -42,6 +50,10 @@ class BraveSyncPrefsTest : public testing::Test {
   base::test::SingleThreadTaskEnvironment task_environment_;
   TestingPrefServiceSimple pref_service_;
   std::unique_ptr<brave_sync::Prefs> brave_sync_prefs_;
+
+#if BUILDFLAG(IS_ANDROID)
+  std::unique_ptr<syncer::SyncPrefs> sync_prefs_;
+#endif
 };
 
 #if BUILDFLAG(IS_APPLE)
@@ -88,10 +100,8 @@ TEST_F(BraveSyncPrefsTest, FailedToDecryptBraveSeedValue) {
   // Valid base64 string but not valid encrypted string must set
   // failed_to_decrypt to true. Note: "v10" prefix is important to make
   // DecryptString fail. Also the remaining string must be 12 or more bytes.
-  std::string valid_base64_string;
-  base::Base64Encode("v10_AABBCCDDEEFF", &valid_base64_string);
   pref_service()->SetString(brave_sync::Prefs::GetSeedPath(),
-                            valid_base64_string);
+                            base::Base64Encode("v10_AABBCCDDEEFF"));
   EXPECT_EQ(brave_sync_prefs()->GetSeed(&failed_to_decrypt), "");
   EXPECT_TRUE(failed_to_decrypt);
 
@@ -110,5 +120,43 @@ using BraveSyncPrefsDeathTest = BraveSyncPrefsTest;
 TEST_F(BraveSyncPrefsDeathTest, MAYBE_GetSeedOutNullptrCHECK) {
   EXPECT_CHECK_DEATH(brave_sync_prefs()->GetSeed(nullptr));
 }
+
+TEST_F(BraveSyncPrefsTest, LeaveChainDetailsMaxLenIOS) {
+  brave_sync_prefs()->SetAddLeaveChainDetailBehaviourForTests(
+      brave_sync::Prefs::AddLeaveChainDetailBehaviour::kAdd);
+
+  auto max_len = Prefs::GetLeaveChainDetailsMaxLenForTests();
+
+  std::string details("a");
+  brave_sync_prefs()->AddLeaveChainDetail("", 0, details.c_str());
+  details = brave_sync_prefs()->GetLeaveChainDetails();
+  EXPECT_LE(details.size(), max_len);
+  EXPECT_GE(details.size(), 1u);
+
+  details.assign(max_len + 1, 'a');
+  brave_sync_prefs()->AddLeaveChainDetail(__FILE__, __LINE__, details.c_str());
+  details = brave_sync_prefs()->GetLeaveChainDetails();
+  EXPECT_EQ(details.size(), max_len);
+}
+
+#if BUILDFLAG(IS_ANDROID)
+// This test is a modified upstream's
+// SyncPrefsTest.PasswordSyncAllowed_ExplicitValue
+TEST_F(BraveSyncPrefsTest, PasswordSyncAllowedExplicitValue) {
+  using syncer::UserSelectableType;
+  using syncer::UserSelectableTypeSet;
+
+  // Make passwords explicitly enabled (no default value).
+  sync_prefs_->SetSelectedTypesForSyncingUser(
+      /*keep_everything_synced=*/false,
+      /*registered_types=*/UserSelectableTypeSet::All(),
+      /*selected_types=*/{UserSelectableType::kPasswords});
+
+  sync_prefs_->SetPasswordSyncAllowed(false);
+
+  EXPECT_TRUE(sync_prefs_->GetSelectedTypesForSyncingUser().Has(
+      UserSelectableType::kPasswords));
+}
+#endif
 
 }  // namespace brave_sync

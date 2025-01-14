@@ -6,12 +6,12 @@
 #ifndef BRAVE_BROWSER_NOTIFICATIONS_ADS_NOTIFICATION_HANDLER_H_
 #define BRAVE_BROWSER_NOTIFICATIONS_ADS_NOTIFICATION_HANDLER_H_
 
+#include <optional>
 #include <string>
 
 #include "base/functional/callback_forward.h"
 #include "base/memory/raw_ref.h"
 #include "chrome/browser/notifications/notification_handler.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class GURL;
 class Profile;
@@ -21,6 +21,12 @@ namespace brave_ads {
 class AdsNotificationHandler : public NotificationHandler {
  public:
   explicit AdsNotificationHandler(Profile& profile);
+
+  AdsNotificationHandler(const AdsNotificationHandler&) = delete;
+  AdsNotificationHandler& operator=(const AdsNotificationHandler&) = delete;
+  AdsNotificationHandler(AdsNotificationHandler&&) = delete;
+  AdsNotificationHandler& operator=(AdsNotificationHandler&&) = delete;
+
   ~AdsNotificationHandler() override;
 
   // NotificationHandler:
@@ -33,16 +39,15 @@ class AdsNotificationHandler : public NotificationHandler {
   void OnClick(Profile* profile,
                const GURL& origin,
                const std::string& id,
-               const absl::optional<int>& action_index,
-               const absl::optional<std::u16string>& reply,
+               const std::optional<int>& action_index,
+               const std::optional<std::u16string>& reply,
                base::OnceClosure completed_closure) override;
   void OpenSettings(Profile* profile, const GURL& origin) override;
 
  private:
-  raw_ref<Profile> profile_;
+  const raw_ref<Profile> profile_;
 
-  AdsNotificationHandler(const AdsNotificationHandler&) = delete;
-  AdsNotificationHandler& operator=(const AdsNotificationHandler&) = delete;
+  bool did_click_notification_ad_ = false;
 };
 
 }  // namespace brave_ads

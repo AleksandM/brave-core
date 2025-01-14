@@ -7,8 +7,8 @@
 
 #include <utility>
 
+#include "components/sync/engine/sync_protocol_error.h"
 #include "components/sync/engine/sync_scheduler.h"
-#include "components/sync/protocol/sync_protocol_error.h"
 
 namespace syncer {
 
@@ -22,7 +22,7 @@ BraveSyncManagerImpl::~BraveSyncManagerImpl() = default;
 void BraveSyncManagerImpl::StartSyncingNormally(base::Time last_poll_time) {
   SyncManagerImpl::StartSyncingNormally(last_poll_time);
   // Remove this hack when we have FCM invalidation integrated.
-  RefreshTypes(ModelTypeSet::All());
+  RefreshTypes(DataTypeSet::All());
 }
 
 void BraveSyncManagerImpl::PermanentlyDeleteAccount(

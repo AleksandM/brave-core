@@ -7,16 +7,18 @@
 
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/thread_test_helper.h"
-#include "brave/browser/brave_content_browser_client.h"
 #include "brave/browser/extensions/brave_base_local_data_files_browsertest.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
+#include "brave/components/webcompat/core/common/features.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/chrome_content_client.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/permissions/permission_request.h"
@@ -28,26 +30,29 @@
 
 using brave_shields::ControlType;
 
-const char kEmbeddedTestServerDirectory[] = "canvas";
-const char kTitleScript[] = "document.title;";
-const char kExpectedImageDataHashFarblingBalanced[] = "204";
-const char kExpectedImageDataHashFarblingOff[] = "0";
-const char kExpectedImageDataHashFarblingMaximum[] = "204";
+constexpr char kEmbeddedTestServerDirectory[] = "canvas";
+constexpr char kTitleScript[] = "document.title;";
+constexpr char kExpectedImageDataHashFarblingBalanced[] = "184";
+constexpr char kExpectedImageDataHashFarblingOff[] = "0";
+constexpr char kExpectedImageDataHashFarblingMaximum[] = "184";
 
 class BraveOffscreenCanvasFarblingBrowserTest : public InProcessBrowserTest {
  public:
+  BraveOffscreenCanvasFarblingBrowserTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {
+            brave_shields::features::kBraveShowStrictFingerprintingMode,
+            webcompat::features::kBraveWebcompatExceptionsService,
+        },
+        {});
+  }
+
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
-
-    content_client_ = std::make_unique<ChromeContentClient>();
-    content::SetContentClient(content_client_.get());
-    browser_content_client_ = std::make_unique<BraveContentBrowserClient>();
-    content::SetBrowserClientForTesting(browser_content_client_.get());
 
     host_resolver()->AddRule("*", "127.0.0.1");
     content::SetupCrossSiteRedirector(embedded_test_server());
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     test_data_dir = test_data_dir.AppendASCII(kEmbeddedTestServerDirectory);
@@ -56,11 +61,6 @@ class BraveOffscreenCanvasFarblingBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(embedded_test_server()->Start());
 
     top_level_page_url_ = embedded_test_server()->GetURL("a.com", "/");
-  }
-
-  void TearDown() override {
-    browser_content_client_.reset();
-    content_client_.reset();
   }
 
   HostContentSettingsMap* content_settings() {
@@ -87,9 +87,8 @@ class BraveOffscreenCanvasFarblingBrowserTest : public InProcessBrowserTest {
   }
 
  private:
+  base::test::ScopedFeatureList scoped_feature_list_;
   GURL top_level_page_url_;
-  std::unique_ptr<ChromeContentClient> content_client_;
-  std::unique_ptr<BraveContentBrowserClient> browser_content_client_;
 };
 
 IN_PROC_BROWSER_TEST_F(BraveOffscreenCanvasFarblingBrowserTest,

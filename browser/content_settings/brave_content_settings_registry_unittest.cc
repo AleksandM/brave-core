@@ -42,7 +42,8 @@ TEST_F(BraveContentSettingsRegistryTest, Properties) {
       registry()->Get(ContentSettingsType::BRAVE_COOKIES);
   ASSERT_TRUE(info);
 
-  EXPECT_THAT(info->allowlisted_schemes(), ElementsAre("chrome", "devtools"));
+  EXPECT_THAT(info->allowlisted_primary_schemes(),
+              ElementsAre("chrome", "devtools"));
 
   // Check the other properties are populated correctly.
   EXPECT_FALSE(info->IsSettingValid(CONTENT_SETTING_SESSION_ONLY));
@@ -94,6 +95,25 @@ TEST_F(BraveContentSettingsRegistryTest, Inheritance) {
       ContentSettingsType::BRAVE_GOOGLE_SIGN_IN,
       ContentSettingsType::BRAVE_HTTPS_UPGRADE,
       ContentSettingsType::BRAVE_REMEMBER_1P_STORAGE,
+      ContentSettingsType::BRAVE_WEBCOMPAT_NONE,
+      ContentSettingsType::BRAVE_WEBCOMPAT_AUDIO,
+      ContentSettingsType::BRAVE_WEBCOMPAT_CANVAS,
+      ContentSettingsType::BRAVE_WEBCOMPAT_DEVICE_MEMORY,
+      ContentSettingsType::BRAVE_WEBCOMPAT_EVENT_SOURCE_POOL,
+      ContentSettingsType::BRAVE_WEBCOMPAT_FONT,
+      ContentSettingsType::BRAVE_WEBCOMPAT_HARDWARE_CONCURRENCY,
+      ContentSettingsType::BRAVE_WEBCOMPAT_KEYBOARD,
+      ContentSettingsType::BRAVE_WEBCOMPAT_LANGUAGE,
+      ContentSettingsType::BRAVE_WEBCOMPAT_MEDIA_DEVICES,
+      ContentSettingsType::BRAVE_WEBCOMPAT_PLUGINS,
+      ContentSettingsType::BRAVE_WEBCOMPAT_SCREEN,
+      ContentSettingsType::BRAVE_WEBCOMPAT_SPEECH_SYNTHESIS,
+      ContentSettingsType::BRAVE_WEBCOMPAT_USB_DEVICE_SERIAL_NUMBER,
+      ContentSettingsType::BRAVE_WEBCOMPAT_USER_AGENT,
+      ContentSettingsType::BRAVE_WEBCOMPAT_WEBGL,
+      ContentSettingsType::BRAVE_WEBCOMPAT_WEBGL2,
+      ContentSettingsType::BRAVE_WEBCOMPAT_WEB_SOCKETS_POOL,
+      ContentSettingsType::BRAVE_WEBCOMPAT_ALL,
   };
 
   for (const ContentSettingsInfo* info : *registry()) {
@@ -147,12 +167,6 @@ TEST_F(BraveContentSettingsRegistryTest, GetInitialDefaultSetting) {
   }
 
   {
-    SCOPED_TRACE("Content setting: BRAVE_SPEEDREADER");
-    info = registry()->Get(ContentSettingsType::BRAVE_SPEEDREADER);
-    EXPECT_EQ(CONTENT_SETTING_ALLOW, info->GetInitialDefaultSetting());
-  }
-
-  {
     SCOPED_TRACE("Content setting: BRAVE_ETHEREUM");
     info = registry()->Get(ContentSettingsType::BRAVE_ETHEREUM);
     EXPECT_EQ(CONTENT_SETTING_ASK, info->GetInitialDefaultSetting());
@@ -181,6 +195,12 @@ TEST_F(BraveContentSettingsRegistryTest, GetInitialDefaultSetting) {
   // {
   //   SCOPED_TRACE("Content setting: BRAVE_COOKIES");
   //   info = registry()->Get(ContentSettingsType::BRAVE_COOKIES);
+  //   EXPECT_EQ(CONTENT_SETTING_DEFAULT, info->GetInitialDefaultSetting());
+  // }
+
+  // {
+  //   SCOPED_TRACE("Content setting: BRAVE_SPEEDREADER");
+  //   info = registry()->Get(ContentSettingsType::BRAVE_SPEEDREADER);
   //   EXPECT_EQ(CONTENT_SETTING_DEFAULT, info->GetInitialDefaultSetting());
   // }
 }

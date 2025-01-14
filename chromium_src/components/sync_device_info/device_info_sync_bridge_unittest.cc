@@ -3,12 +3,14 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at http://mozilla.org/MPL/2.0/.
 
+#include <optional>
+#include <string_view>
+
 #include "base/system/sys_info.h"
 #include "base/test/task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace base {
-namespace test {
+namespace base::test {
 namespace {
 
 // This trick substitutes TaskEnvironment to make the test
@@ -22,14 +24,13 @@ class TaskEnvironmentOptionalMockTime : public TaskEnvironment {
                 ? TimeSource::MOCK_TIME
                 : TimeSource::DEFAULT) {}
 
-  static bool IsMockTimedTest(base::StringPiece test_name) {
+  static bool IsMockTimedTest(std::string_view test_name) {
     return test_name == "LocalDeleteWhenOffline";
   }
 };
 
 }  // namespace
-}  // namespace test
-}  // namespace base
+}  // namespace base::test
 
 #define TaskEnvironment TaskEnvironmentOptionalMockTime
 #define ShouldReuploadOnceAfterLocalDeviceInfoTombstone \
@@ -60,7 +61,7 @@ TEST_F(DeviceInfoSyncBridgeTest, LocalDelete) {
   const std::string kLocalGuid = CacheGuidForSuffix(kLocalSuffix);
   ON_CALL(*processor(), IsEntityUnsynced(kLocalGuid))
       .WillByDefault(Return(false));
-  EXPECT_CALL(*processor(), Delete(kLocalGuid, _)).Times(1);
+  EXPECT_CALL(*processor(), Delete(kLocalGuid, _, _)).Times(1);
 
   bool deleted_device_info_sent = false;
   base::RunLoop loop;
@@ -97,7 +98,7 @@ TEST_F(DeviceInfoSyncBridgeTest, RemoteDelete) {
   const std::string kLocalGuid = CacheGuidForSuffix(kLocalSuffix);
   ON_CALL(*processor(), IsEntityUnsynced(specifics.cache_guid()))
       .WillByDefault(Return(false));
-  EXPECT_CALL(*processor(), Delete(specifics.cache_guid(), _)).Times(1);
+  EXPECT_CALL(*processor(), Delete(specifics.cache_guid(), _, _)).Times(1);
 
   bool deleted_device_info_sent = false;
   base::RunLoop loop;
@@ -137,7 +138,7 @@ TEST_F(DeviceInfoSyncBridgeTest, LocalDeleteWhenOffline) {
   // The statement below means that DeviceInfoSyncBridge::OnDeviceInfoDeleted
   // 5 times did check of IsEntityUnsynced for the entity being deleted
   EXPECT_CALL(*processor(), IsEntityUnsynced).Times(5);
-  EXPECT_CALL(*processor(), Delete(kLocalGuid, _)).Times(1);
+  EXPECT_CALL(*processor(), Delete(kLocalGuid, _, _)).Times(1);
 
   bool deleted_device_info_sent = false;
   base::RunLoop loop;
@@ -185,7 +186,7 @@ TEST_F(DeviceInfoSyncBridgeTest,
   // An incoming deletion for the local device info should not cause a reupload
   EXPECT_CALL(*processor(), Put(CacheGuidForSuffix(kLocalSuffix), _, _))
       .Times(0);
-  absl::optional<ModelError> error = bridge()->ApplyIncrementalSyncChanges(
+  std::optional<ModelError> error = bridge()->ApplyIncrementalSyncChanges(
       bridge()->CreateMetadataChangeList(), std::move(changes));
   ASSERT_FALSE(error);
 
@@ -221,9 +222,9 @@ TEST_F(DeviceInfoSyncBridgeTest, BraveExpireOldEntriesUponStartup) {
 
 TEST_F(DeviceInfoSyncBridgeTest, BraveResetsProgressMarkerOnce) {
   const DeviceInfoSpecifics specifics = CreateLocalDeviceSpecifics();
-  ModelTypeState model_type_state = StateWithEncryption("ekn");
-  model_type_state.mutable_progress_marker()->set_token("ABC");
-  WriteToStoreWithMetadata({specifics}, model_type_state);
+  DataTypeState data_type_state = StateWithEncryption("ekn");
+  data_type_state.mutable_progress_marker()->set_token("ABC");
+  WriteToStoreWithMetadata({specifics}, data_type_state);
 
   {
     base::RunLoop run_loop;
@@ -235,9 +236,8 @@ TEST_F(DeviceInfoSyncBridgeTest, BraveResetsProgressMarkerOnce) {
         .WillOnce([&run_loop](std::unique_ptr<MetadataBatch> batch) {
           // When model is loaded for the first time and the progress token
           // was set then the token should be reset
-          EXPECT_TRUE(batch->GetModelTypeState().has_progress_marker());
-          EXPECT_FALSE(
-              batch->GetModelTypeState().progress_marker().has_token());
+          EXPECT_TRUE(batch->GetDataTypeState().has_progress_marker());
+          EXPECT_FALSE(batch->GetDataTypeState().progress_marker().has_token());
           run_loop.Quit();
         });
 
@@ -253,8 +253,8 @@ TEST_F(DeviceInfoSyncBridgeTest, BraveResetsProgressMarkerOnce) {
         .WillOnce([&run_loop](std::unique_ptr<MetadataBatch> batch) {
           // When the progress token already was reset, then do not reset it
           // again
-          EXPECT_TRUE(batch->GetModelTypeState().has_progress_marker());
-          EXPECT_TRUE(batch->GetModelTypeState().progress_marker().has_token());
+          EXPECT_TRUE(batch->GetDataTypeState().has_progress_marker());
+          EXPECT_TRUE(batch->GetDataTypeState().progress_marker().has_token());
           run_loop.Quit();
         });
     run_loop.Run();

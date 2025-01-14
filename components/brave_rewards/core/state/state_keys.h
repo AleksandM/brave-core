@@ -9,39 +9,33 @@
 namespace brave_rewards::internal {
 namespace state {
 
-const char kServerPublisherListStamp[] = "publisher_prefix_list_stamp";
-const char kUpholdAnonAddress[] = "uphold_anon_address";  // DEPRECATED
-const char kPromotionLastFetchStamp[] = "promotion_last_fetch_stamp";
-const char kPromotionCorruptedMigrated[] = "promotion_corrupted_migrated2";
-const char kVersion[] = "version";
-const char kMinVisitTime[] = "ac.min_visit_time";
-const char kMinVisits[] = "ac.min_visits";
-const char kScoreA[] = "ac.score.a";
-const char kScoreB[] = "ac.score.b";
-const char kAutoContributeEnabled[] = "ac.enabled";
-const char kAutoContributeAmount[] = "ac.amount";
-const char kNextReconcileStamp[] = "ac.next_reconcile_stamp";
-const char kCreationStamp[] = "creation_stamp";
-const char kRecoverySeed[] = "wallet.seed";     // DEPRECATED
-const char kPaymentId[] = "wallet.payment_id";  // DEPRECATED
-const char kInlineTipRedditEnabled[] = "inline_tip.reddit";
-const char kInlineTipTwitterEnabled[] = "inline_tip.twitter";
-const char kInlineTipGithubEnabled[] = "inline_tip.github";
-const char kParametersRate[] = "parameters.rate";
-const char kParametersAutoContributeChoice[] = "parameters.ac.choice";
-const char kParametersAutoContributeChoices[] = "parameters.ac.choices";
-const char kParametersTipChoices[] = "parameters.tip.choices";
-const char kParametersMonthlyTipChoices[] = "parameters.tip.monthly_choices";
-const char kParametersPayoutStatus[] = "parameters.payout_status";
-const char kParametersWalletProviderRegions[] =
-    "parameters.wallet_provider_regions";
-const char kParametersVBatDeadline[] = "parameters.vbat_deadline";
-const char kParametersVBatExpired[] = "parameters.vbat_expired";
-const char kEmptyBalanceChecked[] = "empty_balance_checked";
-const char kWalletBrave[] = "wallets.brave";
-const char kWalletUphold[] = "wallets.uphold";
-const char kWalletBitflyer[] = "wallets.bitflyer";
-const char kWalletGemini[] = "wallets.gemini";
+inline constexpr char kServerPublisherListStamp[] =
+    "publisher_prefix_list_stamp";
+inline constexpr char kUpholdAnonAddress[] =
+    "uphold_anon_address";  // DEPRECATED
+inline constexpr char kVersion[] = "version";
+inline constexpr char kMinVisitTime[] = "ac.min_visit_time";
+inline constexpr char kMinVisits[] = "ac.min_visits";
+inline constexpr char kScoreA[] = "ac.score.a";
+inline constexpr char kScoreB[] = "ac.score.b";
+inline constexpr char kAutoContributeEnabled[] = "ac.enabled";
+inline constexpr char kAutoContributeAmount[] = "ac.amount";
+inline constexpr char kNextReconcileStamp[] = "ac.next_reconcile_stamp";
+inline constexpr char kCreationStamp[] = "creation_stamp";
+inline constexpr char kRecoverySeed[] = "wallet.seed";     // DEPRECATED
+inline constexpr char kPaymentId[] = "wallet.payment_id";  // DEPRECATED
+inline constexpr char kParameters[] = "parameters";
+inline constexpr char kExternalWalletType[] = "external_wallet_type";
+inline constexpr char kSelfCustodyAvailable[] = "self_custody_available";
+inline constexpr char kSelfCustodyInviteDismissed[] =
+    "self_custody_invite_dismissed";
+inline constexpr char kWalletBrave[] = "wallets.brave";
+inline constexpr char kWalletUphold[] = "wallets.uphold";
+inline constexpr char kWalletBitflyer[] = "wallets.bitflyer";
+inline constexpr char kWalletGemini[] = "wallets.gemini";
+inline constexpr char kDeclaredGeo[] = "declared_geo";
+inline constexpr char kWalletZebPay[] = "wallets.zebpay";
+inline constexpr char kWalletSolana[] = "wallets.solana";
 
 }  // namespace state
 }  // namespace brave_rewards::internal

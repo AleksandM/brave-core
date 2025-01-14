@@ -5,9 +5,10 @@
 
 package org.chromium.chrome.browser.preferences;
 
+import org.jni_zero.JNINamespace;
+import org.jni_zero.NativeMethods;
+
 import org.chromium.base.ThreadUtils;
-import org.chromium.base.annotations.JNINamespace;
-import org.chromium.base.annotations.NativeMethods;
 import org.chromium.chrome.browser.profiles.Profile;
 
 /**
@@ -106,8 +107,8 @@ public class BravePrefServiceBridge {
         BravePrefServiceBridgeJni.get().setOldHttpsUpgradesCount(profile, count);
     }
 
-    public boolean GetBooleanForContentSetting(int content_type) {
-        return BravePrefServiceBridgeJni.get().getBooleanForContentSetting(content_type);
+    public boolean getBooleanForContentSetting(int contentType) {
+        return BravePrefServiceBridgeJni.get().getBooleanForContentSetting(contentType);
     }
 
     public void setWebrtcPolicy(int policy) {
@@ -123,9 +124,9 @@ public class BravePrefServiceBridge {
     }
 
     public boolean getNewsOptIn() {
-        boolean getNewsOptIn = BravePrefServiceBridgeJni.get().getNewsOptIn();
         return BravePrefServiceBridgeJni.get().getNewsOptIn();
     }
+
     public void setShowNews(boolean value) {
         BravePrefServiceBridgeJni.get().setShowNews(value);
     }
@@ -162,15 +163,19 @@ public class BravePrefServiceBridge {
         boolean getSafetynetCheckFailed();
 
         void resetPromotionLastFetchStamp();
-        boolean getBooleanForContentSetting(int content_type);
+
+        boolean getBooleanForContentSetting(int contentType);
 
         void setWebrtcPolicy(int policy);
+
         int getWebrtcPolicy();
 
         void setNewsOptIn(boolean value);
+
         boolean getNewsOptIn();
 
         void setShowNews(boolean value);
+
         boolean getShowNews();
     }
 }

@@ -4,18 +4,21 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include <memory>
+#include <optional>
 
 #include "base/path_service.h"
 #include "base/test/bind.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/thread_test_helper.h"
-#include "brave/browser/brave_wallet/json_rpc_service_factory.h"
-#include "brave/browser/brave_wallet/keyring_service_factory.h"
+#include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_constants.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/json_rpc_service.h"
 #include "brave/components/brave_wallet/browser/keyring_service.h"
 #include "brave/components/brave_wallet/browser/permission_utils.h"
+#include "brave/components/brave_wallet/browser/test_utils.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/brave_wallet/common/features.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
@@ -31,16 +34,17 @@
 #include "content/public/test/browser_test.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
+#include "mojo/public/cpp/bindings/pending_remote.h"
 #include "net/dns/mock_host_resolver.h"
 #include "url/gurl.h"
 #include "url/origin.h"
 
 namespace {
 
-const char kEmbeddedTestServerDirectory[] = "brave-wallet";
+constexpr char kEmbeddedTestServerDirectory[] = "brave-wallet";
 
 std::string CheckForEventScript(const std::string& event_var) {
-  return base::StringPrintf(R"(
+  return absl::StrFormat(R"(
       new Promise(resolve => {
         const timer = setInterval(function () {
           if (%s) {
@@ -50,7 +54,7 @@ std::string CheckForEventScript(const std::string& event_var) {
         }, 100);
       });
     )",
-                            event_var.c_str());
+                         event_var);
 }
 
 }  // namespace
@@ -86,14 +90,15 @@ class BraveWalletEventEmitterTest : public InProcessBrowserTest {
         net::test_server::EmbeddedTestServer::TYPE_HTTPS);
     https_server_->SetSSLConfig(net::EmbeddedTestServer::CERT_OK);
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     test_data_dir = test_data_dir.AppendASCII(kEmbeddedTestServerDirectory);
     https_server_->ServeFilesFromDirectory(test_data_dir);
 
-    keyring_service_ =
-        KeyringServiceFactory::GetServiceForContext(browser()->profile());
+    brave_wallet_service_ =
+        brave_wallet::BraveWalletServiceFactory::GetServiceForContext(
+            browser()->profile());
+    keyring_service_ = brave_wallet_service_->keyring_service();
 
     ASSERT_TRUE(https_server_->Start());
   }
@@ -107,10 +112,10 @@ class BraveWalletEventEmitterTest : public InProcessBrowserTest {
 
   mojo::Remote<brave_wallet::mojom::JsonRpcService> GetJsonRpcService() {
     if (!json_rpc_service_) {
-      auto pending =
-          brave_wallet::JsonRpcServiceFactory::GetInstance()->GetForContext(
-              browser()->profile());
-      json_rpc_service_.Bind(std::move(pending));
+      mojo::PendingRemote<brave_wallet::mojom::JsonRpcService> remote;
+      brave_wallet_service_->json_rpc_service()->Bind(
+          remote.InitWithNewPipeAndPassReceiver());
+      json_rpc_service_.Bind(std::move(remote));
     }
     return std::move(json_rpc_service_);
   }
@@ -127,54 +132,23 @@ class BraveWalletEventEmitterTest : public InProcessBrowserTest {
     return url::Origin::Create(web_contents()->GetLastCommittedURL());
   }
 
+  AccountUtils GetAccountUtils() { return AccountUtils(keyring_service_); }
+
   void RestoreWallet() {
-    const char mnemonic[] =
-        "drip caution abandon festival order clown oven regular absorb "
-        "evidence crew where";
-    base::RunLoop run_loop;
-    keyring_service_->RestoreWallet(
-        mnemonic, "brave123", false,
-        base::BindLambdaForTesting([&](bool success) {
-          ASSERT_TRUE(success);
-          run_loop.Quit();
-        }));
-    run_loop.Run();
+    ASSERT_TRUE(keyring_service_->RestoreWalletSync(
+        kMnemonicDripCaution, kTestWalletPassword, false));
   }
 
-  void GetAddress(std::string* valid_address) {
-    ASSERT_NE(valid_address, nullptr);
-
-    base::RunLoop run_loop;
-    keyring_service_->GetKeyringInfo(
-        brave_wallet::mojom::kDefaultKeyringId,
-        base::BindLambdaForTesting(
-            [&](brave_wallet::mojom::KeyringInfoPtr keyring_info) {
-              *valid_address = "";
-              if (keyring_info->account_infos.size() > 0) {
-                *valid_address = keyring_info->account_infos[0]->address;
-              }
-              run_loop.Quit();
-            }));
-    run_loop.Run();
-  }
-
-  void SetSelectedAccount(const std::string& address) {
-    base::RunLoop run_loop;
-    keyring_service_->SetSelectedAccount(
-        MakeAccountId(mojom::CoinType::ETH,
-                      brave_wallet::mojom::kDefaultKeyringId,
-                      mojom::AccountKind::kDerived, address),
-        base::BindLambdaForTesting([&](bool success) {
-          ASSERT_TRUE(success);
-          run_loop.Quit();
-        }));
-    run_loop.Run();
+  void SetSelectedAccount(const mojom::AccountIdPtr& account_id) {
+    ASSERT_TRUE(keyring_service_->SetSelectedAccountSync(account_id.Clone()));
   }
 
  private:
   content::ContentMockCertVerifier mock_cert_verifier_;
   mojo::Remote<brave_wallet::mojom::JsonRpcService> json_rpc_service_;
-  raw_ptr<KeyringService> keyring_service_ = nullptr;
+  raw_ptr<BraveWalletService, DanglingUntriaged> brave_wallet_service_ =
+      nullptr;
+  raw_ptr<KeyringService, DanglingUntriaged> keyring_service_ = nullptr;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
   base::test::ScopedFeatureList feature_list_;
 };
@@ -199,8 +173,8 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEventEmitterTest,
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
   auto service = GetJsonRpcService();
-  service->SetNetwork(brave_wallet::mojom::kGoerliChainId,
-                      brave_wallet::mojom::CoinType::ETH, absl::nullopt,
+  service->SetNetwork(brave_wallet::mojom::kSepoliaChainId,
+                      brave_wallet::mojom::CoinType::ETH, std::nullopt,
                       base::DoNothing());
 
   auto result_first =
@@ -211,23 +185,22 @@ IN_PROC_BROWSER_TEST_F(BraveWalletEventEmitterTest,
 IN_PROC_BROWSER_TEST_F(BraveWalletEventEmitterTest,
                        CheckForAnAccountChangedEvent) {
   RestoreWallet();
+  auto eth_account = GetAccountUtils().EnsureEthAccount(0);
   GURL url =
       https_server()->GetURL("a.com", "/brave_wallet_event_emitter.html");
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   content::WebContents* contents =
       browser()->tab_strip_model()->GetActiveWebContents();
-  std::string address;
-  GetAddress(&address);
 
-  url::Origin sub_request_origin;
-  ASSERT_TRUE(brave_wallet::GetSubRequestOrigin(
+  auto sub_request_origin = brave_wallet::GetSubRequestOrigin(
       permissions::RequestType::kBraveEthereum, GetLastCommitedOrigin(),
-      address, &sub_request_origin));
+      eth_account->address);
+  ASSERT_TRUE(sub_request_origin);
   host_content_settings_map()->SetContentSettingDefaultScope(
-      sub_request_origin.GetURL(), GetLastCommitedOrigin().GetURL(),
+      sub_request_origin->GetURL(), GetLastCommitedOrigin().GetURL(),
       ContentSettingsType::BRAVE_ETHEREUM,
       ContentSetting::CONTENT_SETTING_ALLOW);
-  SetSelectedAccount(address);
+  SetSelectedAccount(eth_account->account_id);
 
   auto result_first =
       EvalJs(contents, CheckForEventScript("received_account_changed_event"));

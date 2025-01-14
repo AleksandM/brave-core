@@ -5,16 +5,20 @@
 
 #include "brave/components/brave_wallet/common/value_conversion_utils.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/containers/contains.h"
-#include "base/json/json_reader.h"
+#include "base/test/values_test_util.h"
 #include "base/values.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/brave_wallet/common/test_utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/origin.h"
+
+using ::testing::ElementsAreArray;
 
 namespace brave_wallet {
 
@@ -25,15 +29,14 @@ void TestValueToBlockchainTokenFailCases(const base::Value::Dict& value,
   for (const auto& key : keys) {
     auto invalid_value = value.Clone();
     invalid_value.Remove(key);
-    EXPECT_FALSE(
-        ValueToBlockchainToken(invalid_value, "0x1", mojom::CoinType::ETH))
+    EXPECT_FALSE(ValueToBlockchainToken(invalid_value))
         << "ValueToBlockchainToken should fail if " << key << " not exists";
   }
 }
 
 constexpr char kNetworkDataValue[] = R"({
-      "chainId": "0x5",
-      "chainName": "Goerli",
+      "chainId": "0xaa36a7",
+      "chainName": "Sepolia",
       "activeRpcEndpointIndex": 3,
       "rpcUrls": [
         "ftp://bar/",
@@ -41,7 +44,7 @@ constexpr char kNetworkDataValue[] = R"({
         "http://bar/",
         "http://localhost/",
         "http://127.0.0.1/",
-        "https://goerli.infura.io/v3/INSERT_API_KEY_HERE",
+        "https://sepolia.infura.io/v3/INSERT_API_KEY_HERE",
         "https://second.infura.io/",
         []
       ],
@@ -56,8 +59,8 @@ constexpr char kNetworkDataValue[] = R"({
         {}
       ],
       "nativeCurrency": {
-        "name": "Goerli ETH",
-        "symbol": "gorETH",
+        "name": "Sepolia ETH",
+        "symbol": "ETH",
         "decimals": 18
       },
       "blockExplorerUrls": [
@@ -66,33 +69,32 @@ constexpr char kNetworkDataValue[] = R"({
         "http://bar/",
         "http://localhost/",
         "http://127.0.0.1/",
-        "https://goerli.etherscan.io",
+        "https://sepolia.etherscan.io",
         2
-      ],
-      "is_eip1559": true
+      ]
     })";
 
 }  // namespace
 
 TEST(ValueConversionUtilsUnitTest, ParseEip3085Payload) {
   {
-    auto value = base::JSONReader::Read(kNetworkDataValue).value();
+    auto value = base::test::ParseJson(kNetworkDataValue);
     mojom::NetworkInfoPtr chain = ParseEip3085Payload(value);
     ASSERT_TRUE(chain);
-    EXPECT_EQ("0x5", chain->chain_id);
-    EXPECT_EQ("Goerli", chain->chain_name);
+    EXPECT_EQ("0xaa36a7", chain->chain_id);
+    EXPECT_EQ("Sepolia", chain->chain_name);
     EXPECT_EQ(0, chain->active_rpc_endpoint_index);
     EXPECT_EQ(chain->rpc_endpoints,
               std::vector<GURL>(
                   {GURL("http://localhost/"), GURL("http://127.0.0.1/"),
-                   GURL("https://goerli.infura.io/v3/INSERT_API_KEY_HERE"),
+                   GURL("https://sepolia.infura.io/v3/INSERT_API_KEY_HERE"),
                    GURL("https://second.infura.io/")}));
     EXPECT_EQ(
         chain->block_explorer_urls,
         std::vector<std::string>({"http://localhost/", "http://127.0.0.1/",
-                                  "https://goerli.etherscan.io"}));
-    EXPECT_EQ("Goerli ETH", chain->symbol_name);
-    EXPECT_EQ("gorETH", chain->symbol);
+                                  "https://sepolia.etherscan.io"}));
+    EXPECT_EQ("Sepolia ETH", chain->symbol_name);
+    EXPECT_EQ("ETH", chain->symbol);
     EXPECT_EQ(18, chain->decimals);
     EXPECT_EQ(chain->icon_urls,
               std::vector<std::string>(
@@ -101,16 +103,13 @@ TEST(ValueConversionUtilsUnitTest, ParseEip3085Payload) {
                    "https://xdaichain.com/fake/example/url/xdai.png"}));
 
     EXPECT_EQ(chain->coin, mojom::CoinType::ETH);
-    EXPECT_FALSE(chain->is_eip1559);
   }
   {
-    mojom::NetworkInfoPtr chain =
-        ParseEip3085Payload(base::JSONReader::Read(R"({
-      "chainId": "0x5"
-    })")
-                                .value());
+    mojom::NetworkInfoPtr chain = ParseEip3085Payload(base::test::ParseJson(R"({
+      "chainId": "0xaa36a7"
+    })"));
     ASSERT_TRUE(chain);
-    EXPECT_EQ("0x5", chain->chain_id);
+    EXPECT_EQ("0xaa36a7", chain->chain_id);
     ASSERT_TRUE(chain->chain_name.empty());
     ASSERT_EQ(0, chain->active_rpc_endpoint_index);
     ASSERT_TRUE(chain->rpc_endpoints.empty());
@@ -119,44 +118,43 @@ TEST(ValueConversionUtilsUnitTest, ParseEip3085Payload) {
     ASSERT_TRUE(chain->symbol_name.empty());
     ASSERT_TRUE(chain->symbol.empty());
     ASSERT_EQ(chain->coin, mojom::CoinType::ETH);
-    ASSERT_FALSE(chain->is_eip1559);
     EXPECT_EQ(chain->decimals, 0);
   }
 
   {
     mojom::NetworkInfoPtr chain =
-        ParseEip3085Payload(base::JSONReader::Read(R"({})").value());
+        ParseEip3085Payload(base::test::ParseJson(R"({})"));
     ASSERT_FALSE(chain);
   }
   {
     mojom::NetworkInfoPtr chain =
-        ParseEip3085Payload(base::JSONReader::Read(R"([])").value());
+        ParseEip3085Payload(base::test::ParseJson(R"([])"));
     ASSERT_FALSE(chain);
   }
 }
 
 TEST(ValueConversionUtilsUnitTest, ValueToNetworkInfoTest) {
   {
-    auto value = base::JSONReader::Read(kNetworkDataValue).value();
+    auto value = base::test::ParseJson(kNetworkDataValue);
     mojom::NetworkInfoPtr chain = ValueToNetworkInfo(value);
     ASSERT_TRUE(chain);
-    EXPECT_EQ("0x5", chain->chain_id);
-    EXPECT_EQ("Goerli", chain->chain_name);
+    EXPECT_EQ("0xaa36a7", chain->chain_id);
+    EXPECT_EQ("Sepolia", chain->chain_name);
     EXPECT_EQ(3, chain->active_rpc_endpoint_index);
     EXPECT_EQ(
         chain->rpc_endpoints,
         std::vector<GURL>(
             {GURL("ftp://bar/"), GURL("ftp://localhost/"), GURL("http://bar/"),
              GURL("http://localhost/"), GURL("http://127.0.0.1/"),
-             GURL("https://goerli.infura.io/v3/INSERT_API_KEY_HERE"),
+             GURL("https://sepolia.infura.io/v3/INSERT_API_KEY_HERE"),
              GURL("https://second.infura.io/")}));
     EXPECT_EQ(chain->block_explorer_urls,
               std::vector<std::string>({"ftp://bar/", "ftp://localhost/",
                                         "http://bar/", "http://localhost/",
                                         "http://127.0.0.1/",
-                                        "https://goerli.etherscan.io"}));
-    EXPECT_EQ("Goerli ETH", chain->symbol_name);
-    EXPECT_EQ("gorETH", chain->symbol);
+                                        "https://sepolia.etherscan.io"}));
+    EXPECT_EQ("Sepolia ETH", chain->symbol_name);
+    EXPECT_EQ("ETH", chain->symbol);
     EXPECT_EQ(18, chain->decimals);
     EXPECT_EQ(chain->icon_urls,
               std::vector<std::string>(
@@ -165,13 +163,14 @@ TEST(ValueConversionUtilsUnitTest, ValueToNetworkInfoTest) {
                    "https://xdaichain.com/fake/example/url/xdai.svg",
                    "https://xdaichain.com/fake/example/url/xdai.png"}));
     EXPECT_EQ(chain->coin, mojom::CoinType::ETH);
-    EXPECT_TRUE(chain->is_eip1559);
+    EXPECT_THAT(chain->supported_keyrings,
+                ElementsAreArray({mojom::KeyringId::kDefault}));
   }
   {
     mojom::NetworkInfoPtr chain = ValueToNetworkInfo(
-        base::JSONReader::Read(R"({"chainId": "0x5" })").value());
+        base::test::ParseJson(R"({"chainId": "0xaa36a7" })"));
     ASSERT_TRUE(chain);
-    EXPECT_EQ("0x5", chain->chain_id);
+    EXPECT_EQ("0xaa36a7", chain->chain_id);
     ASSERT_TRUE(chain->chain_name.empty());
     ASSERT_EQ(0, chain->active_rpc_endpoint_index);
     ASSERT_TRUE(chain->rpc_endpoints.empty());
@@ -180,18 +179,19 @@ TEST(ValueConversionUtilsUnitTest, ValueToNetworkInfoTest) {
     ASSERT_TRUE(chain->symbol_name.empty());
     ASSERT_TRUE(chain->symbol.empty());
     ASSERT_EQ(chain->coin, mojom::CoinType::ETH);
-    ASSERT_FALSE(chain->is_eip1559);
+    EXPECT_THAT(chain->supported_keyrings,
+                ElementsAreArray({mojom::KeyringId::kDefault}));
     EXPECT_EQ(chain->decimals, 0);
   }
 
   {
     mojom::NetworkInfoPtr chain =
-        ValueToNetworkInfo(base::JSONReader::Read(R"({})").value());
+        ValueToNetworkInfo(base::test::ParseJson(R"({})"));
     ASSERT_FALSE(chain);
   }
   {
     mojom::NetworkInfoPtr chain =
-        ValueToNetworkInfo(base::JSONReader::Read(R"([])").value());
+        ValueToNetworkInfo(base::test::ParseJson(R"([])"));
     ASSERT_FALSE(chain);
   }
 }
@@ -207,7 +207,6 @@ TEST(ValueConversionUtilsUnitTest, NetworkInfoToValueTest) {
             chain.symbol);
   EXPECT_EQ(*value.FindIntByDottedPath("nativeCurrency.decimals"),
             chain.decimals);
-  EXPECT_EQ(value.FindBool("is_eip1559").value(), false);
   auto* rpc_urls = value.FindList("rpcUrls");
   for (const auto& entry : *rpc_urls) {
     ASSERT_TRUE(base::Contains(chain.rpc_endpoints, entry.GetString()));
@@ -225,83 +224,105 @@ TEST(ValueConversionUtilsUnitTest, NetworkInfoToValueTest) {
   ASSERT_TRUE(result->Equals(chain));
 
   {
-    mojom::NetworkInfo test_chain = GetTestNetworkInfo1();
+    for (const auto& coin : kAllCoins) {
+      mojom::NetworkInfo test_chain = GetTestNetworkInfo1();
+      test_chain.coin = coin;
+      auto network_value = NetworkInfoToValue(test_chain);
+      EXPECT_EQ(network_value.FindInt("coin"), static_cast<int>(coin));
+    }
 
-    test_chain.coin = mojom::CoinType::ETH;
-    auto eth_value = NetworkInfoToValue(test_chain);
-    EXPECT_EQ(eth_value.FindInt("coin"),
-              static_cast<int>(mojom::CoinType::ETH));
-    EXPECT_TRUE(eth_value.FindBool("is_eip1559"));
-
-    test_chain.coin = mojom::CoinType::FIL;
-    auto fil_value = NetworkInfoToValue(test_chain);
-    EXPECT_EQ(fil_value.FindInt("coin"),
-              static_cast<int>(mojom::CoinType::FIL));
-    EXPECT_FALSE(fil_value.FindBool("is_eip1559"));
-
-    test_chain.coin = mojom::CoinType::SOL;
-    auto sol_value = NetworkInfoToValue(test_chain);
-    EXPECT_EQ(sol_value.FindInt("coin"),
-              static_cast<int>(mojom::CoinType::SOL));
-    EXPECT_FALSE(sol_value.FindBool("is_eip1559"));
+    EXPECT_TRUE(AllCoinsTested());
   }
 
   {
-    auto data_value = *base::JSONReader::Read(kNetworkDataValue);
-    EXPECT_EQ(ValueToNetworkInfo(data_value)->coin, mojom::CoinType::ETH);
+    auto data_value = base::test::ParseJson(kNetworkDataValue);
+    auto value_network = ValueToNetworkInfo(data_value);
+    EXPECT_EQ(value_network->coin, mojom::CoinType::ETH);
+    EXPECT_THAT(value_network->supported_keyrings,
+                ElementsAreArray({mojom::KeyringId::kDefault}));
 
-    data_value.SetIntKey("coin", static_cast<int>(mojom::CoinType::ETH));
-    EXPECT_EQ(ValueToNetworkInfo(data_value)->coin, mojom::CoinType::ETH);
+    data_value.GetDict().Set("coin", static_cast<int>(mojom::CoinType::ETH));
+    value_network = ValueToNetworkInfo(data_value);
+    EXPECT_EQ(value_network->coin, mojom::CoinType::ETH);
+    EXPECT_THAT(value_network->supported_keyrings,
+                ElementsAreArray({mojom::KeyringId::kDefault}));
 
-    data_value.SetIntKey("coin", static_cast<int>(mojom::CoinType::SOL));
-    EXPECT_EQ(ValueToNetworkInfo(data_value)->coin, mojom::CoinType::SOL);
+    data_value.GetDict().Set("coin", static_cast<int>(mojom::CoinType::SOL));
+    value_network = ValueToNetworkInfo(data_value);
+    EXPECT_EQ(value_network->coin, mojom::CoinType::SOL);
+    EXPECT_THAT(value_network->supported_keyrings,
+                ElementsAreArray({mojom::KeyringId::kSolana}));
 
-    data_value.SetIntKey("coin", static_cast<int>(mojom::CoinType::FIL));
-    EXPECT_EQ(ValueToNetworkInfo(data_value)->coin, mojom::CoinType::FIL);
+    data_value.GetDict().Set("coin", static_cast<int>(mojom::CoinType::FIL));
+    value_network = ValueToNetworkInfo(data_value);
+    EXPECT_EQ(value_network->coin, mojom::CoinType::FIL);
+    EXPECT_THAT(value_network->supported_keyrings,
+                ElementsAreArray({mojom::KeyringId::kFilecoinTestnet}));
+
+    data_value.GetDict().Set("coin", static_cast<int>(mojom::CoinType::BTC));
+    value_network = ValueToNetworkInfo(data_value);
+    EXPECT_EQ(value_network->coin, mojom::CoinType::BTC);
+    EXPECT_THAT(value_network->supported_keyrings,
+                ElementsAreArray({mojom::KeyringId::kBitcoin84Testnet,
+                                  mojom::KeyringId::kBitcoinImportTestnet,
+                                  mojom::KeyringId::kBitcoinHardwareTestnet}));
+
+    data_value.GetDict().Set("coin", static_cast<int>(mojom::CoinType::ZEC));
+    value_network = ValueToNetworkInfo(data_value);
+    EXPECT_EQ(value_network->coin, mojom::CoinType::ZEC);
+    EXPECT_THAT(value_network->supported_keyrings,
+                ElementsAreArray({mojom::KeyringId::kZCashTestnet}));
+
+    EXPECT_TRUE(AllCoinsTested());
   }
 }
 
 TEST(ValueConversionUtilsUnitTest, ValueToBlockchainToken) {
-  absl::optional<base::Value> json_value = base::JSONReader::Read(R"({
+  auto json_value = base::test::ParseJsonDict(R"({
+      "coin": 60,
+      "chain_id": "0x1",
       "address": "0x0D8775F648430679A709E98d2b0Cb6250d2887EF",
       "name": "Basic Attention Token",
       "symbol": "BAT",
       "logo": "bat.png",
+      "is_compressed": true,
       "is_erc20": true,
       "is_erc721": false,
       "is_erc1155": false,
       "is_nft": false,
+      "is_spam": false,
       "decimals": 18,
       "visible": true,
       "token_id": "",
       "coingecko_id": ""
   })");
-  ASSERT_TRUE(json_value);
 
   mojom::BlockchainTokenPtr expected_token = mojom::BlockchainToken::New(
       "0x0D8775F648430679A709E98d2b0Cb6250d2887EF", "Basic Attention Token",
-      "bat.png", true, false, false, false, "BAT", 18, true, "", "", "0x1",
-      mojom::CoinType::ETH);
+      "bat.png", true, true, false, false, mojom::SPLTokenProgram::kUnsupported,
+      false, false, "BAT", 18, true, "", "", "0x1", mojom::CoinType::ETH,
+      false);
 
-  mojom::BlockchainTokenPtr token = ValueToBlockchainToken(
-      json_value->GetDict(), "0x1", mojom::CoinType::ETH);
+  mojom::BlockchainTokenPtr token = ValueToBlockchainToken(json_value);
   EXPECT_EQ(token, expected_token);
 
   // Test input value with required keys.
-  TestValueToBlockchainTokenFailCases(json_value->GetDict(),
-                                      {"address", "name", "symbol", "is_erc20",
-                                       "is_erc721", "decimals", "visible"});
+  TestValueToBlockchainTokenFailCases(
+      json_value, {"address", "name", "symbol", "is_erc20", "is_erc721",
+                   "decimals", "visible"});
 
   // Test input value with optional keys.
-  base::Value::Dict optional_value = json_value->GetDict().Clone();
+  base::Value::Dict optional_value = json_value.Clone();
   optional_value.Remove("logo");
   optional_value.Remove("token_id");
   optional_value.Remove("coingecko_id");
   expected_token->logo = "";
-  token = ValueToBlockchainToken(optional_value, "0x1", mojom::CoinType::ETH);
+  token = ValueToBlockchainToken(optional_value);
   EXPECT_EQ(token, expected_token);
 
-  json_value = base::JSONReader::Read(R"({
+  json_value = base::test::ParseJsonDict(R"({
+      "coin": 60,
+      "chain_id": "0x1",
       "address": "0x06012c8cf97BEaD5deAe237070F9587f8E7A266d",
       "name": "Crypto Kitties",
       "symbol": "CK",
@@ -310,22 +331,24 @@ TEST(ValueConversionUtilsUnitTest, ValueToBlockchainToken) {
       "is_erc721": true,
       "is_erc1155": false,
       "is_nft": true,
+      "is_spam": true,
       "decimals": 0,
       "visible": true
   })");
-  ASSERT_TRUE(json_value);
 
   expected_token = mojom::BlockchainToken::New(
       "0x06012c8cf97BEaD5deAe237070F9587f8E7A266d", "Crypto Kitties",
-      "CryptoKitties-Kitty-13733.svg", false, true, false, true, "CK", 0, true,
-      "", "", "0x1", mojom::CoinType::ETH);
+      "CryptoKitties-Kitty-13733.svg", false, false, true, false,
+      mojom::SPLTokenProgram::kUnsupported, true, true, "CK", 0, true, "", "",
+      "0x1", mojom::CoinType::ETH, false);
 
-  token = ValueToBlockchainToken(json_value->GetDict(), "0x1",
-                                 mojom::CoinType::ETH);
+  token = ValueToBlockchainToken(json_value);
   EXPECT_EQ(token, expected_token);
 
   // Test is_erc1155 is parsed
-  json_value = base::JSONReader::Read(R"({
+  json_value = base::test::ParseJsonDict(R"({
+      "coin": 60,
+      "chain_id": "0x1",
       "address": "0x28472a58A490c5e09A238847F66A68a47cC76f0f",
       "name": "ADIDAS",
       "symbol": "ADIDAS",
@@ -334,18 +357,64 @@ TEST(ValueConversionUtilsUnitTest, ValueToBlockchainToken) {
       "is_erc721": false,
       "is_erc1155": true,
       "is_nft": true,
+      "is_spam": false,
       "decimals": 0,
       "visible": true
   })");
-  ASSERT_TRUE(json_value);
 
   expected_token = mojom::BlockchainToken::New(
       "0x28472a58A490c5e09A238847F66A68a47cC76f0f", "ADIDAS", "adidas.png",
-      false, false, true, true, "ADIDAS", 0, true, "", "", "0x1",
-      mojom::CoinType::ETH);
+      false, false, false, true, mojom::SPLTokenProgram::kUnsupported, true,
+      false, "ADIDAS", 0, true, "", "", "0x1", mojom::CoinType::ETH, false);
 
-  token = ValueToBlockchainToken(json_value->GetDict(), "0x1",
-                                 mojom::CoinType::ETH);
+  token = ValueToBlockchainToken(json_value);
+  EXPECT_EQ(token, expected_token);
+
+  // SPL token without token program specified should have unknown token
+  // program.
+  json_value = base::test::ParseJsonDict(R"({
+      "coin": 501,
+      "chain_id": "0x65",
+      "address": "addr",
+      "name": "name",
+      "symbol": "TEST",
+      "logo": "logo",
+      "is_erc20": false,
+      "is_erc721": false,
+      "is_erc1155": false,
+      "is_nft": false,
+      "is_spam": false,
+      "decimals": 8,
+      "visible": true,
+  })");
+
+  expected_token = mojom::BlockchainToken::New(
+      "addr", "name", "logo", false, false, false, false,
+      mojom::SPLTokenProgram::kUnknown, false, false, "TEST", 8, true, "", "",
+      "0x65", mojom::CoinType::SOL, false);
+
+  token = ValueToBlockchainToken(json_value);
+  EXPECT_EQ(token, expected_token);
+
+  // SPL token with token program specified should have the correct token
+  // program.
+  json_value.Set("spl_token_program",
+                 static_cast<int>(mojom::SPLTokenProgram::kToken2022));
+  expected_token->spl_token_program = mojom::SPLTokenProgram::kToken2022;
+  token = ValueToBlockchainToken(json_value);
+  EXPECT_EQ(token, expected_token);
+
+  json_value.Set("spl_token_program",
+                 static_cast<int>(mojom::SPLTokenProgram::kToken));
+  expected_token->spl_token_program = mojom::SPLTokenProgram::kToken;
+  token = ValueToBlockchainToken(json_value);
+  EXPECT_EQ(token, expected_token);
+
+  // Native SOL (empty address) should have unsupported token program.
+  json_value.Set("address", "");
+  expected_token->contract_address = "";
+  expected_token->spl_token_program = mojom::SPLTokenProgram::kUnsupported;
+  token = ValueToBlockchainToken(json_value);
   EXPECT_EQ(token, expected_token);
 }
 
@@ -390,8 +459,8 @@ TEST(ValueConversionUtilsUnitTest, PermissionRequestResponseToValue) {
   std::string* type = caveats0.FindString("type");
   ASSERT_NE(type, nullptr);
   EXPECT_EQ(*type, "limitResponseLength");
-  absl::optional<int> primary_accounts_only_value = caveats0.FindInt("value");
-  ASSERT_NE(primary_accounts_only_value, absl::nullopt);
+  std::optional<int> primary_accounts_only_value = caveats0.FindInt("value");
+  ASSERT_NE(primary_accounts_only_value, std::nullopt);
   EXPECT_EQ(*primary_accounts_only_value, 1);
 
   auto& caveats1 = (*caveats)[1].GetDict();
@@ -412,8 +481,8 @@ TEST(ValueConversionUtilsUnitTest, PermissionRequestResponseToValue) {
   ASSERT_EQ(context->size(), 1UL);
   EXPECT_EQ((*context)[0], base::Value("https://github.com/MetaMask/rpc-cap"));
 
-  absl::optional<double> date = param0.FindDouble("date");
-  ASSERT_NE(date, absl::nullopt);
+  std::optional<double> date = param0.FindDouble("date");
+  ASSERT_NE(date, std::nullopt);
 
   std::string* id = param0.FindString("id");
   ASSERT_NE(id, nullptr);
@@ -429,18 +498,18 @@ TEST(ValueConversionUtilsUnitTest, PermissionRequestResponseToValue) {
 
 TEST(ValueConversionUtilsUnitTest, GetFirstValidChainURL) {
   std::vector<GURL> urls = {
-      GURL("https://goerli.infura.io/v3/${INFURA_API_KEY}"),
-      GURL("https://goerli.alchemy.io/v3/${ALCHEMY_API_KEY}"),
-      GURL("https://goerli.apikey.io/v3/${API_KEY}"),
-      GURL("https://goerli.apikey.io/v3/${PULSECHAIN_API_KEY}"),
-      GURL("wss://goerli.infura.io/v3/")};
+      GURL("https://sepolia.infura.io/v3/${INFURA_API_KEY}"),
+      GURL("https://sepolia.alchemy.io/v3/${ALCHEMY_API_KEY}"),
+      GURL("https://sepolia.apikey.io/v3/${API_KEY}"),
+      GURL("https://sepolia.apikey.io/v3/${PULSECHAIN_API_KEY}"),
+      GURL("wss://sepolia.infura.io/v3/")};
 
   // Uses the first URL when a good URL is not available
   auto index = GetFirstValidChainURLIndex(urls);
   EXPECT_EQ(index, 0);
 
-  urls.emplace_back("https://goerli.infura.io/v3/rpc");
-  urls.emplace_back("https://goerli.infura.io/v3/rpc2");
+  urls.emplace_back("https://sepolia.infura.io/v3/rpc");
+  urls.emplace_back("https://sepolia.infura.io/v3/rpc2");
   // Uses the first HTTP(S) URL without a variable when possible
   index = GetFirstValidChainURLIndex(urls);
   EXPECT_EQ(index, 5);

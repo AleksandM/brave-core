@@ -30,7 +30,7 @@ class BraveClassVisitor extends ClassVisitor {
 
     private ClassVisitor mTarget;
 
-    class Method {
+    static class Method {
         public int access;
         public String name;
         public String desc;
@@ -443,6 +443,7 @@ class BraveClassVisitor extends ClassVisitor {
 
         if (shouldMakeProtectedField(name)) {
             System.out.println("make " + name + " public in " + mName);
+            access &= ~ACC_FINAL;
             access &= ~ACC_PRIVATE;
             access |= ACC_PROTECTED;
         }
@@ -509,7 +510,13 @@ class BraveClassVisitor extends ClassVisitor {
                 }
                 for (String annotation : annotations) {
                     method.visibleAnnotations.add(new AnnotationNode(annotation));
-                    System.out.println("add " + annotation + " annotation to " + method.name + " in " + source.name);
+                    System.out.println(
+                            "add "
+                                    + annotation
+                                    + " annotation to "
+                                    + method.name
+                                    + " in "
+                                    + source.name);
                 }
             }
         }

@@ -12,13 +12,10 @@ namespace brave_ads::ml {
 
 class Data {
  public:
-  explicit Data(const DataType& type);
+  explicit Data(DataType type);
 
   Data(const Data&) = delete;
   Data& operator=(const Data&) = delete;
-
-  Data(Data&&) noexcept = delete;
-  Data& operator=(Data&&) noexcept = delete;
 
   virtual ~Data();
 

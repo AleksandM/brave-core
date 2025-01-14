@@ -10,10 +10,17 @@ namespace brave_wallet {
 namespace switches {
 
 // Allows auto unlocking wallet password with command line.
-extern const char kDevWalletPassword[];
+inline constexpr char kDevWalletPassword[] = "dev-wallet-password";
 
-// Hostname of bitcoin rpc endpoint.
-extern const char kBitcoinRpcHost[];
+// Ratios service dev URL
+inline constexpr char kAssetRatioDevUrl[] = "asset-ratio-dev-url";
+inline constexpr char kMeldAssetRatioDevUrl[] = "meld-asset-ratio-dev-url";
+
+// ZCash rpc mainnet endpoint.
+inline constexpr char kZCashMainnetRpcUrl[] = "zcash-mainnet-rpc-url";
+
+// ZCash rpc testnet endpoint.
+inline constexpr char kZCashTestnetRpcUrl[] = "zcash-testnet-rpc-url";
 
 }  // namespace switches
 }  // namespace brave_wallet

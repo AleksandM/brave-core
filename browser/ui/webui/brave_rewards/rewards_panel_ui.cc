@@ -11,6 +11,7 @@
 #include "brave/browser/brave_rewards/rewards_service_factory.h"
 #include "brave/browser/ui/brave_rewards/rewards_panel_coordinator.h"
 #include "brave/browser/ui/webui/brave_rewards/rewards_panel_handler.h"
+#include "brave/browser/ui/webui/brave_rewards/rewards_web_ui_utils.h"
 #include "brave/components/brave_adaptive_captcha/server_util.h"
 #include "brave/components/brave_rewards/resources/grit/brave_rewards_panel_generated_map.h"
 #include "brave/components/brave_rewards/resources/grit/brave_rewards_resources.h"
@@ -26,14 +27,16 @@
 #include "components/grit/brave_components_strings.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
+#include "content/public/browser/web_ui_data_source.h"
+#include "content/public/common/url_constants.h"
 #include "services/network/public/mojom/content_security_policy.mojom.h"
+#include "ui/base/webui/web_ui_util.h"
 
 namespace brave_rewards {
 
 namespace {
 
 static constexpr webui::LocalizedString kStrings[] = {
-    {"aboutRewardsText", IDS_REWARDS_PANEL_ABOUT_REWARDS_TEXT},
     {"attention", IDS_REWARDS_PANEL_ATTENTION},
     {"cancel", IDS_REWARDS_PANEL_CANCEL},
     {"captchaContactSupport", IDS_REWARDS_CAPTCHA_CONTACT_SUPPORT},
@@ -46,41 +49,19 @@ static constexpr webui::LocalizedString kStrings[] = {
     {"captchaSolvedTitle", IDS_REWARDS_CAPTCHA_SOLVED_TITLE},
     {"changeAmount", IDS_REWARDS_PANEL_CHANGE_AMOUNT},
     {"connectAccountText", IDS_REWARDS_CONNECT_ACCOUNT_TEXT},
-    {"connectAccountNoProviders", IDS_REWARDS_CONNECT_ACCOUNT_NO_PROVIDERS},
     {"connectContributeHeader", IDS_REWARDS_CONNECT_CONTRIBUTE_HEADER},
     {"connectContributeText", IDS_REWARDS_CONNECT_CONTRIBUTE_TEXT},
-    {"connectContributeNoProviders",
-     IDS_REWARDS_CONNECT_CONTRIBUTE_NO_PROVIDERS},
-    {"grantCaptchaAmountAds", IDS_REWARDS_GRANT_CAPTCHA_AMOUNT_ADS},
-    {"grantCaptchaAmountUGP", IDS_REWARDS_GRANT_CAPTCHA_AMOUNT_UGP},
-    {"grantCaptchaErrorText", IDS_REWARDS_GRANT_CAPTCHA_ERROR_TEXT},
-    {"grantCaptchaErrorTitle", IDS_REWARDS_GRANT_CAPTCHA_ERROR_TITLE},
-    {"grantCaptchaExpiration", IDS_REWARDS_GRANT_CAPTCHA_EXPIRATION},
-    {"grantCaptchaFailedTitle", IDS_REWARDS_GRANT_CAPTCHA_FAILED_TITLE},
-    {"grantCaptchaHint", IDS_REWARDS_GRANT_CAPTCHA_HINT},
-    {"grantCaptchaPassedTextAds", IDS_REWARDS_GRANT_CAPTCHA_PASSED_TEXT_ADS},
-    {"grantCaptchaPassedTextUGP", IDS_REWARDS_GRANT_CAPTCHA_PASSED_TEXT_UGP},
-    {"grantCaptchaPassedTitleAds", IDS_REWARDS_GRANT_CAPTCHA_PASSED_TITLE_ADS},
-    {"grantCaptchaPassedTitleUGP", IDS_REWARDS_GRANT_CAPTCHA_PASSED_TITLE_UGP},
-    {"grantCaptchaTitle", IDS_REWARDS_GRANT_CAPTCHA_TITLE},
-    {"headerTextAdsDisabled", IDS_REWARDS_PANEL_HEADER_TEXT_ADS_DISABLED},
-    {"headerTextAdsEnabled", IDS_REWARDS_PANEL_HEADER_TEXT_ADS_ENABLED},
     {"headerTitle", IDS_REWARDS_PANEL_HEADER_TITLE},
+    {"headerText", IDS_REWARDS_PANEL_HEADER_TEXT},
     {"includeInAutoContribute", IDS_REWARDS_PANEL_INCLUDE_IN_AUTO_CONTRIBUTE},
     {"learnMore", IDS_REWARDS_LEARN_MORE},
     {"learnMoreAboutBAT", IDS_REWARDS_PANEL_LEARN_MORE_ABOUT_BAT},
     {"loading", IDS_BRAVE_REWARDS_LOADING_LABEL},
     {"monthlyTip", IDS_REWARDS_PANEL_MONTHLY_TIP},
-    {"notificationAdGrantAmount", IDS_REWARDS_NOTIFICATION_AD_GRANT_AMOUNT},
-    {"notificationAdGrantTitle", IDS_REWARDS_NOTIFICATION_AD_GRANT_TITLE},
     {"notificationAutoContributeCompletedText",
      IDS_REWARDS_NOTIFICATION_AUTO_CONTRIBUTE_COMPLETED_TEXT},
     {"notificationAutoContributeCompletedTitle",
      IDS_REWARDS_NOTIFICATION_AUTO_CONTRIBUTE_COMPLETED_TITLE},
-    {"notificationClaimRewards", IDS_REWARDS_NOTIFICATION_CLAIM_REWARDS},
-    {"notificationClaimTokens", IDS_REWARDS_NOTIFICATION_CLAIM_TOKENS},
-    {"notificationGrantDaysRemaining",
-     IDS_REWARDS_NOTIFICATION_GRANT_DAYS_REMAINING},
     {"notificationMonthlyContributionFailedText",
      IDS_REWARDS_NOTIFICATION_MONTHLY_CONTRIBUTION_FAILED_TEXT},
     {"notificationMonthlyContributionFailedTitle",
@@ -89,7 +70,6 @@ static constexpr webui::LocalizedString kStrings[] = {
      IDS_REWARDS_NOTIFICATION_MONTHLY_TIP_COMPLETED_TEXT},
     {"notificationMonthlyTipCompletedTitle",
      IDS_REWARDS_NOTIFICATION_MONTHLY_TIP_COMPLETED_TITLE},
-    {"notificationReconnect", IDS_REWARDS_NOTIFICATION_RECONNECT},
     {"notificationWalletDisconnectedAction",
      IDS_REWARDS_NOTIFICATION_WALLET_DISCONNECTED_ACTION},
     {"notificationWalletDisconnectedText",
@@ -104,7 +84,6 @@ static constexpr webui::LocalizedString kStrings[] = {
      IDS_REWARDS_NOTIFICATION_UPHOLD_INSUFFICIENT_CAPABILITIES_TEXT},
     {"notificationUpholdInsufficientCapabilitiesTitle",
      IDS_REWARDS_NOTIFICATION_UPHOLD_INSUFFICIENT_CAPABILITIES_TITLE},
-    {"notificationTokenGrantTitle", IDS_REWARDS_NOTIFICATION_TOKEN_GRANT_TITLE},
     {"ok", IDS_REWARDS_PANEL_OK},
     {"onboardingClose", IDS_BRAVE_REWARDS_ONBOARDING_CLOSE},
     {"onboardingDone", IDS_BRAVE_REWARDS_ONBOARDING_DONE},
@@ -136,15 +115,21 @@ static constexpr webui::LocalizedString kStrings[] = {
     {"rewardsConnectAccount", IDS_REWARDS_CONNECT_ACCOUNT},
     {"rewardsLearnMore", IDS_REWARDS_LEARN_MORE},
     {"rewardsLogInToSeeBalance", IDS_REWARDS_LOG_IN_TO_SEE_BALANCE},
+    {"rewardsNotNow", IDS_REWARDS_NOT_NOW},
     {"rewardsPaymentCheckStatus", IDS_REWARDS_PAYMENT_CHECK_STATUS},
     {"rewardsPaymentCompleted", IDS_REWARDS_PAYMENT_COMPLETED},
     {"rewardsPaymentPending", IDS_REWARDS_PAYMENT_PENDING},
     {"rewardsPaymentProcessing", IDS_REWARDS_PAYMENT_PROCESSING},
+    {"rewardsPaymentSupport", IDS_REWARDS_PAYMENT_SUPPORT},
+    {"rewardsSelfCustodyInviteHeader", IDS_REWARDS_SELF_CUSTODY_INVITE_HEADER},
+    {"rewardsSelfCustodyInviteText", IDS_REWARDS_SELF_CUSTODY_INVITE_TEXT},
     {"rewardsSettings", IDS_REWARDS_PANEL_REWARDS_SETTINGS},
+    {"rewardsTosUpdateHeading", IDS_REWARDS_TOS_UPDATE_HEADING},
+    {"rewardsTosUpdateText", IDS_REWARDS_TOS_UPDATE_TEXT},
+    {"rewardsTosUpdateLinkText", IDS_REWARDS_TOS_UPDATE_LINK_TEXT},
+    {"rewardsTosUpdateButtonLabel", IDS_REWARDS_TOS_UPDATE_BUTTON_LABEL},
     {"rewardsVBATNoticeText1", IDS_REWARDS_VBAT_NOTICE_TEXT1},
-    {"rewardsVBATNoticeText2", IDS_REWARDS_VBAT_NOTICE_TEXT2},
     {"rewardsVBATNoticeTitle1", IDS_REWARDS_VBAT_NOTICE_TITLE1},
-    {"rewardsVBATNoticeTitle2", IDS_REWARDS_VBAT_NOTICE_TITLE2},
     {"sendTip", IDS_REWARDS_PANEL_SEND_TIP},
     {"set", IDS_REWARDS_PANEL_SET},
     {"summary", IDS_REWARDS_PANEL_SUMMARY},
@@ -157,8 +142,9 @@ static constexpr webui::LocalizedString kStrings[] = {
     {"walletBalanceTitle", IDS_REWARDS_WALLET_BALANCE_TITLE},
     {"walletDisconnected", IDS_REWARDS_WALLET_DISCONNECTED},
     {"walletEarningInfoText", IDS_REWARDS_WIDGET_EARNING_INFO_TEXT},
-    {"walletEstimatedEarnings", IDS_REWARDS_WALLET_ESTIMATED_EARNINGS},
+    {"walletEstimatedEarnings", IDS_REWARDS_ESTIMATED_EARNINGS_TITLE},
     {"walletLogIntoYourAccount", IDS_REWARDS_WALLET_LOG_INTO_YOUR_ACCOUNT},
+    {"walletManageAds", IDS_REWARDS_WALLET_MANAGE_ADS},
     {"walletMonthlyTips", IDS_REWARDS_WALLET_MONTHLY_TIPS},
     {"walletOneTimeTips", IDS_REWARDS_WALLET_ONE_TIME_TIPS},
     {"walletRewardsFromAds", IDS_REWARDS_WALLET_REWARDS_FROM_ADS},
@@ -169,7 +155,7 @@ static constexpr webui::LocalizedString kStrings[] = {
 }  // namespace
 
 RewardsPanelUI::RewardsPanelUI(content::WebUI* web_ui)
-    : MojoBubbleWebUIController(web_ui, true) {
+    : TopChromeWebUIController(web_ui, true) {
   auto* profile = Profile::FromWebUI(web_ui);
   if (auto* browser = chrome::FindLastActiveWithProfile(profile)) {
     panel_coordinator_ = RewardsPanelCoordinator::FromBrowser(browser);
@@ -184,9 +170,7 @@ RewardsPanelUI::RewardsPanelUI(content::WebUI* web_ui)
       web_ui->GetWebContents()->GetBrowserContext(), kBraveRewardsPanelHost);
   source->AddLocalizedStrings(kStrings);
 
-  webui::SetupWebUIDataSource(source,
-                              base::make_span(kBraveRewardsPanelGenerated,
-                                              kBraveRewardsPanelGeneratedSize),
+  webui::SetupWebUIDataSource(source, kBraveRewardsPanelGenerated,
                               IDR_BRAVE_REWARDS_PANEL_HTML);
 
   // Adaptive captcha challenges are displayed in an iframe on the Rewards
@@ -224,6 +208,19 @@ void RewardsPanelUI::CreatePanelHandler(
   panel_handler_ = std::make_unique<RewardsPanelHandler>(
       std::move(panel), std::move(receiver), embedder(), rewards,
       panel_coordinator_);
+}
+
+RewardsPanelUIConfig::RewardsPanelUIConfig()
+    : DefaultTopChromeWebUIConfig(content::kChromeUIScheme,
+                                  kBraveRewardsPanelHost) {}
+
+bool RewardsPanelUIConfig::IsWebUIEnabled(
+    content::BrowserContext* browser_context) {
+  return !ShouldBlockRewardsWebUI(browser_context, GURL(kBraveRewardsPanelURL));
+}
+
+bool RewardsPanelUIConfig::ShouldAutoResizeHost() {
+  return true;
 }
 
 }  // namespace brave_rewards

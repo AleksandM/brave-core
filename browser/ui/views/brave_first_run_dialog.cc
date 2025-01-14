@@ -16,8 +16,9 @@
 #include "chrome/browser/first_run/first_run.h"
 #include "chrome/browser/first_run/first_run_dialog.h"
 #include "chrome/browser/ui/ui_features.h"
-#include "chrome/grit/chromium_strings.h"
+#include "chrome/grit/branded_strings.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/dialog_button.mojom.h"
 #include "ui/gfx/font.h"
 #include "ui/gfx/geometry/insets.h"
 #include "ui/views/controls/button/checkbox.h"
@@ -41,8 +42,8 @@ void ShowBraveFirstRunDialogViews() {
 
 #if BUILDFLAG(ENABLE_PIN_SHORTCUT)
 class PinShortcutCheckbox : public views::Checkbox {
+  METADATA_HEADER(PinShortcutCheckbox, views::Checkbox)
  public:
-  METADATA_HEADER(PinShortcutCheckbox);
 
   PinShortcutCheckbox() {
     SetFontList();
@@ -63,7 +64,7 @@ class PinShortcutCheckbox : public views::Checkbox {
   }
 };
 
-BEGIN_METADATA(PinShortcutCheckbox, views::Checkbox)
+BEGIN_METADATA(PinShortcutCheckbox)
 END_METADATA
 #endif  // BUILDFLAG(IS_WIN)
 
@@ -97,10 +98,10 @@ BraveFirstRunDialog::BraveFirstRunDialog(base::RepeatingClosure quit_runloop)
 #if BUILDFLAG(IS_LINUX)
   SetTitle(IDS_FIRST_RUN_DIALOG_WINDOW_TITLE);
 #endif
-  SetButtonLabel(ui::DIALOG_BUTTON_OK,
+  SetButtonLabel(ui::mojom::DialogButton::kOk,
                  brave_l10n::GetLocalizedResourceUTF16String(
                      IDS_FIRSTRUN_DLG_OK_BUTTON_LABEL));
-  SetButtonLabel(ui::DIALOG_BUTTON_CANCEL,
+  SetButtonLabel(ui::mojom::DialogButton::kCancel,
                  brave_l10n::GetLocalizedResourceUTF16String(
                      IDS_FIRSTRUN_DLG_CANCEL_BUTTON_LABEL));
 
@@ -186,5 +187,5 @@ void BraveFirstRunDialog::WindowClosing() {
   Done();
 }
 
-BEGIN_METADATA(BraveFirstRunDialog, views::DialogDelegateView)
+BEGIN_METADATA(BraveFirstRunDialog)
 END_METADATA

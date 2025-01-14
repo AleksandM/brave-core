@@ -5,6 +5,7 @@
 
 #include "brave/components/brave_wallet/browser/solana_instruction_data_decoder.h"
 
+#include <optional>
 #include <tuple>
 #include <utility>
 
@@ -12,8 +13,11 @@
 #include "base/containers/span.h"
 #include "base/no_destructor.h"
 #include "base/notreached.h"
+#include "base/numerics/byte_conversions.h"
 #include "base/sys_byteorder.h"
+#include "brave/components/brave_wallet/browser/solana_instruction_builder.h"
 #include "brave/components/brave_wallet/common/brave_wallet_constants.h"
+#include "brave/components/brave_wallet/common/encoding_utils.h"
 #include "brave/components/brave_wallet/common/solana_utils.h"
 #include "build/build_config.h"
 #include "components/grit/brave_components_strings.h"
@@ -605,111 +609,60 @@ GetTokenInstructionAccountParams() {
   return *params;
 }
 
-absl::optional<uint8_t> DecodeUint8(const std::vector<uint8_t>& input,
-                                    size_t& offset) {
-  if (offset >= input.size() || input.size() - offset < sizeof(uint8_t)) {
-    return absl::nullopt;
-  }
-
-  offset += sizeof(uint8_t);
-  return input[offset - sizeof(uint8_t)];
-}
-
-absl::optional<std::string> DecodeUint8String(const std::vector<uint8_t>& input,
-                                              size_t& offset) {
+std::optional<std::string> DecodeUint8String(base::span<const uint8_t> input,
+                                             size_t& offset) {
   auto ret = DecodeUint8(input, offset);
   if (!ret) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return base::NumberToString(*ret);
 }
 
-absl::optional<std::string> DecodeAuthorityTypeString(
-    const std::vector<uint8_t>& input,
+std::optional<std::string> DecodeAuthorityTypeString(
+    base::span<const uint8_t> input,
     size_t& offset) {
   auto ret = DecodeUint8(input, offset);
   if (ret && *ret <= kAuthorityTypeMax) {
     return base::NumberToString(*ret);
   }
-  return absl::nullopt;
+  return std::nullopt;
 }
 
-absl::optional<uint32_t> DecodeUint32(const std::vector<uint8_t>& input,
-                                      size_t& offset) {
-  if (offset >= input.size() || input.size() - offset < sizeof(uint32_t)) {
-    return absl::nullopt;
-  }
-
-  // Read bytes in little endian order.
-  base::span<const uint8_t> s =
-      base::make_span(input.begin() + offset, sizeof(uint32_t));
-  uint32_t uint32_le = *reinterpret_cast<const uint32_t*>(s.data());
-
-  offset += sizeof(uint32_t);
-
-#if defined(ARCH_CPU_LITTLE_ENDIAN)
-  return uint32_le;
-#else
-  return base::ByteSwap(uint32_le);
-#endif
-}
-
-absl::optional<std::string> DecodeUint32String(
-    const std::vector<uint8_t>& input,
-    size_t& offset) {
+std::optional<std::string> DecodeUint32String(base::span<const uint8_t> input,
+                                              size_t& offset) {
   auto ret = DecodeUint32(input, offset);
   if (!ret) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return base::NumberToString(*ret);
 }
 
-absl::optional<uint64_t> DecodeUint64(const std::vector<uint8_t>& input,
-                                      size_t& offset) {
-  if (offset >= input.size() || input.size() - offset < sizeof(uint64_t)) {
-    return absl::nullopt;
+std::optional<uint64_t> DecodeUint64(base::span<const uint8_t> input,
+                                     size_t& offset) {
+  if (offset >= input.size() || input.size() - offset < 8u) {
+    return std::nullopt;
   }
 
   // Read bytes in little endian order.
-  base::span<const uint8_t> s =
-      base::make_span(input.begin() + offset, sizeof(uint64_t));
-  uint64_t uint64_le = *reinterpret_cast<const uint64_t*>(s.data());
-
-  offset += sizeof(uint64_t);
-
-#if defined(ARCH_CPU_LITTLE_ENDIAN)
-  return uint64_le;
-#else
-  return base::ByteSwap(uint64_le);
-#endif
+  auto value = input.subspan(offset).first<8u>();
+  offset += 8u;
+  return base::U64FromLittleEndian(value);
 }
 
-absl::optional<std::string> DecodeUint64String(
-    const std::vector<uint8_t>& input,
-    size_t& offset) {
+std::optional<std::string> DecodeUint64String(base::span<const uint8_t> input,
+                                              size_t& offset) {
   auto ret = DecodeUint64(input, offset);
   if (!ret) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return base::NumberToString(*ret);
 }
 
-absl::optional<std::string> DecodePublicKey(const std::vector<uint8_t>& input,
-                                            size_t& offset) {
-  if (offset >= input.size() || input.size() - offset < kSolanaPubkeySize) {
-    return absl::nullopt;
-  }
-
-  offset += kSolanaPubkeySize;
-  return Base58Encode(std::vector<uint8_t>(
-      input.begin() + offset - kSolanaPubkeySize, input.begin() + offset));
-}
-
-absl::optional<std::string> DecodeOptionalPublicKey(
-    const std::vector<uint8_t>& input,
+std::optional<std::string> DecodeOptionalPublicKey(
+    base::span<const uint8_t> input,
     size_t& offset) {
   if (offset == input.size()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // First byte is 0 or 1 to indicate if public key is passed.
@@ -721,7 +674,7 @@ absl::optional<std::string> DecodeOptionalPublicKey(
     offset++;
     return DecodePublicKey(input, offset);
   } else {
-    return absl::nullopt;
+    return std::nullopt;
   }
 }
 
@@ -732,19 +685,19 @@ absl::optional<std::string> DecodeOptionalPublicKey(
 // We currently cap the length here to be the max size of std::string
 // on 32 bit systems, it's safe to do so because currently we don't expect any
 // valid cases would have strings larger than it.
-absl::optional<std::string> DecodeString(const std::vector<uint8_t>& input,
-                                         size_t& offset) {
+std::optional<std::string> DecodeString(base::span<const uint8_t> input,
+                                        size_t& offset) {
   auto len_lower = DecodeUint32(input, offset);
   if (!len_lower || *len_lower > kMaxStringSize32Bit) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   auto len_upper = DecodeUint32(input, offset);
   if (!len_upper || *len_upper != 0) {  // Non-zero means len exceeds u32 max.
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (offset + *len_lower > input.size()) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   offset += *len_lower;
@@ -753,10 +706,10 @@ absl::optional<std::string> DecodeString(const std::vector<uint8_t>& input,
 }
 
 bool DecodeParamType(const ParamNameTypeTuple& name_type_tuple,
-                     const std::vector<std::uint8_t> data,
+                     base::span<const uint8_t> data,
                      size_t& offset,
                      std::vector<InsParamTuple>& ins_param_tuple) {
-  absl::optional<std::string> value;
+  std::optional<std::string> value;
 
   switch (std::get<2>(name_type_tuple)) {
     case mojom::SolanaInstructionParamType::kUint8:
@@ -803,47 +756,48 @@ bool DecodeParamType(const ParamNameTypeTuple& name_type_tuple,
   return true;
 }
 
-absl::optional<mojom::SolanaSystemInstruction> DecodeSystemInstructionType(
-    const std::vector<uint8_t>& data,
+std::optional<mojom::SolanaSystemInstruction> DecodeSystemInstructionType(
+    base::span<const uint8_t> data,
     size_t& offset) {
   auto ins_type = DecodeUint32(data, offset);
   if (!ins_type || *ins_type > static_cast<uint32_t>(
                                    mojom::SolanaSystemInstruction::kMaxValue)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return static_cast<mojom::SolanaSystemInstruction>(*ins_type);
 }
 
-absl::optional<mojom::SolanaTokenInstruction> DecodeTokenInstructionType(
-    const std::vector<uint8_t>& data,
+std::optional<mojom::SolanaTokenInstruction> DecodeTokenInstructionType(
+    base::span<const uint8_t> data,
     size_t& offset) {
   auto ins_type = DecodeUint8(data, offset);
   if (!ins_type || *ins_type > static_cast<uint8_t>(
                                    mojom::SolanaTokenInstruction::kMaxValue)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return static_cast<mojom::SolanaTokenInstruction>(*ins_type);
 }
 
 const std::vector<ParamNameTypeTuple>* DecodeInstructionType(
     const std::string& program_id,
-    const std::vector<uint8_t>& data,
+    base::span<const uint8_t> data,
     size_t& offset,
     SolanaInstructionDecodedData& decoded_data) {
   if (program_id == mojom::kSolanaSystemProgramId) {
     if (auto ins_type = DecodeSystemInstructionType(data, offset)) {
       auto* ret = &GetSystemInstructionParams().at(*ins_type);
-      decoded_data.sys_ins_type = std::move(ins_type);
       decoded_data.account_params =
           GetSystemInstructionAccountParams().at(*ins_type);
+      decoded_data.sys_ins_type = std::move(ins_type);
       return ret;
     }
-  } else if (program_id == mojom::kSolanaTokenProgramId) {
+  } else if (program_id == mojom::kSolanaTokenProgramId ||
+             program_id == mojom::kSolanaToken2022ProgramId) {
     if (auto ins_type = DecodeTokenInstructionType(data, offset)) {
       auto* ret = &GetTokenInstructionParams().at(*ins_type);
-      decoded_data.token_ins_type = std::move(ins_type);
       decoded_data.account_params =
           GetTokenInstructionAccountParams().at(*ins_type);
+      decoded_data.token_ins_type = std::move(ins_type);
       return ret;
     }
   }
@@ -853,12 +807,13 @@ const std::vector<ParamNameTypeTuple>* DecodeInstructionType(
 
 }  // namespace
 
-absl::optional<SolanaInstructionDecodedData> Decode(
-    const std::vector<uint8_t>& data,
+std::optional<SolanaInstructionDecodedData> Decode(
+    base::span<const uint8_t> data,
     const std::string& program_id) {
   if (program_id != mojom::kSolanaSystemProgramId &&
-      program_id != mojom::kSolanaTokenProgramId) {
-    return absl::nullopt;
+      program_id != mojom::kSolanaTokenProgramId &&
+      program_id != mojom::kSolanaToken2022ProgramId) {
+    return std::nullopt;
   }
 
   SolanaInstructionDecodedData decoded_data;
@@ -867,21 +822,53 @@ absl::optional<SolanaInstructionDecodedData> Decode(
   const std::vector<ParamNameTypeTuple>* param_tuples =
       DecodeInstructionType(program_id, data, offset, decoded_data);
   if (!param_tuples) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   for (const auto& param_tuple : *param_tuples) {
     if (!DecodeParamType(param_tuple, data, offset, decoded_data.params)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 
   return decoded_data;
 }
 
+std::optional<uint8_t> DecodeUint8(base::span<const uint8_t> input,
+                                   size_t& offset) {
+  if (offset >= input.size() || input.size() - offset < sizeof(uint8_t)) {
+    return std::nullopt;
+  }
+
+  auto result = input[offset];
+  offset += sizeof(uint8_t);
+  return result;
+}
+
+std::optional<uint32_t> DecodeUint32(base::span<const uint8_t> input,
+                                     size_t& offset) {
+  if (offset >= input.size() || input.size() - offset < sizeof(uint32_t)) {
+    return std::nullopt;
+  }
+  auto value = input.subspan(offset).first<4u>();
+  offset += 4u;
+  return base::U32FromLittleEndian(value);
+}
+
+std::optional<std::string> DecodePublicKey(base::span<const uint8_t> input,
+                                           size_t& offset) {
+  if (offset >= input.size() || input.size() - offset < kSolanaPubkeySize) {
+    return std::nullopt;
+  }
+
+  offset += kSolanaPubkeySize;
+  return Base58Encode(std::vector<uint8_t>(
+      input.begin() + offset - kSolanaPubkeySize, input.begin() + offset));
+}
+
 std::vector<InsParamPair> GetAccountParamsForTesting(
-    absl::optional<mojom::SolanaSystemInstruction> sys_ins_type,
-    absl::optional<mojom::SolanaTokenInstruction> token_ins_type) {
+    std::optional<mojom::SolanaSystemInstruction> sys_ins_type,
+    std::optional<mojom::SolanaTokenInstruction> token_ins_type) {
   if (sys_ins_type) {
     return GetSystemInstructionAccountParams().at(*sys_ins_type);
   }
@@ -891,13 +878,12 @@ std::vector<InsParamPair> GetAccountParamsForTesting(
   }
 
   NOTREACHED();
-  return std::vector<InsParamPair>();
 }
 
 std::vector<mojom::SolanaInstructionAccountParamPtr>
 GetMojomAccountParamsForTesting(
-    absl::optional<mojom::SolanaSystemInstruction> sys_ins_type,
-    absl::optional<mojom::SolanaTokenInstruction> token_ins_type) {
+    std::optional<mojom::SolanaSystemInstruction> sys_ins_type,
+    std::optional<mojom::SolanaTokenInstruction> token_ins_type) {
   std::vector<mojom::SolanaInstructionAccountParamPtr> mojom_params;
   for (const auto& param :
        GetAccountParamsForTesting(sys_ins_type, token_ins_type)) {
@@ -905,6 +891,55 @@ GetMojomAccountParamsForTesting(
         mojom::SolanaInstructionAccountParam::New(param.first, param.second));
   }
   return mojom_params;
+}
+
+std::optional<mojom::SolanaSystemInstruction> GetSystemInstructionType(
+    base::span<const uint8_t> data,
+    const std::string& program_id) {
+  if (program_id != mojom::kSolanaSystemProgramId) {
+    return std::nullopt;
+  }
+
+  size_t offset = 0;
+  return DecodeSystemInstructionType(data, offset);
+}
+
+std::optional<mojom::SolanaComputeBudgetInstruction>
+GetComputeBudgetInstructionType(const std::vector<uint8_t>& data,
+                                const std::string& program_id) {
+  if (program_id != mojom::kSolanaComputeBudgetProgramId) {
+    return std::nullopt;
+  }
+
+  if (data.empty()) {
+    return std::nullopt;
+  }
+
+  uint8_t ins_type = data[0];  // First byte is the instruction type
+  auto mojo_ins_type =
+      static_cast<mojom::SolanaComputeBudgetInstruction>(ins_type);
+  if (!mojom::IsKnownEnumValue(mojo_ins_type)) {
+    return std::nullopt;
+  }
+
+  return mojo_ins_type;
+}
+
+bool IsCompressedNftTransferInstruction(const std::vector<uint8_t>& data,
+                                        const std::string& program_id) {
+  if (program_id != mojom::kSolanaBubbleGumProgramId) {
+    return false;
+  }
+
+  if (data.size() <
+      solana::bubblegum_program::kTransferInstructionDiscriminator.size()) {
+    return false;
+  }
+
+  return std::equal(
+      solana::bubblegum_program::kTransferInstructionDiscriminator.begin(),
+      solana::bubblegum_program::kTransferInstructionDiscriminator.end(),
+      data.begin());
 }
 
 }  // namespace brave_wallet::solana_ins_data_decoder

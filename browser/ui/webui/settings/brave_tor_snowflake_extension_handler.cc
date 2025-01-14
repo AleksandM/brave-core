@@ -22,8 +22,7 @@
 
 namespace {
 // https://chrome.google.com/webstore/detail/snowflake/mafpmfcccpbjnhfhjnllmmalhifmlcie
-constexpr const char kSnowflakeExtensionId[] =
-    "mafpmfcccpbjnhfhjnllmmalhifmlcie";
+constexpr char kSnowflakeExtensionId[] = "mafpmfcccpbjnhfhjnllmmalhifmlcie";
 }  // namespace
 
 class SnowflakeWebstoreInstaller final
@@ -166,7 +165,7 @@ void BraveTorSnowflakeExtensionHandler::EnableSnowflakeExtension(
   if (enable) {
     if (!installed) {
       installer_ = base::MakeRefCounted<SnowflakeWebstoreInstaller>(
-          kSnowflakeExtensionId, profile,
+          kSnowflakeExtensionId, profile, /*parent_window=*/nullptr,
           base::BindOnce(
               &BraveTorSnowflakeExtensionHandler::OnSnowflakeExtensionInstalled,
               weak_factory_.GetWeakPtr(), args[0].Clone()));

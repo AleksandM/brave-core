@@ -8,22 +8,23 @@ import { MemoryRouter as Router, Route } from 'react-router'
 
 import { StepsNavigation } from './steps-navigation'
 
-export const Nav = () => {
-  return <Router>
-    <Route path={'/:currentStep'}>
-      {({ match }) => (
-        <StepsNavigation
-          steps={['1', '2', '3']}
-          currentStep={match?.params.currentStep || '1'}
-          goBack={() => alert('go back')}
-        />
-      )}
-    </Route>
-  </Router>
+export const Nav = {
+  render: () =>
+    <Router>
+      <Route path={'/:currentStep'}>
+        {({ match }) => (
+          <StepsNavigation
+            steps={['1', '2', '3']}
+            currentStep={match?.params.currentStep || '1'}
+            goBack={() => alert('go back')}
+          />
+        )}
+      </Route>
+    </Router>
 }
 
-export const NavWithSkip = () => {
-  return <Router>
+export const NavWithSkip = {
+  render: () => <Router>
     <Route path={'/:currentStep'}>
       {({ match }) => (
         <StepsNavigation
@@ -37,4 +38,6 @@ export const NavWithSkip = () => {
   </Router>
 }
 
-export default Nav
+export default {
+  title: 'Steps Navigation'
+}

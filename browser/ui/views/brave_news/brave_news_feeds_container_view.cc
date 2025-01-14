@@ -35,7 +35,7 @@ BraveNewsFeedsContainerView::BraveNewsFeedsContainerView(
     content::WebContents* contents) {
   auto* tab_helper = BraveNewsTabHelper::FromWebContents(contents);
 
-  auto available_feeds = tab_helper->GetAvailableFeeds();
+  auto available_feeds = tab_helper->GetAvailableFeedUrls();
   for (auto& feed_item : available_feeds) {
     auto* child = AddChildView(
         std::make_unique<BraveNewsFeedItemView>(feed_item, contents));
@@ -61,11 +61,12 @@ void BraveNewsFeedsContainerView::OnThemeChanged() {
   views::View::OnThemeChanged();
   auto is_dark = dark_mode::GetActiveBraveDarkModeType() ==
                  dark_mode::BraveDarkModeType::BRAVE_DARK_MODE_TYPE_DARK;
-  SetBackground(views::CreateSolidBackground(is_dark ? kBackgroundColorDark
-                                                     : kBackgroundColorLight));
+  constexpr float kCornerRadius = 12;
+  SetBackground(views::CreateRoundedRectBackground(
+      is_dark ? kBackgroundColorDark : kBackgroundColorLight, kCornerRadius));
   SetBorder(views::CreateRoundedRectBorder(
-      1, 12, is_dark ? kBorderColorDark : kBorderColorLight));
+      1, kCornerRadius, is_dark ? kBorderColorDark : kBorderColorLight));
 }
 
-BEGIN_METADATA(BraveNewsFeedsContainerView, views::View)
+BEGIN_METADATA(BraveNewsFeedsContainerView)
 END_METADATA

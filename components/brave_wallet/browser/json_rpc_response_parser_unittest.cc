@@ -3,14 +3,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "brave/components/brave_wallet/browser/json_rpc_response_parser.h"
+
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "base/test/values_test_util.h"
-#include "brave/components/brave_wallet/browser/json_rpc_response_parser.h"
 #include "brave/components/brave_wallet/browser/json_rpc_responses.h"
-#include "brave/components/ipfs/ipfs_utils.h"
 #include "components/grit/brave_components_strings.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -46,20 +47,20 @@ TEST(JsonRpcResponseParserUnitTest, ParseBoolResult) {
   std::string json =
       "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":"
       "\"0x0000000000000000000000000000000000000000000000000000000000000001\"}";
-  EXPECT_EQ(ParseBoolResult(ParseJson(json)), absl::make_optional(true));
+  EXPECT_EQ(ParseBoolResult(ParseJson(json)), std::make_optional(true));
 
   json =
       "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":"
       "\"0x0000000000000000000000000000000000000000000000000000000000000000\"}";
-  EXPECT_EQ(ParseBoolResult(ParseJson(json)), absl::make_optional(false));
+  EXPECT_EQ(ParseBoolResult(ParseJson(json)), std::make_optional(false));
 
   json =
       "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":"
       "\"0x00000000000000000000000000000000000000000\"}";
-  EXPECT_EQ(ParseBoolResult(ParseJson(json)), absl::nullopt);
+  EXPECT_EQ(ParseBoolResult(ParseJson(json)), std::nullopt);
 
   json = "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":\"0\"}";
-  EXPECT_EQ(ParseBoolResult(ParseJson(json)), absl::nullopt);
+  EXPECT_EQ(ParseBoolResult(ParseJson(json)), std::nullopt);
 }
 
 TEST(JsonRpcResponseParserUnitTest, ParseErrorResult) {
@@ -350,10 +351,234 @@ TEST(JsonRpcResponseParserUnitTest, RPCResponse) {
   ASSERT_TRUE(response);
   EXPECT_EQ(response->jsonrpc, "2.0");
   EXPECT_EQ(response->id, base::Value(2));
-  EXPECT_EQ(response->result, absl::nullopt);
+  EXPECT_EQ(response->result, std::nullopt);
   ASSERT_TRUE(response->error);
   EXPECT_EQ(response->error->code, -32601);
   EXPECT_EQ(response->error->message, "method does not exist");
+}
+
+TEST(JsonRpcResponseParserUnitTest, AnkrParseGetAccountBalanceResponse) {
+  std::string json(R"(
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "totalBalanceUsd": "4915134435857.581297310767673907",
+        "assets": [
+          {
+            "blockchain": "polygon",
+            "tokenName": "Matic",
+            "tokenSymbol": "MATIC",
+            "tokenDecimals": "18",
+            "tokenType": "NATIVE",
+            "holderAddress": "0xa92d461a9a988a7f11ec285d39783a637fdd6ba4",
+            "balance": "120.275036899888325666",
+            "balanceRawInteger": "120275036899888325666",
+            "balanceUsd": "66.534394147826631446",
+            "tokenPrice": "0.553185397924316979",
+            "thumbnail": "polygon.svg"
+          },
+          {
+            "blockchain": "polygon",
+            "tokenName": "Malformed USDC",
+            "tokenSymbol": "USDC",
+            "tokenDecimals": "-6",
+            "tokenType": "ERC20",
+            "contractAddress": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+            "holderAddress": "0xa92d461a9a988a7f11ec285d39783a637fdd6ba4",
+            "balance": "8.202765",
+            "balanceRawInteger": "8202765",
+            "balanceUsd": "8.202765",
+            "tokenPrice": "1",
+            "thumbnail": "usdc.png"
+          },
+          {
+            "blockchain": "polygon",
+            "tokenName": "USD Coin",
+            "tokenSymbol": "USDC",
+            "tokenDecimals": "6",
+            "tokenType": "ERC20",
+            "contractAddress": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+            "holderAddress": "0xa92d461a9a988a7f11ec285d39783a637fdd6ba4",
+            "balance": "8.202765",
+            "balanceRawInteger": "8202765",
+            "balanceUsd": "8.202765",
+            "tokenPrice": "1",
+            "thumbnail": "usdc.png"
+          },
+          {
+            "blockchain": "polygon",
+            "tokenName": "Malformed USDC",
+            "tokenSymbol": "USDC",
+            "tokenDecimals": "6",
+            "tokenType": "ERC20",
+            "holderAddress": "0xa92d461a9a988a7f11ec285d39783a637fdd6ba4",
+            "balance": "8.202765",
+            "balanceRawInteger": "8202765",
+            "balanceUsd": "8.202765",
+            "tokenPrice": "1",
+            "thumbnail": "usdc.png"
+          }
+        ]
+      }
+    }
+  )");
+
+  auto response = ankr::ParseGetAccountBalanceResponse(ParseJson(json));
+  ASSERT_TRUE(response);
+  ASSERT_EQ(response->size(), 2u);
+
+  EXPECT_EQ(response->at(0)->asset->contract_address, "");
+  EXPECT_EQ(response->at(0)->asset->name, "Matic");
+  EXPECT_EQ(response->at(0)->asset->logo, "polygon.svg");
+  EXPECT_FALSE(response->at(0)->asset->is_erc20);
+  EXPECT_FALSE(response->at(0)->asset->is_erc721);
+  EXPECT_FALSE(response->at(0)->asset->is_erc1155);
+  EXPECT_FALSE(response->at(0)->asset->is_nft);
+  EXPECT_FALSE(response->at(0)->asset->is_spam);
+  EXPECT_EQ(response->at(0)->asset->symbol, "MATIC");
+  EXPECT_EQ(response->at(0)->asset->decimals, 18);
+  EXPECT_TRUE(response->at(0)->asset->visible);
+  EXPECT_EQ(response->at(0)->asset->token_id, "");
+  EXPECT_EQ(response->at(0)->asset->coingecko_id, "");
+  EXPECT_EQ(response->at(0)->asset->chain_id, mojom::kPolygonMainnetChainId);
+  EXPECT_EQ(response->at(0)->asset->coin, mojom::CoinType::ETH);
+  EXPECT_EQ(response->at(0)->balance, "120275036899888325666");
+  EXPECT_EQ(response->at(0)->formatted_balance, "120.275036899888325666");
+  EXPECT_EQ(response->at(0)->balance_usd, "66.534394147826631446");
+  EXPECT_EQ(response->at(0)->price_usd, "0.553185397924316979");
+
+  EXPECT_EQ(response->at(1)->asset->contract_address,
+            "0x2791bca1f2de4661ed88a30c99a7a9449aa84174");
+  EXPECT_EQ(response->at(1)->asset->name, "USD Coin");
+  EXPECT_EQ(response->at(1)->asset->logo, "usdc.png");
+  EXPECT_TRUE(response->at(1)->asset->is_erc20);
+  EXPECT_FALSE(response->at(1)->asset->is_erc721);
+  EXPECT_FALSE(response->at(1)->asset->is_erc1155);
+  EXPECT_FALSE(response->at(1)->asset->is_nft);
+  EXPECT_FALSE(response->at(1)->asset->is_spam);
+  EXPECT_EQ(response->at(1)->asset->symbol, "USDC");
+  EXPECT_EQ(response->at(1)->asset->decimals, 6);
+  EXPECT_TRUE(response->at(1)->asset->visible);
+  EXPECT_EQ(response->at(1)->asset->token_id, "");
+  EXPECT_EQ(response->at(1)->asset->coingecko_id, "");
+  EXPECT_EQ(response->at(1)->asset->chain_id, mojom::kPolygonMainnetChainId);
+  EXPECT_EQ(response->at(1)->asset->coin, mojom::CoinType::ETH);
+  EXPECT_EQ(response->at(1)->balance, "8202765");
+  EXPECT_EQ(response->at(1)->formatted_balance, "8.202765");
+  EXPECT_EQ(response->at(1)->balance_usd, "8.202765");
+  EXPECT_EQ(response->at(1)->price_usd, "1");
+}
+
+TEST(JsonRpcResponseParserUnitTest, GetUint64FromDictValue) {
+  uint64_t ret;
+
+  // Case 1: Successful conversion
+  ret = 0;
+  EXPECT_TRUE(GetUint64FromDictValue(
+      base::test::ParseJsonDict(R"({"key": "18446744073709551615"})"), "key",
+      false, &ret));
+  EXPECT_EQ(ret, UINT64_MAX);
+
+  // Case 2: ret is nullptr
+  EXPECT_FALSE(GetUint64FromDictValue(
+      base::test::ParseJsonDict(R"({"key": "18446744073709551615"})"), "key",
+      false, nullptr));
+
+  // Case 3: Key not found
+  ret = 0;
+  EXPECT_FALSE(GetUint64FromDictValue(
+      base::test::ParseJsonDict(R"({"other_key": "18446744073709551615"})"),
+      "key", false, &ret));
+
+  // Case 4: Nullable and value is none
+  ret = 0;
+  EXPECT_TRUE(GetUint64FromDictValue(
+      base::test::ParseJsonDict(R"({"key": null})"), "key", true, &ret));
+  EXPECT_EQ(ret, 0U);
+
+  // Case 5: Nullable but value is not none
+  ret = 0;
+  EXPECT_TRUE(GetUint64FromDictValue(
+      base::test::ParseJsonDict(R"({"key": "0"})"), "key", true, &ret));
+  EXPECT_EQ(ret, 0U);
+
+  // Case 6: Non-string value
+  ret = 0;
+  EXPECT_FALSE(GetUint64FromDictValue(
+      base::test::ParseJsonDict(R"({"key": 12345})"), "key", false, &ret));
+
+  // Case 7: Empty string value
+  ret = 0;
+  EXPECT_FALSE(GetUint64FromDictValue(
+      base::test::ParseJsonDict(R"({"key": ""})"), "key", false, &ret));
+
+  // Case 8: Invalid string value
+  ret = 0;
+  EXPECT_FALSE(GetUint64FromDictValue(
+      base::test::ParseJsonDict(R"({"key": "invalid"})"), "key", false, &ret));
+}
+
+TEST(JsonRpcResponseParserUnitTest, ConvertAllNumbersToString) {
+  // OK: convert u64, f64, and i64 values to string
+  std::string json(
+      R"({"a":[{"key":18446744073709551615},{"key":-2},{"key":3.14}]})");
+  EXPECT_EQ(
+      ConvertAllNumbersToString("", json).value_or(""),
+      R"({"a":[{"key":"18446744073709551615"},{"key":"-2"},{"key":"3.14"}]})");
+
+  // OK: convert deeply nested value to string
+  json = R"({"some":[{"deeply":{"nested":[{"path":123}]}}]})";
+  EXPECT_EQ(ConvertAllNumbersToString("", json).value_or(""),
+            R"({"some":[{"deeply":{"nested":[{"path":"123"}]}}]})");
+
+  // OK: values other than u64/f64/i64 are unchanged
+  json = R"({"a":[{"key":18446744073709551615},{"key":null},{"key":true}]})";
+  EXPECT_EQ(
+      ConvertAllNumbersToString("", json).value_or(""),
+      R"({"a":[{"key":"18446744073709551615"},{"key":null},{"key":true}]})");
+
+  // OK: empty object array, nothing to convert
+  json = R"({"a":[]})";
+  EXPECT_EQ(ConvertAllNumbersToString("", json).value_or(""), json);
+
+  // OK: empty array json, nothing to convert
+  json = R"([])";
+  EXPECT_EQ(ConvertAllNumbersToString("", json).value_or(""), json);
+
+  // OK: floating point values in scientific notation are unchanged
+  json = R"({"a": 1.196568750220778e-7})";
+  EXPECT_EQ(ConvertAllNumbersToString("", json).value_or(""),
+            R"({"a":"1.196568750220778e-7"})");
+
+  // OK: convert under specified JSON path only
+  json = R"({"a":1,"outer":{"inner": 2}})";
+  EXPECT_EQ(ConvertAllNumbersToString("/outer", json).value_or(""),
+            R"({"a":1,"outer":{"inner":"2"}})");
+  EXPECT_EQ(ConvertAllNumbersToString("/a", json).value_or(""),
+            R"({"a":"1","outer":{"inner":2}})");
+
+  // KO: invalid path has no effect on the JSON
+  json = R"({"a":1,"outer":{"inner":2}})";
+  EXPECT_EQ(ConvertAllNumbersToString("/invalid", json).value_or(""), json);
+  EXPECT_EQ(ConvertAllNumbersToString("/", json).value_or(""), json);
+
+  // KO: invalid cases
+  std::vector<std::string> invalid_cases = {
+      // invalid json
+      R"({"a": hello})",
+      // UINT64_MAX + 1
+      R"("{a":[{"key":18446744073709551616}]})",
+      // INT64_MIN
+      R"("{a":[{"key":)" + base::NumberToString(INT64_MIN) + "}]}",
+      // DBL_MIN
+      R"("{a":[{"key":)" + base::NumberToString(DBL_MIN) + "}]}",
+      // DBL_MAX
+      R"("{a":[{"key":)" + base::NumberToString(DBL_MAX + 1) + "}]}"};
+  for (const auto& invalid_case : invalid_cases) {
+    EXPECT_EQ("", ConvertAllNumbersToString("", invalid_case).value_or(""))
+        << invalid_case;
+  }
 }
 
 }  // namespace brave_wallet

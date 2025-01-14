@@ -5,10 +5,13 @@
 
 #include "brave/components/brave_wallet/browser/solana_instruction_data_decoder.h"
 
+#include <optional>
 #include <tuple>
 #include <utility>
 #include <vector>
 
+#include "brave/components/brave_wallet/browser/solana_instruction.h"
+#include "brave/components/brave_wallet/browser/solana_instruction_builder.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
 #include "brave/components/brave_wallet/common/brave_wallet_constants.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -36,7 +39,7 @@ class SolanaInstructionDecoderTest : public testing::Test {
       EXPECT_EQ(params[i], std::make_pair(std::get<0>(ret->params[i]),
                                           std::get<2>(ret->params[i])));
     }
-    EXPECT_EQ(GetAccountParamsForTesting(ins_type, absl::nullopt),
+    EXPECT_EQ(GetAccountParamsForTesting(ins_type, std::nullopt),
               ret->account_params);
 
     for (size_t i = 0; i < data.size(); ++i) {
@@ -59,7 +62,7 @@ class SolanaInstructionDecoderTest : public testing::Test {
       EXPECT_EQ(params[i], std::make_pair(std::get<0>(ret->params[i]),
                                           std::get<2>(ret->params[i])));
     }
-    EXPECT_EQ(GetAccountParamsForTesting(absl::nullopt, ins_type),
+    EXPECT_EQ(GetAccountParamsForTesting(std::nullopt, ins_type),
               ret->account_params);
 
     // Skip when testing typescript impl without passing the optional key
@@ -382,6 +385,72 @@ TEST_F(SolanaInstructionDecoderTest, Decode_InitializeMint2) {
        0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0},
       mojom::SolanaTokenInstruction::kInitializeMint2,
       {{"decimals", "9"}, {"mint_authority", kPubkey1}}, true);
+}
+
+TEST_F(SolanaInstructionDecoderTest, GetComputeBudgetInstructionType) {
+  // Recognizes compute limit instruction
+  auto instruction = solana::compute_budget_program::SetComputeUnitLimit(0);
+  auto instruction_type = GetComputeBudgetInstructionType(
+      instruction.data(), instruction.GetProgramId());
+  ASSERT_TRUE(instruction_type);
+  EXPECT_EQ(*instruction_type,
+            mojom::SolanaComputeBudgetInstruction::kSetComputeUnitLimit);
+
+  // Recognizes compute unit instruction
+  instruction = solana::compute_budget_program::SetComputeUnitPrice(0);
+  instruction_type = GetComputeBudgetInstructionType(
+      instruction.data(), instruction.GetProgramId());
+  ASSERT_TRUE(instruction_type);
+  EXPECT_EQ(*instruction_type,
+            mojom::SolanaComputeBudgetInstruction::kSetComputeUnitPrice);
+
+  // Returns nullopt for system instruction
+  std::string from_pubkey = "5PfVQ7u360kP2uvPX9oeKtp3bpHbSYKJyQEEMKB3eF7V";
+  std::string to_pubkey = "H5sGH5Avk14e6h6gV8vXuBwYxVtT1VkmmVU5sPMinHho";
+  auto system_instruction =
+      solana::system_program::Transfer(from_pubkey, to_pubkey, 1000);
+  ASSERT_TRUE(system_instruction);
+  instruction_type = GetComputeBudgetInstructionType(
+      (*system_instruction).data(), (*system_instruction).GetProgramId());
+  ASSERT_FALSE(instruction_type);
+
+  // Returns nullopt for empty data
+  instruction_type =
+      GetComputeBudgetInstructionType({}, mojom::kSolanaComputeBudgetProgramId);
+  ASSERT_FALSE(instruction_type);
+
+  // Returns nullopt for invalid instruction type
+  std::vector<uint8_t> invalid_data = {255};  // 255 is not a valid enum value
+  instruction_type = GetComputeBudgetInstructionType(
+      invalid_data, mojom::kSolanaComputeBudgetProgramId);
+  ASSERT_FALSE(instruction_type);
+}
+
+TEST_F(SolanaInstructionDecoderTest, IsCompressedNftTransferInstruction) {
+  // Empty data is not a compressed NFT transfer instruction.
+  EXPECT_FALSE(
+      IsCompressedNftTransferInstruction({}, mojom::kSolanaBubbleGumProgramId));
+
+  // Compressed NFT transfer instruction is recognized.
+  std::vector<uint8_t> data = {
+      // Contains compressed NFT transfer disctiminator.
+      0xa3, 0x34, 0xc8, 0xe7, 0x8c, 0x03, 0x45, 0xba, 0x44, 0x3f, 0xca, 0x38,
+      0xd1, 0x3e, 0x68, 0xf2, 0x95, 0xaf, 0xfc, 0x5f, 0x34, 0x31, 0xf3, 0x75,
+      0xba, 0xd8, 0xd3, 0x82, 0x90, 0x1a, 0x94, 0x7f, 0x72, 0x96, 0xfc, 0xd8,
+      0x79, 0x8a, 0xb7, 0x98, 0x3b, 0x17, 0x52, 0x74, 0x15, 0x6f, 0x94, 0x1a,
+      0xe6, 0xc6, 0x1e, 0x0e, 0xb4, 0x6c, 0xcf, 0x64, 0xd6, 0x8f, 0xfd, 0x34,
+      0xb7, 0x68, 0x6d, 0x97, 0x32, 0x45, 0x7e, 0x8a, 0x5c, 0x1a, 0x80, 0x31,
+      0x9b, 0x22, 0x99, 0xb4, 0xc2, 0x20, 0x0e, 0x5e, 0xef, 0x2e, 0x12, 0xb1,
+      0x6d, 0x4f, 0xbd, 0xf1, 0x2e, 0x11, 0xe1, 0x4f, 0xb2, 0x76, 0xc3, 0x91,
+      0x21, 0x88, 0x34, 0xf3, 0x0a, 0xec, 0x39, 0x45, 0xa5, 0x15, 0x14, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0xa5, 0x15, 0x14, 0x00};
+  EXPECT_TRUE(IsCompressedNftTransferInstruction(
+      data, mojom::kSolanaBubbleGumProgramId));
+
+  // Compressed NFT transfer instruction is not recognized for different program
+  // id.
+  EXPECT_FALSE(
+      IsCompressedNftTransferInstruction(data, mojom::kSolanaTokenProgramId));
 }
 
 }  // namespace brave_wallet::solana_ins_data_decoder

@@ -5,35 +5,34 @@
 #include "brave/components/brave_rewards/core/state/state_migration_v7.h"
 
 #include <string>
+#include <utility>
 
-#include "brave/components/brave_rewards/core/ledger_impl.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/state/state.h"
 #include "brave/components/brave_rewards/core/state/state_keys.h"
 
-namespace brave_rewards::internal {
-namespace state {
+namespace brave_rewards::internal::state {
 
-StateMigrationV7::StateMigrationV7(LedgerImpl& ledger) : ledger_(ledger) {}
+StateMigrationV7::StateMigrationV7(RewardsEngine& engine) : engine_(engine) {}
 
 StateMigrationV7::~StateMigrationV7() = default;
 
-void StateMigrationV7::Migrate(LegacyResultCallback callback) {
-  const std::string brave = ledger_->GetState<std::string>(kWalletBrave);
+void StateMigrationV7::Migrate(ResultCallback callback) {
+  const std::string brave = engine_->GetState<std::string>(kWalletBrave);
 
-  if (!ledger_->state()->SetEncryptedString(kWalletBrave, brave)) {
-    callback(mojom::Result::LEDGER_ERROR);
+  if (!engine_->state()->SetEncryptedString(kWalletBrave, brave)) {
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
-  const std::string uphold = ledger_->GetState<std::string>(kWalletUphold);
+  const std::string uphold = engine_->GetState<std::string>(kWalletUphold);
 
-  if (!ledger_->state()->SetEncryptedString(kWalletUphold, uphold)) {
-    callback(mojom::Result::LEDGER_ERROR);
+  if (!engine_->state()->SetEncryptedString(kWalletUphold, uphold)) {
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
-  callback(mojom::Result::LEDGER_OK);
+  std::move(callback).Run(mojom::Result::OK);
 }
 
-}  // namespace state
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::state

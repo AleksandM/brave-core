@@ -6,31 +6,19 @@
 #ifndef BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_ISSUERS_ISSUERS_UTIL_H_
 #define BRAVE_COMPONENTS_BRAVE_ADS_CORE_INTERNAL_ACCOUNT_ISSUERS_ISSUERS_UTIL_H_
 
-#include <string>
-
-#include "brave/components/brave_ads/core/internal/account/issuers/issuer_types.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
+#include <optional>
 
 namespace brave_ads {
 
-struct IssuerInfo;
 struct IssuersInfo;
 
 void SetIssuers(const IssuersInfo& issuers);
-absl::optional<IssuersInfo> GetIssuers();
-void ResetIssuers();
+std::optional<IssuersInfo> GetIssuers();
 
 bool IsIssuersValid(const IssuersInfo& issuers);
 
 bool HasIssuers();
 bool HasIssuersChanged(const IssuersInfo& other);
-
-bool IssuerExistsForType(IssuerType issuer_type);
-absl::optional<IssuerInfo> GetIssuerForType(const IssuersInfo& issuers,
-                                            IssuerType issuer_type);
-
-bool PublicKeyExistsForIssuerType(IssuerType issuer_type,
-                                  const std::string& public_key);
 
 }  // namespace brave_ads
 

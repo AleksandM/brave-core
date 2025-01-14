@@ -1,8 +1,8 @@
 diff --git a/components/os_crypt/sync/os_crypt_win.cc b/components/os_crypt/sync/os_crypt_win.cc
-index 7fac2caf8aeedceb44d3527a1de9d132adea6e7d..f97b16c99bdd5090a61fa097633b8e72949d64e6 100644
+index 32357ed94bb13da79d7c30d345c5088e621bd9d6..e47b585ddfdde37fa1ec4ce742c9977a3412ef89 100644
 --- a/components/os_crypt/sync/os_crypt_win.cc
 +++ b/components/os_crypt/sync/os_crypt_win.cc
-@@ -176,6 +176,7 @@ bool OSCryptImpl::DecryptString16(const std::string& ciphertext,
+@@ -190,6 +190,7 @@ bool OSCryptImpl::DecryptString16(const std::string& ciphertext,
  
  bool OSCryptImpl::EncryptString(const std::string& plaintext,
                              std::string* ciphertext) {
@@ -10,7 +10,7 @@ index 7fac2caf8aeedceb44d3527a1de9d132adea6e7d..f97b16c99bdd5090a61fa097633b8e72
    if (use_legacy_)
      return EncryptStringWithDPAPI(plaintext, ciphertext);
  
-@@ -201,6 +202,7 @@ bool OSCryptImpl::EncryptString(const std::string& plaintext,
+@@ -215,6 +216,7 @@ bool OSCryptImpl::EncryptString(const std::string& plaintext,
  
  bool OSCryptImpl::DecryptString(const std::string& ciphertext,
                              std::string* plaintext) {

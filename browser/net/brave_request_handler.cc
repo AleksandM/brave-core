@@ -8,25 +8,21 @@
 #include <algorithm>
 #include <utility>
 
-#include "base/containers/contains.h"
 #include "base/feature_list.h"
 #include "brave/browser/net/brave_ad_block_csp_network_delegate_helper.h"
 #include "brave/browser/net/brave_ad_block_tp_network_delegate_helper.h"
-#include "brave/browser/net/brave_ads_status_header_network_delegate_helper.h"
 #include "brave/browser/net/brave_common_static_redirect_network_delegate_helper.h"
-#include "brave/browser/net/brave_httpse_network_delegate_helper.h"
 #include "brave/browser/net/brave_localhost_permission_network_delegate_helper.h"
 #include "brave/browser/net/brave_reduce_language_network_delegate_helper.h"
-#include "brave/browser/net/brave_referrals_network_delegate_helper.h"
 #include "brave/browser/net/brave_service_key_network_delegate_helper.h"
 #include "brave/browser/net/brave_site_hacks_network_delegate_helper.h"
 #include "brave/browser/net/brave_stp_util.h"
 #include "brave/browser/net/decentralized_dns_network_delegate_helper.h"
 #include "brave/browser/net/global_privacy_control_network_delegate_helper.h"
-#include "brave/components/brave_shields/common/features.h"
+#include "brave/browser/net/search_ads_header_network_delegate_helper.h"
+#include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/brave_webtorrent/browser/buildflags/buildflags.h"
 #include "brave/components/constants/pref_names.h"
-#include "brave/components/ipfs/buildflags/buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -35,14 +31,10 @@
 #include "extensions/common/constants.h"
 #include "net/base/features.h"
 #include "net/base/net_errors.h"
+#include "third_party/blink/public/common/features.h"
 
 #if BUILDFLAG(ENABLE_BRAVE_WEBTORRENT)
 #include "brave/browser/net/brave_torrent_redirect_network_delegate_helper.h"
-#endif
-
-#if BUILDFLAG(ENABLE_IPFS)
-#include "brave/browser/net/ipfs_redirect_network_delegate_helper.h"
-#include "brave/components/ipfs/features.h"
 #endif
 
 static bool IsInternalScheme(std::shared_ptr<brave::BraveRequestInfo> ctx) {
@@ -69,11 +61,6 @@ void BraveRequestHandler::SetupCallbacks() {
   callback = base::BindRepeating(brave::OnBeforeURLRequest_AdBlockTPPreWork);
   before_url_request_callbacks_.push_back(callback);
 
-  if (!base::FeatureList::IsEnabled(net::features::kBraveHttpsByDefault)) {
-    callback = base::BindRepeating(brave::OnBeforeURLRequest_HttpsePreFileWork);
-    before_url_request_callbacks_.push_back(callback);
-  }
-
   callback =
       base::BindRepeating(brave::OnBeforeURLRequest_CommonStaticRedirectWork);
   before_url_request_callbacks_.push_back(callback);
@@ -89,27 +76,19 @@ void BraveRequestHandler::SetupCallbacks() {
     before_url_request_callbacks_.push_back(callback);
   }
 
-#if BUILDFLAG(ENABLE_IPFS)
-  if (base::FeatureList::IsEnabled(ipfs::features::kIpfsFeature)) {
-    callback = base::BindRepeating(ipfs::OnBeforeURLRequest_IPFSRedirectWork);
-    before_url_request_callbacks_.push_back(callback);
-  }
-#endif
-
   brave::OnBeforeStartTransactionCallback start_transaction_callback =
       base::BindRepeating(brave::OnBeforeStartTransaction_SiteHacksWork);
   before_start_transaction_callbacks_.push_back(start_transaction_callback);
 
-  start_transaction_callback = base::BindRepeating(
-      brave::OnBeforeStartTransaction_GlobalPrivacyControlWork);
-  before_start_transaction_callbacks_.push_back(start_transaction_callback);
+  if (base::FeatureList::IsEnabled(
+          blink::features::kBraveGlobalPrivacyControl)) {
+    start_transaction_callback = base::BindRepeating(
+        brave::OnBeforeStartTransaction_GlobalPrivacyControlWork);
+    before_start_transaction_callbacks_.push_back(start_transaction_callback);
+  }
 
   start_transaction_callback =
       base::BindRepeating(brave::OnBeforeStartTransaction_BraveServiceKey);
-  before_start_transaction_callbacks_.push_back(start_transaction_callback);
-
-  start_transaction_callback =
-      base::BindRepeating(brave::OnBeforeStartTransaction_ReferralsWork);
   before_start_transaction_callbacks_.push_back(start_transaction_callback);
 
   if (base::FeatureList::IsEnabled(
@@ -120,7 +99,7 @@ void BraveRequestHandler::SetupCallbacks() {
   }
 
   start_transaction_callback =
-      base::BindRepeating(brave::OnBeforeStartTransaction_AdsStatusHeader);
+      base::BindRepeating(brave::OnBeforeStartTransaction_SearchAdsHeader);
   before_start_transaction_callbacks_.push_back(start_transaction_callback);
 
 #if BUILDFLAG(ENABLE_BRAVE_WEBTORRENT)
@@ -139,7 +118,7 @@ void BraveRequestHandler::SetupCallbacks() {
 
 bool BraveRequestHandler::IsRequestIdentifierValid(
     uint64_t request_identifier) {
-  return base::Contains(callbacks_, request_identifier);
+  return callbacks_.contains(request_identifier);
 }
 
 int BraveRequestHandler::OnBeforeURLRequest(
@@ -200,8 +179,9 @@ int BraveRequestHandler::OnHeadersReceived(
 
 void BraveRequestHandler::OnURLRequestDestroyed(
     std::shared_ptr<brave::BraveRequestInfo> ctx) {
-  if (base::Contains(callbacks_, ctx->request_identifier)) {
-    callbacks_.erase(ctx->request_identifier);
+  auto it = callbacks_.find(ctx->request_identifier);
+  if (it != callbacks_.end()) {
+    callbacks_.erase(it);
   }
 }
 
@@ -222,7 +202,7 @@ void BraveRequestHandler::RunNextCallback(
     std::shared_ptr<brave::BraveRequestInfo> ctx) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
-  if (!base::Contains(callbacks_, ctx->request_identifier)) {
+  if (!callbacks_.contains(ctx->request_identifier)) {
     return;
   }
 

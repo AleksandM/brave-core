@@ -39,6 +39,7 @@ import org.chromium.chrome.browser.bookmarks.BookmarkUtils;
 import org.chromium.chrome.browser.night_mode.GlobalNightModeStateProviderHolder;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
+import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tasks.tab_management.BraveTabUiFeatureUtilities;
 import org.chromium.chrome.browser.toolbar.LocationBarModel;
 import org.chromium.components.bookmarks.BookmarkId;
@@ -194,8 +195,14 @@ public class TabUtils {
 
     private static void openNewTab(BraveActivity braveActivity, boolean isIncognito) {
         if (braveActivity == null) return;
-        braveActivity.getTabModelSelector().getModel(isIncognito).commitAllTabClosures();
-        braveActivity.getTabCreator(isIncognito).launchNTP();
+
+        ObservableSupplier<TabModelSelector> supplier = braveActivity.getTabModelSelectorSupplier();
+        TabModelSelector selector = supplier.get();
+        if (selector == null) {
+            return;
+        }
+        selector.getModel(isIncognito).commitAllTabClosures();
+        braveActivity.getTabCreator(isIncognito).launchNtp();
     }
 
     public static void openUrlInNewTab(boolean isIncognito, String url) {
@@ -210,13 +217,19 @@ public class TabUtils {
     public static void openUrlInNewTabInBackground(boolean isIncognito, String url) {
         try {
             BraveActivity braveActivity = BraveActivity.getBraveActivity();
-            if (braveActivity.getTabModelSelector() != null
-                    && braveActivity.getActivityTab() != null) {
-                braveActivity.getTabModelSelector().openNewTab(new LoadUrlParams(url),
+
+            ObservableSupplier<TabModelSelector> supplier =
+                    braveActivity.getTabModelSelectorSupplier();
+            TabModelSelector selector = supplier.get();
+
+            if (selector != null && braveActivity.getActivityTab() != null) {
+                selector.openNewTab(
+                        new LoadUrlParams(url),
                         BraveTabUiFeatureUtilities.isBraveTabGroupsEnabled()
                                 ? TabLaunchType.FROM_LONGPRESS_BACKGROUND_IN_GROUP
                                 : TabLaunchType.FROM_LONGPRESS_BACKGROUND,
-                        braveActivity.getActivityTab(), isIncognito);
+                        braveActivity.getActivityTab(),
+                        isIncognito);
             }
         } catch (BraveActivity.BraveActivityNotFoundException e) {
             Log.e(TAG, "openUrlInNewTabInBackground " + e);
@@ -269,6 +282,7 @@ public class TabUtils {
     public static void bringChromeTabbedActivityToTheTop(Activity activity) {
         Intent braveActivityIntent = new Intent(activity, ChromeTabbedActivity.class);
         braveActivityIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        braveActivityIntent.setAction(Intent.ACTION_VIEW);
         activity.startActivity(braveActivityIntent);
     }
 
@@ -282,8 +296,19 @@ public class TabUtils {
         TabUtils.bringChromeTabbedActivityToTheTop(activity);
     }
 
+    public static void openURLWithBraveActivity(String url) {
+        try {
+            BraveActivity activity = BraveActivity.getBraveActivity();
+            activity.openNewOrSelectExistingTab(url, true);
+            TabUtils.bringChromeTabbedActivityToTheTop(activity);
+        } catch (BraveActivity.BraveActivityNotFoundException e) {
+            Log.e(TAG, "openURLWithBraveActivity error", e);
+        }
+    }
+
     /**
      * Open link in a custom tab
+     *
      * @param context packageContext/source of the intent
      * @param url to be opened
      */
@@ -304,5 +329,21 @@ public class TabUtils {
         IntentUtils.addTrustedIntentExtras(intent);
 
         context.startActivity(intent);
+    }
+
+    /** Returns transition for the given tab */
+    public static int getTransition(Tab tab) {
+        if (tab != null
+                && tab.getWebContents() != null
+                && tab.getWebContents().getNavigationController() != null
+                && tab.getWebContents().getNavigationController().getVisibleEntry() != null) {
+            int transition =
+                    tab.getWebContents()
+                            .getNavigationController()
+                            .getVisibleEntry()
+                            .getTransition();
+            return transition;
+        }
+        return 0;
     }
 }

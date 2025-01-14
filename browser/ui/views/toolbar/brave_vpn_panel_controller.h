@@ -21,13 +21,15 @@ class BraveVPNPanelController {
   BraveVPNPanelController(const BraveVPNPanelController&) = delete;
   BraveVPNPanelController& operator=(const BraveVPNPanelController&) = delete;
 
-  void ShowBraveVPNPanel();
+  // Pass true to |show_select| when we want to show server selection
+  // in the main panel at startup.
+  void ShowBraveVPNPanel(bool show_select = false);
   // Manager should be reset to use different anchor view for bubble.
   void ResetBubbleManager();
 
  private:
   raw_ptr<BraveBrowserView> browser_view_ = nullptr;
-  std::unique_ptr<WebUIBubbleManagerT<VPNPanelUI>> webui_bubble_manager_;
+  std::unique_ptr<WebUIBubbleManager> webui_bubble_manager_;
 };
 
 #endif  // BRAVE_BROWSER_UI_VIEWS_TOOLBAR_BRAVE_VPN_PANEL_CONTROLLER_H_

@@ -12,15 +12,15 @@ import { commandsCache } from '../commands'
 import { stringToKeys } from '../utils/accelerator'
 import Button from '@brave/leo/react/button'
 import Icon from '@brave/leo/react/icon'
-import { color, spacing } from '@brave/leo/tokens/css'
+import { color, spacing } from '@brave/leo/tokens/css/variables'
 import { getLocale } from '$web-common/locale'
 
 const Grid = styled.div`
   display: grid;
   grid-template-columns: 200px auto min-content min-content;
-  column-gap: ${spacing[16]};
+  column-gap: ${spacing.xl};
   align-items: center;
-  padding: ${spacing[16]};
+  padding: ${spacing.xl};
   min-height: 68px;
 
   border-top: 1px solid ${color.divider.subtle};
@@ -58,15 +58,16 @@ function Accelerator({
   return (
     <Row>
       <Keys keys={stringToKeys(accelerator.keys)} />
-      <RemoveButton
-        size="small"
-        kind="plain-faint"
-        onClick={() =>
-          commandsCache.unassignAccelerator(commandId, accelerator.codes)
-        }
-      >
-        <Icon name="remove-circle-outline" />
-      </RemoveButton>
+      {!accelerator.unmodifiable &&
+        <RemoveButton
+          size="small"
+          kind="plain-faint"
+          onClick={() =>
+            commandsCache.unassignAccelerator(commandId, accelerator.codes)
+          }
+        >
+          <Icon name="remove-circle-outline" />
+        </RemoveButton>}
     </Row>
   )
 }

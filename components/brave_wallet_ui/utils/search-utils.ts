@@ -19,7 +19,7 @@ import {
   networkEntityAdapter
 } from '../common/slices/entities/network.entity'
 import { makeNetworkAsset } from '../options/asset-options'
-import { getAddressLabelFromRegistry } from './account-utils'
+import { getAddressLabel, getAccountLabel } from './account-utils'
 import Amount from './amount'
 import { getCoinFromTxDataUnion } from './network-utils'
 import {
@@ -40,7 +40,7 @@ export type SearchableTransaction = TransactionInfo & {
   recipient: string
   recipientLabel: string
   sellToken?: BraveWallet.BlockchainToken
-  sender: string
+  senderAddress: string
   senderLabel: string
   token?: BraveWallet.BlockchainToken
 }
@@ -51,6 +51,16 @@ export const makeSearchableTransaction = (
   networksRegistry: NetworksRegistry | undefined,
   accountInfosRegistry: EntityState<AccountInfoEntity>
 ): SearchableTransaction => {
+  const txNetwork =
+    networksRegistry?.entities[
+      networkEntityAdapter.selectId({
+        chainId: tx.chainId,
+        coin: getCoinFromTxDataUnion(tx.txDataUnion)
+      })
+    ]
+
+  const nativeAsset = makeNetworkAsset(txNetwork)
+
   const token = findTransactionToken(tx, combinedTokensListForSelectedChain)
 
   const erc721BlockchainToken = [
@@ -60,15 +70,6 @@ export const makeSearchableTransaction = (
     ? token
     : undefined
 
-  const txNetwork =
-    networksRegistry?.entities[
-      networkEntityAdapter.selectId({
-        chainId: tx.chainId,
-        coin: getCoinFromTxDataUnion(tx.txDataUnion)
-      })
-    ]
-  const nativeAsset = makeNetworkAsset(txNetwork)
-
   const { buyToken, sellToken } = getETHSwapTransactionBuyAndSellTokens({
     nativeAsset,
     tokensList: combinedTokensListForSelectedChain,
@@ -76,18 +77,16 @@ export const makeSearchableTransaction = (
   })
 
   const approvalTarget = getTransactionApprovalTargetAddress(tx)
-  const approvalTargetLabel = getAddressLabelFromRegistry(
+  const approvalTargetLabel = getAddressLabel(
     approvalTarget,
     accountInfosRegistry
   )
 
-  const sender = tx.fromAddress
-  const senderLabel = getAddressLabelFromRegistry(sender, accountInfosRegistry)
+  const senderAccount = tx.fromAccountId
+  const senderAddress = senderAccount.address
+  const senderLabel = getAccountLabel(senderAccount, accountInfosRegistry)
   const recipient = getTransactionToAddress(tx)
-  const recipientLabel = getAddressLabelFromRegistry(
-    recipient,
-    accountInfosRegistry
-  )
+  const recipientLabel = getAddressLabel(recipient, accountInfosRegistry)
 
   const emptyAmount = new Amount('')
 
@@ -114,7 +113,7 @@ export const makeSearchableTransaction = (
     recipient,
     recipientLabel,
     sellToken,
-    sender,
+    senderAddress,
     senderLabel,
     token
   }
@@ -139,7 +138,7 @@ export const filterTransactionsBySearchValue = (
   txs: SearchableTransaction[],
   lowerCaseSearchValue: string
 ) => {
-  return txs.filter(tx => {
+  return txs.filter((tx) => {
     return (
       // Tokens
       findTokenBySearchValue(lowerCaseSearchValue, tx.token) ||
@@ -150,7 +149,7 @@ export const filterTransactionsBySearchValue = (
       // ERC721 NFTs
       findTokenBySearchValue(lowerCaseSearchValue, tx.erc721BlockchainToken) ||
       // Sender
-      tx.sender.toLowerCase().includes(lowerCaseSearchValue) ||
+      tx.senderAddress.toLowerCase().includes(lowerCaseSearchValue) ||
       tx.senderLabel.toLowerCase().includes(lowerCaseSearchValue) ||
       // Receiver
       tx.recipient.toLowerCase().includes(lowerCaseSearchValue) ||

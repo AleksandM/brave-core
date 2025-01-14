@@ -13,6 +13,7 @@
 #include "base/functional/bind.h"
 #include "base/functional/callback.h"
 #include "brave/components/brave_component_updater/browser/brave_on_demand_updater.h"
+#include "brave/components/ntp_background_images/browser/ntp_background_images_update_util.h"
 #include "brave/components/ntp_background_images/browser/sponsored_images_component_data.h"
 #include "components/component_updater/component_installer.h"
 #include "components/component_updater/component_updater_service.h"
@@ -66,6 +67,7 @@ class NTPBackgroundImagesComponentInstallerPolicy
   void GetHash(std::vector<uint8_t>* hash) const override;
   std::string GetName() const override;
   update_client::InstallerAttributes GetInstallerAttributes() const override;
+  bool IsBraveComponent() const override;
 
  private:
   const std::string component_id_;
@@ -131,7 +133,7 @@ base::FilePath NTPBackgroundImagesComponentInstallerPolicy::
 
 void NTPBackgroundImagesComponentInstallerPolicy::GetHash(
     std::vector<uint8_t>* hash) const {
-  hash->assign(component_hash_, component_hash_ + kHashSize);
+  hash->assign(component_hash_, UNSAFE_TODO(component_hash_ + kHashSize));
 }
 
 std::string NTPBackgroundImagesComponentInstallerPolicy::GetName() const {
@@ -143,8 +145,20 @@ NTPBackgroundImagesComponentInstallerPolicy::GetInstallerAttributes() const {
   return update_client::InstallerAttributes();
 }
 
-void OnRegistered(const std::string& component_id) {
-  BraveOnDemandUpdater::GetInstance()->OnDemandUpdate(component_id);
+bool NTPBackgroundImagesComponentInstallerPolicy::IsBraveComponent() const {
+  return true;
+}
+
+void RegisterNTPBackgroundImagesComponentCallback(
+    const std::string& component_id) {
+  BraveOnDemandUpdater::GetInstance()->EnsureInstalled(component_id);
+}
+
+void RegisterNTPSponsoredImagesComponentCallback(
+    const std::string& component_id) {
+  // Unlike other components that are only installed during registration,
+  // we always update the sponsored images component upon registration.
+  CheckAndUpdateSponsoredImagesComponent(component_id);
 }
 
 }  // namespace
@@ -160,7 +174,9 @@ void RegisterNTPBackgroundImagesComponent(
       std::make_unique<NTPBackgroundImagesComponentInstallerPolicy>(
           kNTPBIComponentPublicKey, kNTPBIComponentID, "NTP Background Images",
           callback));
-  installer->Register(cus, base::BindOnce(&OnRegistered, kNTPBIComponentID));
+  installer->Register(
+      cus, base::BindOnce(&RegisterNTPBackgroundImagesComponentCallback,
+                          kNTPBIComponentID));
 }
 
 void RegisterNTPSponsoredImagesComponent(
@@ -179,8 +195,9 @@ void RegisterNTPSponsoredImagesComponent(
           component_id,
           component_name,
           callback));
-  installer->Register(cus,
-                      base::BindOnce(&OnRegistered, component_id));
+  installer->Register(
+      cus, base::BindOnce(&RegisterNTPSponsoredImagesComponentCallback,
+                          component_id));
 }
 
 }  // namespace ntp_background_images

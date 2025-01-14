@@ -5,6 +5,7 @@
 
 #include "brave/components/brave_rewards/core/wallet/wallet.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -14,25 +15,20 @@
 #include "base/values.h"
 #include "brave/components/brave_rewards/core/database/database.h"
 #include "brave/components/brave_rewards/core/global_constants.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
 #include "brave/components/brave_rewards/core/logging/event_log_keys.h"
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 #include "brave/components/brave_rewards/core/state/state_keys.h"
 #include "brave/components/brave_rewards/core/wallet/wallet_util.h"
-
 #include "wally_bip39.h"  // NOLINT
 
-namespace brave_rewards::internal {
-namespace wallet {
+namespace brave_rewards::internal::wallet {
 
-Wallet::Wallet(LedgerImpl& ledger)
-    : ledger_(ledger),
-      create_(ledger),
-      balance_(ledger),
-      promotion_server_(ledger) {}
+Wallet::Wallet(RewardsEngine& engine)
+    : engine_(engine), create_(engine), balance_(engine) {}
 
 Wallet::~Wallet() = default;
 
-void Wallet::CreateWalletIfNecessary(absl::optional<std::string>&& geo_country,
+void Wallet::CreateWalletIfNecessary(std::optional<std::string>&& geo_country,
                                      CreateRewardsWalletCallback callback) {
   create_.CreateWallet(std::move(geo_country), std::move(callback));
 }
@@ -45,15 +41,15 @@ mojom::RewardsWalletPtr Wallet::GetWallet(bool* corrupted) {
   DCHECK(corrupted);
   *corrupted = false;
 
-  const std::string json = ledger_->GetState<std::string>(state::kWalletBrave);
+  const std::string json = engine_->GetState<std::string>(state::kWalletBrave);
 
   if (json.empty()) {
     return nullptr;
   }
 
-  absl::optional<base::Value> value = base::JSONReader::Read(json);
+  std::optional<base::Value> value = base::JSONReader::Read(json);
   if (!value || !value->is_dict()) {
-    BLOG(0, "Parsing of brave wallet failed");
+    engine_->LogError(FROM_HERE) << "Parsing of brave wallet failed";
     *corrupted = true;
     return nullptr;
   }
@@ -75,7 +71,7 @@ mojom::RewardsWalletPtr Wallet::GetWallet(bool* corrupted) {
   }
   std::string decoded_seed;
   if (!base::Base64Decode(*seed, &decoded_seed)) {
-    BLOG(0, "Problem decoding recovery seed");
+    engine_->LogError(FROM_HERE) << "Problem decoding recovery seed";
     *corrupted = true;
     return nullptr;
   }
@@ -94,11 +90,10 @@ mojom::RewardsWalletPtr Wallet::GetWallet() {
 
 bool Wallet::SetWallet(mojom::RewardsWalletPtr wallet) {
   if (!wallet) {
-    BLOG(0, "Rewards wallet is null!");
+    engine_->LogError(FROM_HERE) << "Rewards wallet is null";
     return false;
   }
 
-  const std::string seed_string = base::Base64Encode(wallet->recovery_seed);
   std::string event_string;
   if (wallet->recovery_seed.size() > 1) {
     event_string =
@@ -107,21 +102,20 @@ bool Wallet::SetWallet(mojom::RewardsWalletPtr wallet) {
 
   base::Value::Dict new_wallet;
   new_wallet.Set("payment_id", wallet->payment_id);
-  new_wallet.Set("recovery_seed", seed_string);
+  new_wallet.Set("recovery_seed", base::Base64Encode(wallet->recovery_seed));
 
   std::string json;
   base::JSONWriter::Write(new_wallet, &json);
 
-  ledger_->SetState(state::kWalletBrave, std::move(json));
+  engine_->SetState(state::kWalletBrave, std::move(json));
 
-  ledger_->database()->SaveEventLog(state::kRecoverySeed, event_string);
+  engine_->database()->SaveEventLog(state::kRecoverySeed, event_string);
 
   if (!wallet->payment_id.empty()) {
-    ledger_->database()->SaveEventLog(state::kPaymentId, wallet->payment_id);
+    engine_->database()->SaveEventLog(state::kPaymentId, wallet->payment_id);
   }
 
   return true;
 }
 
-}  // namespace wallet
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::wallet

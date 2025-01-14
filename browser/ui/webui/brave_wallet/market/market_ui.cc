@@ -32,27 +32,31 @@ UntrustedMarketUI::UntrustedMarketUI(content::WebUI* web_ui)
     untrusted_source->AddString(str.name, l10n_str);
   }
   untrusted_source->SetDefaultResource(IDR_BRAVE_WALLET_MARKET_DISPLAY_HTML);
-  untrusted_source->AddResourcePaths(
-      base::make_span(kMarketDisplayGenerated, kMarketDisplayGeneratedSize));
+  untrusted_source->AddResourcePaths(base::span(kMarketDisplayGenerated));
   untrusted_source->AddFrameAncestor(GURL(kBraveUIWalletPageURL));
   untrusted_source->AddFrameAncestor(GURL(kBraveUIWalletPanelURL));
-  webui::SetupWebUIDataSource(
-      untrusted_source,
-      base::make_span(kMarketDisplayGenerated, kMarketDisplayGeneratedSize),
-      IDR_BRAVE_WALLET_MARKET_DISPLAY_HTML);
+  webui::SetupWebUIDataSource(untrusted_source,
+                              base::span(kMarketDisplayGenerated),
+                              IDR_BRAVE_WALLET_MARKET_DISPLAY_HTML);
 
   untrusted_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ScriptSrc,
       std::string("script-src 'self' chrome-untrusted://resources;"));
+
   untrusted_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::StyleSrc,
       std::string("style-src 'self' 'unsafe-inline';"));
   untrusted_source->OverrideContentSecurityPolicy(
+      network::mojom::CSPDirectiveName::StyleSrc,
+      std::string(
+          "style-src 'self' 'unsafe-inline' chrome-untrusted://resources;"));
+  untrusted_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::FontSrc,
-      std::string("font-src 'self' data:;"));
+      std::string("font-src 'self' data: chrome-untrusted://resources;"));
   untrusted_source->OverrideContentSecurityPolicy(
       network::mojom::CSPDirectiveName::ImgSrc,
-      std::string("img-src 'self' https://assets.cgproxy.brave.com;"));
+      std::string("img-src 'self' https://assets.cgproxy.brave.com "
+                  "chrome-untrusted://resources;"));
 
   untrusted_source->AddResourcePath("load_time_data_deprecated.js",
                                     IDR_WEBUI_JS_LOAD_TIME_DATA_DEPRECATED_JS);

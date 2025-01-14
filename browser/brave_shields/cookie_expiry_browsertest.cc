@@ -6,10 +6,9 @@
 #include <string>
 
 #include "base/functional/bind.h"
-#include "base/test/bind.h"
-
 #include "base/path_service.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/bind.h"
 #include "brave/components/constants/brave_paths.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/browser.h"
@@ -18,10 +17,13 @@
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/storage_partition.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
+#include "net/cookies/canonical_cookie.h"
 #include "net/dns/mock_host_resolver.h"
 #include "net/test/embedded_test_server/default_handlers.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "services/network/public/mojom/cookie_manager.mojom.h"
 
 namespace {
 
@@ -44,7 +46,6 @@ class CookieExpirationTest : public InProcessBrowserTest {
         net::test_server::EmbeddedTestServer::TYPE_HTTPS);
     RegisterDefaultHandlers(https_server_.get());
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     https_server_->ServeFilesFromDirectory(test_data_dir);
@@ -70,22 +71,22 @@ class CookieExpirationTest : public InProcessBrowserTest {
   // Set a cookie with JavaScript.
   void JSDocumentCookieWriteCookie(Browser* browser, std::string age) {
     std::string cookie_string =
-        base::StringPrintf("document.cookie = 'name=Test; %s'", age.c_str());
+        absl::StrFormat("document.cookie = 'name=Test; %s'", age);
     ASSERT_TRUE(content::ExecJs(
         browser->tab_strip_model()->GetActiveWebContents(), cookie_string));
   }
 
   void JSCookieStoreWriteCookie(Browser* browser, std::string expires_in_ms) {
-    ASSERT_TRUE(content::ExecJs(
-        browser->tab_strip_model()->GetActiveWebContents(),
-        base::StringPrintf("(async () => {"
-                           "return await window.cookieStore.set("
-                           "       { name: 'name',"
-                           "         value: 'Good',"
-                           "         expires: Date.now() + %s,"
-                           "       });"
-                           "})()",
-                           expires_in_ms.c_str())));
+    ASSERT_TRUE(
+        content::ExecJs(browser->tab_strip_model()->GetActiveWebContents(),
+                        absl::StrFormat("(async () => {"
+                                        "return await window.cookieStore.set("
+                                        "       { name: 'name',"
+                                        "         value: 'Good',"
+                                        "         expires: Date.now() + %s,"
+                                        "       });"
+                                        "})()",
+                                        expires_in_ms)));
   }
 
   std::vector<net::CanonicalCookie> GetAllCookiesDirect(Browser* browser) {

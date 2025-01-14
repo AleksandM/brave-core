@@ -11,11 +11,13 @@ import android.content.Intent;
 import android.view.Window;
 import android.view.WindowManager;
 
+import androidx.annotation.MainThread;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 import org.chromium.base.Log;
-import org.chromium.brave_wallet.mojom.AccountInfo;
+import org.chromium.base.ThreadUtils;
+import org.chromium.base.supplier.OneshotSupplier;
 import org.chromium.brave_wallet.mojom.TransactionInfo;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.app.BraveActivity;
@@ -25,21 +27,26 @@ import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.AddSwitchChainN
 import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.AddTokenFragment;
 import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.ConnectAccountFragment;
 import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.EncryptionKeyFragment;
+import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.SignMessageErrorFragment;
 import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.SignMessageFragment;
-import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.SignTransactionFragment;
+import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.SignSolTransactionsFragment;
+import org.chromium.chrome.browser.crypto_wallet.fragments.dapps.SiweMessageFragment;
 import org.chromium.chrome.browser.crypto_wallet.listeners.TransactionConfirmationListener;
 import org.chromium.chrome.browser.crypto_wallet.util.PendingTxHelper;
 import org.chromium.chrome.browser.crypto_wallet.util.TransactionUtils;
+import org.chromium.chrome.browser.init.ActivityProfileProvider;
+import org.chromium.chrome.browser.profiles.ProfileProvider;
 
 import java.util.HashMap;
 import java.util.Map;
 
+/** Base activity for all DApps-related activities */
 public class BraveWalletDAppsActivity extends BraveWalletBaseActivity
         implements TransactionConfirmationListener,
-                   AddSwitchChainNetworkFragment.AddSwitchRequestProcessListener {
+                AddSwitchChainNetworkFragment.AddSwitchRequestProcessListener {
     public static final String ACTIVITY_TYPE = "activityType";
     private static final String TAG = "BraveWalletDApps";
-    private ApproveTxBottomSheetDialogFragment approveTxBottomSheetDialogFragment;
+    private ApproveTxBottomSheetDialogFragment mApproveTxBottomSheetDialogFragment;
     private PendingTxHelper mPendingTxHelper;
     private Fragment mFragment;
     private WalletModel mWalletModel;
@@ -53,63 +60,76 @@ public class BraveWalletDAppsActivity extends BraveWalletBaseActivity
         CONFIRM_TRANSACTION(5),
         DECRYPT_REQUEST(6),
         GET_ENCRYPTION_PUBLIC_KEY_REQUEST(7),
-        SIGN_TRANSACTION(8),
-        SIGN_ALL_TRANSACTIONS(9),
-        FINISH(10);
+        SIGN_TRANSACTION_DEPRECATED(8),
+        SIGN_SOL_TRANSACTIONS(9),
+        SIWE_MESSAGE(10),
+        SIGN_MESSAGE_ERROR(11),
+        FINISH(12);
 
-        private int value;
-        private static Map map = new HashMap<>();
+        private final int mValue;
+        private static Map sMap = new HashMap<>();
 
         private ActivityType(int value) {
-            this.value = value;
+            this.mValue = value;
         }
 
         static {
             for (ActivityType activityType : ActivityType.values()) {
-                map.put(activityType.value, activityType);
+                sMap.put(activityType.mValue, activityType);
             }
         }
 
         public static ActivityType valueOf(int activityType) {
-            return (ActivityType) map.get(activityType);
+            return (ActivityType) sMap.get(activityType);
         }
 
         public int getValue() {
-            return value;
+            return mValue;
         }
     }
 
     private ActivityType mActivityType;
 
     @Override
-    protected void triggerLayoutInflation() {
+    protected void onPreCreate() {
+        super.onPreCreate();
         requestWindowFeature(Window.FEATURE_NO_TITLE);
-        this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+    }
+
+    @Override
+    protected void triggerLayoutInflation() {
         setContentView(R.layout.activity_brave_wallet_dapps);
         Intent intent = getIntent();
-        mActivityType = ActivityType.valueOf(
-                intent.getIntExtra("activityType", ActivityType.ADD_ETHEREUM_CHAIN.getValue()));
+        mActivityType =
+                ActivityType.valueOf(
+                        intent.getIntExtra(
+                                "activityType", ActivityType.ADD_ETHEREUM_CHAIN.getValue()));
         try {
             BraveActivity activity = BraveActivity.getBraveActivity();
             mWalletModel = activity.getWalletModel();
-            mWalletModel.getDappsModel().mProcessNextDAppsRequest.observe(this, activityType -> {
-                if (activityType == null) return;
-                switch (activityType) {
-                    case GET_ENCRYPTION_PUBLIC_KEY_REQUEST:
-                    case DECRYPT_REQUEST:
-                        processPendingDappsRequest();
-                        break;
-                    case FINISH:
-                        finish();
-                        break;
-                    default:
-                        break;
-                }
-            });
+            mWalletModel
+                    .getDappsModel()
+                    .mProcessNextDAppsRequest
+                    .observe(
+                            this,
+                            activityType -> {
+                                if (activityType == null) return;
+                                switch (activityType) {
+                                    case GET_ENCRYPTION_PUBLIC_KEY_REQUEST:
+                                    case DECRYPT_REQUEST:
+                                        processPendingDappsRequest();
+                                        break;
+                                    case FINISH:
+                                        finish();
+                                        break;
+                                    default:
+                                        break;
+                                }
+                            });
 
         } catch (BraveActivity.BraveActivityNotFoundException e) {
-            Log.e(TAG, "triggerLayoutInflation " + e);
+            Log.e(TAG, "triggerLayoutInflation", e);
         }
 
         onInitialLayoutInflationComplete();
@@ -142,13 +162,16 @@ public class BraveWalletDAppsActivity extends BraveWalletBaseActivity
     @Override
     public void onRejectAllTransactions() {
         for (TransactionInfo transactionInfo : mPendingTxHelper.getPendingTransactions()) {
-            getTxService().rejectTransaction(
-                    TransactionUtils.getCoinFromTxDataUnion(transactionInfo.txDataUnion),
-                    transactionInfo.chainId, transactionInfo.id, success -> {
-                        if (!success) {
-                            Log.e(TAG, "Transaction failed " + transactionInfo.id);
-                        }
-                    });
+            getTxService()
+                    .rejectTransaction(
+                            TransactionUtils.getCoinFromTxDataUnion(transactionInfo.txDataUnion),
+                            transactionInfo.chainId,
+                            transactionInfo.id,
+                            success -> {
+                                if (!success) {
+                                    Log.e(TAG, "Transaction failed " + transactionInfo.id);
+                                }
+                            });
         }
         mPendingTxHelper.destroy();
         finish();
@@ -171,62 +194,70 @@ public class BraveWalletDAppsActivity extends BraveWalletBaseActivity
         }
     }
 
+    @MainThread
     private void processPendingDappsRequest() {
+        ThreadUtils.assertOnUiThread();
         mFragment = null;
         if (mActivityType == ActivityType.SIGN_MESSAGE) {
             mFragment = new SignMessageFragment();
+        } else if (mActivityType == ActivityType.SIWE_MESSAGE) {
+            mFragment = new SiweMessageFragment();
+        } else if (mActivityType == ActivityType.SIGN_MESSAGE_ERROR) {
+            mFragment = new SignMessageErrorFragment();
         } else if (mActivityType == ActivityType.ADD_TOKEN) {
             mFragment = new AddTokenFragment();
         } else if (mActivityType == ActivityType.CONFIRM_TRANSACTION) {
-            mWalletModel.getKeyringModel().getDefaultAccountPerCoin(defaultAccountPerCoin -> {
-                AccountInfo[] accountInfos = defaultAccountPerCoin.toArray(new AccountInfo[0]);
-                if (mPendingTxHelper != null) {
-                    mPendingTxHelper.destroy();
-                }
-                mPendingTxHelper =
-                        new PendingTxHelper(getTxService(), accountInfos, false, true, null);
-                mPendingTxHelper.mHasNoPendingTxAfterProcessing.observe(this, hasNoPendingTx -> {
-                    if (hasNoPendingTx) {
-                        finish();
-                    }
-                });
-                final AccountInfo[] accounts = accountInfos;
-                mPendingTxHelper.mSelectedPendingRequest.observe(this, transactionInfo -> {
-                    if (transactionInfo == null
-                            || mPendingTxHelper.getPendingTransactions().size() == 0) {
-                        return;
-                    }
-                    if (approveTxBottomSheetDialogFragment != null
-                            && approveTxBottomSheetDialogFragment.isVisible()) {
-                        // TODO: instead of dismiss, show the details of new Tx once
-                        //  onNextTransaction implementation is done
-                        approveTxBottomSheetDialogFragment.dismiss();
-                    }
-                    String accountName = "";
-                    for (AccountInfo accountInfo : accounts) {
-                        if (accountInfo.address.equals(transactionInfo.fromAddress)) {
-                            accountName = accountInfo.name;
-                            break;
+            mKeyringService.getAllAccounts(
+                    allAccounts -> {
+                        if (mPendingTxHelper != null) {
+                            mPendingTxHelper.destroy();
                         }
-                    }
-                    approveTxBottomSheetDialogFragment =
-                            ApproveTxBottomSheetDialogFragment.newInstance(
-                                    mPendingTxHelper.getPendingTransactions(), transactionInfo,
-                                    accountName, this);
-                    approveTxBottomSheetDialogFragment.show(getSupportFragmentManager(),
-                            ApproveTxBottomSheetDialogFragment.TAG_FRAGMENT);
-                    mPendingTxHelper.mTransactionInfoLd.observe(this, transactionInfos -> {
-                        approveTxBottomSheetDialogFragment.setTxList(transactionInfos);
+                        mPendingTxHelper =
+                                new PendingTxHelper(
+                                        getTxService(), allAccounts.accounts, false, true);
+                        mPendingTxHelper.mHasNoPendingTxAfterProcessing.observe(
+                                this,
+                                hasNoPendingTx -> {
+                                    if (hasNoPendingTx) {
+                                        finish();
+                                    }
+                                });
+                        mPendingTxHelper.mSelectedPendingRequest.observe(
+                                this,
+                                transactionInfo -> {
+                                    if (transactionInfo == null
+                                            || mPendingTxHelper
+                                                    .getPendingTransactions()
+                                                    .isEmpty()) {
+                                        return;
+                                    }
+                                    if (mApproveTxBottomSheetDialogFragment != null
+                                            && mApproveTxBottomSheetDialogFragment.isVisible()) {
+                                        // TODO: instead of dismiss, show the details of new Tx once
+                                        //  onNextTransaction implementation is done
+                                        mApproveTxBottomSheetDialogFragment.dismiss();
+                                    }
+                                    mApproveTxBottomSheetDialogFragment =
+                                            ApproveTxBottomSheetDialogFragment.newInstance(
+                                                    mPendingTxHelper.getPendingTransactions(),
+                                                    transactionInfo,
+                                                    this);
+                                    mApproveTxBottomSheetDialogFragment.show(
+                                            getSupportFragmentManager());
+                                    mPendingTxHelper.mTransactionInfoLd.observe(
+                                            this,
+                                            transactionInfos -> {
+                                                mApproveTxBottomSheetDialogFragment.setTxList(
+                                                        transactionInfos);
+                                            });
+                                });
+                        mPendingTxHelper.fetchTransactions(() -> {});
                     });
-                });
-                mPendingTxHelper.fetchTransactions(() -> {});
-            });
         } else if (mActivityType == ActivityType.ADD_ETHEREUM_CHAIN
                 || mActivityType == ActivityType.SWITCH_ETHEREUM_CHAIN) {
             mFragment = new AddSwitchChainNetworkFragment(mActivityType, this);
-        } else if (mActivityType == ActivityType.SIGN_TRANSACTION
-                || mActivityType == ActivityType.SIGN_ALL_TRANSACTIONS) {
-            mFragment = SignTransactionFragment.newInstance(mActivityType);
+        } else if (mActivityType == ActivityType.SIGN_SOL_TRANSACTIONS) {
+            mFragment = SignSolTransactionsFragment.newInstance();
         } else if (mActivityType == ActivityType.CONNECT_ACCOUNT) {
             mFragment = new ConnectAccountFragment();
         } else if (mActivityType == GET_ENCRYPTION_PUBLIC_KEY_REQUEST
@@ -251,8 +282,11 @@ public class BraveWalletDAppsActivity extends BraveWalletBaseActivity
         // TODO (pavi): update the flow with dapps model
         // (under-development) and get rid of explicit clear state call
         try {
-            BraveActivity activity = BraveActivity.getBraveActivity();
-            activity.getWalletModel().getDappsModel().clearDappsState();
+            final BraveActivity activity = BraveActivity.getBraveActivity();
+            final WalletModel walletModel = activity.getWalletModel();
+            if (walletModel != null) {
+                walletModel.getDappsModel().clearDappsState();
+            }
         } catch (BraveActivity.BraveActivityNotFoundException e) {
             Log.e(TAG, "onDestroy " + e);
         }
@@ -260,5 +294,10 @@ public class BraveWalletDAppsActivity extends BraveWalletBaseActivity
         if (mPendingTxHelper != null) {
             mPendingTxHelper.destroy();
         }
+    }
+
+    @Override
+    protected OneshotSupplier<ProfileProvider> createProfileProvider() {
+        return new ActivityProfileProvider(getLifecycleDispatcher());
     }
 }

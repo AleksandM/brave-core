@@ -5,7 +5,7 @@
 
 #include "brave/browser/ui/views/brave_ads/bounds_util.h"
 
-#include "brave/components/brave_ads/common/custom_notification_ad_feature.h"
+#include "brave/components/brave_ads/browser/ad_units/notification_ad/custom_notification_ad_feature.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/native_widget_types.h"
@@ -53,16 +53,21 @@ void AdjustBoundsToFitWorkArea(const gfx::Rect& work_area, gfx::Rect* bounds) {
 
 }  // namespace
 
-void AdjustBoundsAndSnapToFitWorkAreaForNativeView(views::Widget* widget,
+gfx::Rect GetDefaultDisplayScreenWorkArea(gfx::NativeView browser_native_view) {
+  return kUseSameZOrderAsBrowserWindow.Get()
+             ? GetNearestDisplayScreenWorkArea(browser_native_view)
+             : GetPrimaryDisplayScreenWorkArea();
+}
+
+void AdjustBoundsAndSnapToFitWorkAreaForNativeView(const views::Widget& widget,
                                                    gfx::Rect* bounds) {
-  CHECK(widget);
   CHECK(bounds);
 
-  gfx::NativeView native_view = widget->GetNativeView();
+  gfx::NativeView native_view = widget.GetNativeView();
   gfx::Rect work_area;
   if (kUseSameZOrderAsBrowserWindow.Get()) {
-    if (widget->parent()) {
-      native_view = widget->parent()->GetNativeView();
+    if (widget.parent()) {
+      native_view = widget.parent()->GetNativeView();
     }
     work_area = GetNearestDisplayScreenWorkArea(native_view);
   } else if (kShouldSupportMultipleDisplays.Get()) {

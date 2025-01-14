@@ -22,7 +22,7 @@ provideStrings({
   braveWelcomeSelectAllButtonLabel: 'Select All',
   braveWelcomeHelpImproveBraveTitle: 'Help make Brave better.',
   braveWelcomeSendReportsLabel: 'Send diagnostic reports if you experience a crash or freeze. $1Learn more.$2',
-  braveWelcomeSendInsightsLabel: 'Share completely private and anonymous product insights about what features are being used by Brave\'s users. $1Learn more.$2',
+  braveWelcomeSendInsightsLabel: 'Share private and anonymous product insights about what features are being used by Brave\'s users. $1Learn more.$2',
   braveWelcomeSetupCompleteLabel: 'Setup complete',
   braveWelcomeChangeSettingsNote: ' Change these choices at any time in Brave at $1brave://settings/privacy$2.',
   braveWelcomePrivacyPolicyNote: 'Read our full $1Privacy Policy$2',
@@ -30,5 +30,11 @@ provideStrings({
   braveWelcomeSelectThemeNote: 'You can change this at any time in Brave settings.',
   braveWelcomeSelectThemeSystemLabel: 'Match system setting',
   braveWelcomeSelectThemeLightLabel: 'Light mode',
-  braveWelcomeSelectThemeDarkLabel: 'Dark mode'
+  braveWelcomeSelectThemeDarkLabel: 'Dark mode',
+  braveWelcomeHelpWDPTitle: 'Want better search results?',
+  braveWelcomeHelpWDPSubtitle: 'Join the movement, contribute to Brave Search.',
+  braveWelcomeHelpWDPDescription: 'Help us fix the web by participating in Brave’s Web Discovery Project. By sharing completely anonymous search signals, you can help Brave grow the search index.',
+  braveWelcomeHelpWDPLearnMore: 'Learn More.',
+  braveWelcomeHelpWDPAccept: `Sure, I'll help`,
+  braveWelcomeHelpWDPReject: 'Maybe later',
 })

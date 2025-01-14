@@ -11,7 +11,6 @@ import { LocaleContext, formatMessage } from '../../shared/lib/locale_context'
 import { getPublisherPlatformName } from '../../shared/lib/publisher_platform'
 import { HostContext, useHostListener } from '../lib/host_context'
 import { NewTabLink } from '../../shared/components/new_tab_link'
-import { ToggleButton } from '../../shared/components/toggle_button'
 import { TokenAmount } from '../../shared/components/token_amount'
 import { LoadingIcon } from '../../shared/components/icons/loading_icon'
 import { InfoIcon } from './icons/info_icon'
@@ -29,14 +28,12 @@ export function PublisherCard () {
     React.useState(host.state.publisherInfo)
   const [publisherRefreshing, setPublisherRefreshing] =
     React.useState(host.state.publisherRefreshing)
-  const [settings, setSettings] = React.useState(host.state.settings)
 
   const [showPublisherLoading, setShowPublisherLoading] = React.useState(false)
 
   useHostListener(host, (state) => {
     setPublisherInfo(state.publisherInfo)
     setPublisherRefreshing(state.publisherRefreshing)
-    setSettings(host.state.settings)
   })
 
   if (!publisherInfo) {
@@ -122,28 +119,7 @@ export function PublisherCard () {
 
     return (
       <>
-        {
-          settings.autoContributeEnabled &&
-            <style.attention data-test-id='attention-score-text'>
-              <div>{getString('attention')}</div>
-              <div className='value'>
-                {(publisherInfo.attentionScore * 100).toFixed(0)}%
-              </div>
-            </style.attention>
-        }
         <style.contribution>
-          {
-            settings.autoContributeEnabled &&
-              <style.autoContribution>
-                <div>{getString('includeInAutoContribute')}</div>
-                <div>
-                  <ToggleButton
-                    checked={publisherInfo.autoContributeEnabled}
-                    onChange={host.setIncludeInAutoContribute}
-                  />
-                </div>
-              </style.autoContribution>
-          }
           {
             publisherInfo.monthlyTip > 0 &&
               <style.monthlyTip>
@@ -169,12 +145,12 @@ export function PublisherCard () {
   return (
     <style.root data-test-id='publisher-card'>
       <style.heading>
-        {
-          publisherInfo.icon &&
-            <style.icon>
-              <img src={publisherInfo.icon} />
-            </style.icon>
-        }
+        <style.icon>
+          <img
+            className={publisherInfo.platform ? 'rounded' : ''}
+            src={publisherInfo.icon}
+          />
+        </style.icon>
         <style.name>
           {getPublisherName()}
           <style.status>

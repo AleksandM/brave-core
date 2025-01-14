@@ -9,19 +9,9 @@
 class Profile;
 class PrefService;
 
-namespace user_prefs {
-class PrefRegistrySyncable;
-}  // namespace user_prefs
-
 namespace brave {
 
-bool IsRegionForQwant(Profile* profile);
-void SetBraveAsDefaultPrivateSearchProvider(PrefService* prefs);
-
-// For prefs migration.
-void RegisterSearchEngineProviderPrefsForMigration(
-    user_prefs::PrefRegistrySyncable* registry);
-void MigrateSearchEngineProviderPrefs(Profile* profile);
+void SetBraveAsDefaultPrivateSearchProvider(Profile* profile);
 
 // Initialize default provider for private profile.
 void PrepareDefaultPrivateSearchProviderDataIfNeeded(Profile* profile);
@@ -29,6 +19,10 @@ void PrepareDefaultPrivateSearchProviderDataIfNeeded(Profile* profile);
 // Update TemplareURLData with provider guid.
 void UpdateDefaultPrivateSearchProviderData(Profile* profile);
 void ResetDefaultPrivateSearchProvider(Profile* profile);
+
+void PrepareSearchSuggestionsConfig(PrefService* local_state, bool first_run);
+void UpdateDefaultSearchSuggestionsPrefs(PrefService* local_state,
+                                         PrefService* profile_prefs);
 
 }  // namespace brave
 

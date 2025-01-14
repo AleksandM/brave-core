@@ -39,11 +39,11 @@ class WelcomeDOMHandler : public content::WebUIMessageHandler {
   void SetP3AEnabled(const base::Value::List& args);
   void HandleOpenSettingsPage(const base::Value::List& args);
   void HandleSetMetricsReportingEnabled(const base::Value::List& args);
+  void HandleEnableWebDiscovery(const base::Value::List& args);
+
   Browser* GetBrowser();
 
-  int screen_number_ = 0;
-  bool finished_ = false;
-  bool skipped_ = false;
+  size_t last_onboarding_phase_ = 0;
   std::u16string default_browser_name_;
   raw_ptr<Profile> profile_ = nullptr;
   base::WeakPtrFactory<WelcomeDOMHandler> weak_ptr_factory_{this};

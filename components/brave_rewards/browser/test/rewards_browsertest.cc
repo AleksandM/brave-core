@@ -17,13 +17,11 @@
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_context_util.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_contribution.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_network_util.h"
-#include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_promotion.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_response.h"
 #include "brave/components/brave_rewards/browser/test/common/rewards_browsertest_util.h"
 #include "brave/components/brave_rewards/common/features.h"
 #include "brave/components/brave_rewards/common/pref_names.h"
 #include "brave/components/brave_rewards/core/global_constants.h"
-#include "brave/components/brave_rewards/core/uphold/uphold_util.h"
 #include "brave/components/constants/brave_paths.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/test/base/in_process_browser_test.h"
@@ -32,6 +30,7 @@
 #include "components/network_session_configurator/common/network_switches.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
 
 // npm run test -- brave_browser_tests --filter=RewardsBrowserTest.*
@@ -54,7 +53,7 @@ class WalletUpdatedWaiter : public RewardsServiceObserver {
 
   ~WalletUpdatedWaiter() override { rewards_service_->RemoveObserver(this); }
 
-  void OnRewardsWalletUpdated() override { run_loop_.Quit(); }
+  void OnRewardsWalletCreated() override { run_loop_.Quit(); }
 
   void Wait() { run_loop_.Run(); }
 
@@ -69,7 +68,6 @@ class RewardsBrowserTest : public InProcessBrowserTest {
     response_ = std::make_unique<test_util::RewardsBrowserTestResponse>();
     contribution_ =
         std::make_unique<test_util::RewardsBrowserTestContribution>();
-    promotion_ = std::make_unique<test_util::RewardsBrowserTestPromotion>();
     feature_list_.InitAndEnableFeature(features::kGeminiFeature);
   }
 
@@ -88,7 +86,6 @@ class RewardsBrowserTest : public InProcessBrowserTest {
     ASSERT_TRUE(https_server_->Start());
 
     // Rewards service
-    brave::RegisterPathProvider();
     auto* profile = browser()->profile();
     rewards_service_ = static_cast<RewardsServiceImpl*>(
         RewardsServiceFactory::GetForProfile(profile));
@@ -100,11 +97,10 @@ class RewardsBrowserTest : public InProcessBrowserTest {
         base::BindRepeating(
             &RewardsBrowserTest::GetTestResponse,
             base::Unretained(this)));
-    rewards_service_->SetLedgerEnvForTesting();
+    rewards_service_->SetEngineEnvForTesting();
 
     // Other
     contribution_->Initialize(browser(), rewards_service_);
-    promotion_->Initialize(browser(), rewards_service_);
 
     test_util::SetOnboardingBypassed(browser());
   }
@@ -147,8 +143,8 @@ class RewardsBrowserTest : public InProcessBrowserTest {
     double total = -1.0;
     base::RunLoop run_loop;
     rewards_service_->FetchBalance(base::BindLambdaForTesting(
-        [&](brave_rewards::FetchBalanceResult result) {
-          total = result.has_value() ? result.value()->total : -1.0;
+        [&](brave_rewards::mojom::BalancePtr balance) {
+          total = balance ? balance->total : -1.0;
           run_loop.Quit();
         }));
     run_loop.Run();
@@ -156,11 +152,10 @@ class RewardsBrowserTest : public InProcessBrowserTest {
   }
 
   base::test::ScopedFeatureList feature_list_;
-  raw_ptr<RewardsServiceImpl> rewards_service_ = nullptr;
+  raw_ptr<RewardsServiceImpl, DanglingUntriaged> rewards_service_ = nullptr;
   std::unique_ptr<net::EmbeddedTestServer> https_server_;
   std::unique_ptr<test_util::RewardsBrowserTestResponse> response_;
   std::unique_ptr<test_util::RewardsBrowserTestContribution> contribution_;
-  std::unique_ptr<test_util::RewardsBrowserTestPromotion> promotion_;
   std::unique_ptr<test_util::RewardsBrowserTestContextHelper> context_helper_;
 };
 
@@ -171,11 +166,12 @@ IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, ActivateSettingsModal) {
 
   test_util::WaitForElementThenClick(contents(),
                                      "[data-test-id=manage-wallet-button]");
-  test_util::WaitForElementToAppear(contents(), "#modal");
+  test_util::WaitForElementToAppear(contents(),
+                                    "[data-test-id=rewards-reset-modal]");
 }
 
 IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, SiteBannerDefaultTipChoices) {
-  test_util::CreateRewardsWallet(rewards_service_);
+  test_util::StartProcessWithConnectedUser(browser()->profile());
   test_util::NavigateToPublisherAndWaitForUpdate(browser(), https_server_.get(),
                                                  "3zsistemi.si");
 
@@ -186,7 +182,7 @@ IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, SiteBannerDefaultTipChoices) {
 }
 
 IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, SiteBannerDefaultPublisherAmounts) {
-  test_util::CreateRewardsWallet(rewards_service_);
+  test_util::StartProcessWithConnectedUser(browser()->profile());
   test_util::NavigateToPublisherAndWaitForUpdate(browser(), https_server_.get(),
                                                  "laurenwags.github.io");
 
@@ -200,57 +196,6 @@ IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, SiteBannerDefaultPublisherAmounts) {
   ASSERT_EQ(tip_options, std::vector<double>({1, 5, 50}));
 }
 
-IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, NotVerifiedWallet) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  context_helper_->LoadRewardsPage();
-  contribution_->AddBalance(promotion_->ClaimPromotionViaCode());
-  contribution_->IsBalanceCorrect();
-
-  test_util::WaitForElementThenClick(contents(),
-                                     "[data-test-id=verify-rewards-button]");
-
-  test_util::WaitForElementThenClick(contents(),
-                                     "[data-test-id=connect-provider-button]");
-
-  // Check if we are redirected to uphold
-  content::DidStartNavigationObserver(contents()).Wait();
-  content::DidFinishNavigationObserver observer(
-      contents(),
-      base::BindLambdaForTesting(
-          [this](content::NavigationHandle* navigation_handle) {
-            DCHECK(navigation_handle->GetURL().spec().find("/authorize/") ==
-                   std::string::npos);
-
-            // Fake successful authentication
-            ui_test_utils::NavigateToURLBlockUntilNavigationsComplete(
-                browser(), uphold_auth_url(), 1);
-
-            test_util::WaitForElementToContain(
-                contents(), "[data-test-id=external-wallet-status-text]",
-                "Connected");
-          }));
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, ShowACPercentInThePanel) {
-  test_util::CreateRewardsWallet(rewards_service_);
-  rewards_service_->SetAutoContributeEnabled(true);
-  context_helper_->LoadRewardsPage();
-  context_helper_->VisitPublisher(
-      test_util::GetUrl(https_server_.get(), "3zsistemi.si"), true);
-
-  test_util::NavigateToPublisherPage(browser(), https_server_.get(),
-                                     "3zsistemi.si");
-
-  // Open the Rewards popup
-  base::WeakPtr<content::WebContents> popup_contents =
-      context_helper_->OpenRewardsPopup();
-  ASSERT_TRUE(popup_contents);
-
-  const std::string score = test_util::WaitForElementThenGetContent(
-      popup_contents.get(), "[data-test-id=attention-score-text]");
-  EXPECT_NE(score.find("100%"), std::string::npos);
-}
-
 IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, ResetRewards) {
   test_util::CreateRewardsWallet(rewards_service_);
   context_helper_->LoadRewardsPage();
@@ -258,37 +203,12 @@ IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, ResetRewards) {
   test_util::WaitForElementThenClick(contents(),
                                      "[data-test-id=manage-wallet-button]");
 
-  test_util::WaitForElementToAppear(contents(), "#modal");
+  test_util::WaitForElementToAppear(contents(),
+                                    "[data-test-id=rewards-reset-modal]");
 
   test_util::WaitForElementToContain(
-      contents(), "[data-test-id='reset-text']",
+      contents(), "[data-test-id=rewards-reset-modal]",
       "By resetting, your current Brave Rewards profile will be deleted");
-}
-
-IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, EnableRewardsWithBalance) {
-  // Load a balance into the user's wallet
-  test_util::CreateRewardsWallet(rewards_service_);
-  auto* prefs = browser()->profile()->GetPrefs();
-  EXPECT_TRUE(prefs->GetBoolean(prefs::kEnabled));
-
-  rewards_service_->FetchPromotions(base::DoNothing());
-  promotion_->WaitForPromotionInitialization();
-  promotion_->ClaimPromotionViaCode();
-
-  // Make sure rewards, ads, and AC prefs are off
-  prefs->SetBoolean(prefs::kEnabled, false);
-  prefs->SetBoolean(prefs::kAutoContributeEnabled, false);
-
-  base::RunLoop run_loop;
-  rewards_service_->CreateRewardsWallet(
-      "",
-      base::BindLambdaForTesting(
-          [&run_loop](mojom::CreateRewardsWalletResult) { run_loop.Quit(); }));
-  run_loop.Run();
-
-  // Ensure that AC is not enabled
-  EXPECT_TRUE(prefs->GetBoolean(prefs::kEnabled));
-  EXPECT_FALSE(prefs->GetBoolean(prefs::kAutoContributeEnabled));
 }
 
 IN_PROC_BROWSER_TEST_F(RewardsBrowserTest, GeoDeclarationNewUser) {

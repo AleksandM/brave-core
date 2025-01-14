@@ -46,6 +46,21 @@ void PageDistiller::GetDistilledText(DistillContentCallback callback) {
                               weak_factory_.GetWeakPtr(), std::move(callback)));
 }
 
+void PageDistiller::GetTextToSpeak(TextToSpeechContentCallback callback) {
+  if (state_ != State::kDistilled) {
+    return std::move(callback).Run(base::Value());
+  }
+
+  static constexpr char16_t kGetTextToSpeak[] =
+      uR"js( speedreaderUtils.extractTextToSpeak() )js";
+
+  web_contents_->GetPrimaryMainFrame()->ExecuteJavaScriptInIsolatedWorld(
+      kGetTextToSpeak,
+      base::BindOnce(&PageDistiller::OnGetTextToSpeak,
+                     weak_factory_.GetWeakPtr(), std::move(callback)),
+      ISOLATED_WORLD_ID_BRAVE_INTERNAL);
+}
+
 void PageDistiller::UpdateState(State state) {
   state_ = state;
   for (auto& observer : observers_) {
@@ -62,10 +77,10 @@ void PageDistiller::StartDistill(DistillContentCallback callback) {
     return std::move(callback).Run(false, {});
   }
 
-  constexpr const char16_t kGetDocumentSource[] =
+  static constexpr char16_t kGetDocumentSource[] =
       uR"js( document.documentElement.outerHTML )js";
 
-  constexpr const char16_t kGetBodySource[] =
+  static constexpr char16_t kGetBodySource[] =
       uR"js( document.body.outerHTML )js";
 
   web_contents_->GetPrimaryMainFrame()->ExecuteJavaScriptInIsolatedWorld(
@@ -83,10 +98,8 @@ void PageDistiller::OnGetOuterHTML(DistillContentCallback callback,
   if (state_ == State::kDistilled) {
     return std::move(callback).Run(true, std::move(result).TakeString());
   } else {
-    auto* profile =
-        Profile::FromBrowserContext(web_contents_->GetBrowserContext());
-    auto* speedreader_service =
-        SpeedreaderServiceFactory::GetForProfile(profile);
+    auto* speedreader_service = SpeedreaderServiceFactory::GetForBrowserContext(
+        web_contents_->GetBrowserContext());
     auto* speedreader_service_rewriter =
         g_brave_browser_process->speedreader_rewriter_service();
     if (!speedreader_service || !speedreader_service_rewriter) {
@@ -99,6 +112,14 @@ void PageDistiller::OnGetOuterHTML(DistillContentCallback callback,
         base::BindOnce(&PageDistiller::OnPageDistilled,
                        weak_factory_.GetWeakPtr(), std::move(callback)));
   }
+}
+
+void PageDistiller::OnGetTextToSpeak(TextToSpeechContentCallback callback,
+                                     base::Value result) {
+  if (!result.is_dict()) {
+    return std::move(callback).Run(base::Value());
+  }
+  std::move(callback).Run(std::move(result));
 }
 
 void PageDistiller::OnPageDistilled(DistillContentCallback callback,

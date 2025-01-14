@@ -10,6 +10,7 @@
 #include "brave/components/permissions/brave_permission_manager.h"
 #include "brave/components/permissions/contexts/brave_google_sign_in_permission_context.h"
 #include "brave/components/permissions/contexts/brave_localhost_permission_context.h"
+#include "brave/components/permissions/contexts/brave_open_ai_chat_permission_context.h"
 #include "brave/components/permissions/contexts/brave_wallet_permission_context.h"
 #include "brave/components/permissions/permission_lifetime_manager.h"
 #include "components/permissions/features.h"
@@ -17,14 +18,16 @@
 #define GeolocationPermissionContextDelegate \
   BraveGeolocationPermissionContextDelegate
 
-#define BuildServiceInstanceFor BuildServiceInstanceFor_ChromiumImpl
+#define BuildServiceInstanceForBrowserContext \
+  BuildServiceInstanceForBrowserContext_ChromiumImpl
 
 #include "src/chrome/browser/permissions/permission_manager_factory.cc"
 
 #undef GeolocationPermissionContextDelegate
-#undef BuildServiceInstanceFor
+#undef BuildServiceInstanceForBrowserContext
 
-KeyedService* PermissionManagerFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+PermissionManagerFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
   auto permission_contexts = CreatePermissionContexts(profile);
@@ -40,6 +43,8 @@ KeyedService* PermissionManagerFactory::BuildServiceInstanceFor(
           profile);
   permission_contexts[ContentSettingsType::BRAVE_LOCALHOST_ACCESS] =
       std::make_unique<permissions::BraveLocalhostPermissionContext>(profile);
+  permission_contexts[ContentSettingsType::BRAVE_OPEN_AI_CHAT] =
+      std::make_unique<permissions::BraveOpenAIChatPermissionContext>(profile);
 
   if (base::FeatureList::IsEnabled(
           permissions::features::kPermissionLifetime)) {
@@ -50,6 +55,6 @@ KeyedService* PermissionManagerFactory::BuildServiceInstanceFor(
     }
   }
 
-  return new permissions::BravePermissionManager(
+  return std::make_unique<permissions::BravePermissionManager>(
       profile, std::move(permission_contexts));
 }

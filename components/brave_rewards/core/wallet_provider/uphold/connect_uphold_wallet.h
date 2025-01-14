@@ -8,11 +8,11 @@
 
 #include <string>
 
-#include "base/containers/flat_map.h"
-#include "base/timer/timer.h"
-#include "brave/components/brave_rewards/core/endpoints/uphold/post_oauth/post_oauth_uphold.h"
-#include "brave/components/brave_rewards/core/ledger_callbacks.h"
+#include "brave/components/brave_rewards/core/endpoint/uphold/uphold_server.h"
+#include "brave/components/brave_rewards/core/endpoints/uphold/post_oauth_uphold.h"
+#include "brave/components/brave_rewards/core/rewards_callbacks.h"
 #include "brave/components/brave_rewards/core/uphold/uphold_capabilities.h"
+#include "brave/components/brave_rewards/core/uphold/uphold_card.h"
 #include "brave/components/brave_rewards/core/uphold/uphold_user.h"
 #include "brave/components/brave_rewards/core/wallet_provider/connect_external_wallet.h"
 
@@ -20,14 +20,18 @@ namespace brave_rewards::internal::uphold {
 
 class ConnectUpholdWallet : public wallet_provider::ConnectExternalWallet {
  public:
-  explicit ConnectUpholdWallet(LedgerImpl& ledger);
+  explicit ConnectUpholdWallet(RewardsEngine& engine);
 
   ~ConnectUpholdWallet() override;
+
+  void CheckEligibility();
 
  private:
   const char* WalletType() const override;
 
-  void Authorize(OAuthInfo&&, ConnectExternalWalletCallback) override;
+  std::string GetOAuthLoginURL() const override;
+
+  void Authorize(ConnectExternalWalletCallback callback) override;
 
   void OnAuthorize(ConnectExternalWalletCallback,
                    endpoints::PostOAuthUphold::Result&&);
@@ -35,25 +39,26 @@ class ConnectUpholdWallet : public wallet_provider::ConnectExternalWallet {
   void OnGetUser(ConnectExternalWalletCallback,
                  const std::string& access_token,
                  mojom::Result,
-                 const User&) const;
+                 User) const;
 
   void OnGetCapabilities(ConnectExternalWalletCallback,
                          const std::string& access_token,
+                         const std::string& country_id,
                          mojom::Result,
-                         internal::uphold::Capabilities) const;
+                         Capabilities) const;
 
   void OnCreateCard(ConnectExternalWalletCallback,
                     const std::string& access_token,
+                    const std::string& country_id,
                     mojom::Result,
                     std::string&& id) const;
 
-  void CheckEligibility();
+  void OnGetUserForEligibilityCheck(mojom::Result, User) const;
 
-  void OnGetUser(mojom::Result, const User&) const;
+  void OnGetCapabilitiesForEligibilityCheck(mojom::Result, Capabilities) const;
 
-  void OnGetCapabilities(mojom::Result, Capabilities) const;
-
-  base::RepeatingTimer eligibility_checker_;
+  UpholdCard card_;
+  endpoint::UpholdServer server_;
 };
 
 }  // namespace brave_rewards::internal::uphold

@@ -5,7 +5,7 @@
 
 #include "brave/components/brave_ads/core/internal/diagnostics/entries/locale_diagnostic_entry.h"
 
-#include "brave/components/brave_ads/core/internal/common/unittest/unittest_base.h"
+#include "brave/components/brave_ads/core/internal/common/test/test_base.h"
 #include "brave/components/brave_ads/core/internal/diagnostics/diagnostic_entry_types.h"
 #include "brave/components/l10n/common/test/scoped_default_locale.h"
 
@@ -13,7 +13,7 @@
 
 namespace brave_ads {
 
-class BraveAdsLocaleDiagnosticEntryTest : public UnitTestBase {};
+class BraveAdsLocaleDiagnosticEntryTest : public test::TestBase {};
 
 TEST_F(BraveAdsLocaleDiagnosticEntryTest, GetValue) {
   // Arrange
@@ -21,9 +21,7 @@ TEST_F(BraveAdsLocaleDiagnosticEntryTest, GetValue) {
 
   const LocaleDiagnosticEntry diagnostic_entry;
 
-  // Act
-
-  // Assert
+  // Act & Assert
   EXPECT_EQ(DiagnosticEntryType::kLocale, diagnostic_entry.GetType());
   EXPECT_EQ("Locale", diagnostic_entry.GetName());
   EXPECT_EQ("en_KY", diagnostic_entry.GetValue());

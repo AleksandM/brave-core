@@ -1,20 +1,20 @@
 diff --git a/components/content_settings/core/browser/content_settings_policy_provider.cc b/components/content_settings/core/browser/content_settings_policy_provider.cc
-index 2a742f98cec3c08ff8c1a6cc667617e31c751cbe..d6acd9c3b257839b4aae0ed75c402d2023d9b0f8 100644
+index 7639a7c467cf6179f789908afac11666d4bb7497..aba51c27959de6abda684c303ae697fcd47b863a 100644
 --- a/components/content_settings/core/browser/content_settings_policy_provider.cc
 +++ b/components/content_settings/core/browser/content_settings_policy_provider.cc
-@@ -34,6 +34,7 @@ struct PrefsForManagedContentSettingsMapEntry {
+@@ -39,6 +39,7 @@ struct PrefsForManagedContentSettingsMapEntry {
  
  constexpr PrefsForManagedContentSettingsMapEntry
      kPrefsForManagedContentSettingsMap[] = {
 +        BRAVE_MANAGED_CONTENT_SETTINGS
-         {prefs::kManagedCookiesAllowedForUrls, ContentSettingsType::COOKIES,
-          CONTENT_SETTING_ALLOW},
-         {prefs::kManagedCookiesBlockedForUrls, ContentSettingsType::COOKIES,
-@@ -113,6 +114,7 @@ constexpr PrefsForManagedContentSettingsMapEntry
+         {prefs::kManagedAutomaticFullscreenAllowedForUrls,
+          ContentSettingsType::AUTOMATIC_FULLSCREEN, CONTENT_SETTING_ALLOW},
+         {prefs::kManagedAutomaticFullscreenBlockedForUrls,
+@@ -139,6 +140,7 @@ constexpr PrefsForManagedContentSettingsMapEntry
  };
  
  constexpr const char* kManagedPrefs[] = {
 +    BRAVE_MANAGED_PREFS
+     prefs::kManagedAutomaticFullscreenAllowedForUrls,
+     prefs::kManagedAutomaticFullscreenBlockedForUrls,
      prefs::kManagedAutoSelectCertificateForUrls,
-     prefs::kManagedClipboardAllowedForUrls,
-     prefs::kManagedClipboardBlockedForUrls,

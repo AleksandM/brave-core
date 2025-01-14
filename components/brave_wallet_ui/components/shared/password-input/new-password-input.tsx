@@ -13,18 +13,19 @@ import { usePasswordStrength } from '../../../common/hooks/use-password-strength
 
 // components
 import { PasswordStrengthBar } from './password-strength-bar'
-import { PasswordInput } from './index'
+import { PasswordInput } from './password-input-v2'
+import PasswordStrengthTooltip from '../tooltip/password-strength-tooltip'
 
 // style
-import {
-  Column,
-  VerticalSpace
-} from '../style'
+import { Row } from '../../shared/style'
+import { Column, VerticalSpace } from '../style'
 import {
   PasswordMatchRow,
-  PasswordMatchText,
-  PasswordMatchCheckmark
+  PasswordValidationText,
+  PasswordValidationIcon,
+  TooltipWrapper
 } from './new-password-input.styles'
+import { Asterisk, InputLabel } from './password-input-v2.style'
 
 export interface NewPasswordValues {
   password: string
@@ -34,6 +35,7 @@ export interface NewPasswordValues {
 export interface Props {
   autoFocus?: boolean
   showToggleButton?: boolean
+  initialPassword?: string
   onSubmit: (values: NewPasswordValues) => void
   onChange: (values: NewPasswordValues) => void
 }
@@ -41,12 +43,13 @@ export interface Props {
 export const NewPasswordInput = ({
   autoFocus,
   showToggleButton,
+  initialPassword,
   onSubmit,
   onChange
 }: Props) => {
   // state
-  const [showPassword, setShowPassword] = React.useState(false)
-  const [isPasswordFieldFocused, setIsPasswordFieldFocused] = React.useState(false)
+  const [isPasswordFieldFocused, setIsPasswordFieldFocused] =
+    React.useState(false)
 
   // custom hooks
   const {
@@ -59,20 +62,18 @@ export const NewPasswordInput = ({
     password,
     setConfirmedPassword,
     passwordsMatch
-  } = usePasswordStrength()
+  } = usePasswordStrength(initialPassword)
 
-  // methods
-  const onTogglePasswordVisibility = React.useCallback(() => {
-    setShowPassword(prevShowPassword => !prevShowPassword)
-  }, [])
-
-  const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      if (!hasConfirmedPasswordError) {
-        onSubmit({ isValid, password })
+  const handleKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') {
+        if (!hasConfirmedPasswordError) {
+          onSubmit({ isValid, password })
+        }
       }
-    }
-  }, [hasConfirmedPasswordError, onSubmit, isValid, password])
+    },
+    [hasConfirmedPasswordError, onSubmit, isValid, password]
+  )
 
   // effect
   React.useEffect(() => {
@@ -82,66 +83,106 @@ export const NewPasswordInput = ({
   // render
   return (
     <>
-      <Column fullWidth gap={'0px'}>
-        <PasswordInput
-          autoFocus={autoFocus}
-          error={''}
-          hasError={hasPasswordError}
-          key={'password'}
-          label={getLocale('braveWalletCreatePasswordInput')}
-          name='password'
-          onBlur={() => setIsPasswordFieldFocused(false)}
-          onChange={onPasswordChanged}
-          onFocus={() => setIsPasswordFieldFocused(true)}
-          onKeyDown={handleKeyDown}
-          onVisibilityToggled={onTogglePasswordVisibility}
-          placeholder={getLocale('braveWalletCreatePasswordInput')}
-          showToggleButton={true}
-          value={password}
+      <Column
+        fullWidth
+        gap={'0px'}
+      >
+        <Column
+          fullWidth
+          alignItems='flex-start'
         >
-          {({ value }) => value
-            ? <PasswordStrengthBar
-                criteria={[
-                  passwordStrength.isLongEnough, // weak
-                  password.length >= 12, // medium
-                  password.length >= 16 // strong
-                ]}
-                isVisible={isPasswordFieldFocused}
-                passwordStrength={passwordStrength}
-              />
-            : <VerticalSpace space={'44px'} />
-          }
-        </PasswordInput>
-
-        <PasswordInput
-          autoFocus={false}
-          error={''}
-          hasError={hasConfirmedPasswordError}
-          key={'password-confirmation'}
-          label={getLocale('braveWalletConfirmPasswordInput')}
-          name='password-confirmation'
-          onChange={setConfirmedPassword}
-          onKeyDown={handleKeyDown}
-          onVisibilityToggled={onTogglePasswordVisibility}
-          placeholder={getLocale('braveWalletConfirmPasswordInput')}
-          showToggleButton={false}
-          value={confirmedPassword}
-          revealValue={showPassword}
-        >
-          <PasswordMatchRow>
-            {passwordsMatch
-              ? <>
-                  <PasswordMatchCheckmark />
-                  <PasswordMatchText>
-                    {getLocale('braveWalletPasswordMatch')}
-                  </PasswordMatchText>
-                </>
-              : <VerticalSpace space='44px' />
+          <Row justifyContent='flex-start'>
+            <InputLabel htmlFor='password'>
+              {getLocale('braveWalletCreatePasswordInput')}
+            </InputLabel>
+            <Asterisk>*</Asterisk>
+          </Row>
+          <TooltipWrapper>
+            <PasswordStrengthTooltip
+              isVisible={isPasswordFieldFocused}
+              passwordStrength={passwordStrength}
+            />
+          </TooltipWrapper>
+          <PasswordInput
+            autoFocus={autoFocus}
+            error={''}
+            hasError={hasPasswordError}
+            key={'password'}
+            name='password'
+            onBlur={() => setIsPasswordFieldFocused(false)}
+            onChange={onPasswordChanged}
+            onFocus={() => setIsPasswordFieldFocused(true)}
+            onKeyDown={handleKeyDown}
+            placeholder={getLocale('braveWalletCreatePasswordInput')}
+            showToggleButton={true}
+            value={password}
+          >
+            {({ value }) =>
+              value ? (
+                <PasswordStrengthBar
+                  criteria={[
+                    passwordStrength.isLongEnough, // weak
+                    password.length >= 12, // medium
+                    password.length >= 16 // strong
+                  ]}
+                />
+              ) : (
+                <VerticalSpace space={'44px'} />
+              )
             }
-          </PasswordMatchRow>
-        </PasswordInput>
+          </PasswordInput>
+        </Column>
+        <Column
+          fullWidth
+          alignItems='flex-start'
+        >
+          <Row
+            justifyContent='flex-start'
+            marginBottom='4px'
+          >
+            <InputLabel htmlFor='password-confirmation'>
+              {getLocale('braveWalletConfirmPasswordInput')}
+            </InputLabel>
+            <Asterisk>*</Asterisk>
+          </Row>
+          <PasswordInput
+            autoFocus={false}
+            error={''}
+            hasError={hasConfirmedPasswordError}
+            key={'password-confirmation'}
+            name='password-confirmation'
+            onChange={setConfirmedPassword}
+            onKeyDown={handleKeyDown}
+            placeholder={getLocale('braveWalletConfirmPasswordInput')}
+            showToggleButton={true}
+            value={confirmedPassword}
+          >
+            <PasswordMatchRow>
+              {confirmedPassword ? (
+                <>
+                  <PasswordValidationIcon
+                    isMatch={passwordsMatch}
+                    name={
+                      passwordsMatch
+                        ? 'check-circle-filled'
+                        : 'warning-triangle-outline'
+                    }
+                  />
+                  <PasswordValidationText isMatch={passwordsMatch}>
+                    {getLocale(
+                      passwordsMatch
+                        ? 'braveWalletPasswordMatch'
+                        : 'braveWalletConfirmPasswordError'
+                    )}
+                  </PasswordValidationText>
+                </>
+              ) : (
+                <VerticalSpace space={'20px'} />
+              )}
+            </PasswordMatchRow>
+          </PasswordInput>
+        </Column>
       </Column>
-      <VerticalSpace space={'30px'} />
     </>
   )
 }

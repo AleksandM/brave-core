@@ -9,31 +9,27 @@
 #include "brave/components/brave_rewards/core/common/time_util.h"
 #include "brave/components/brave_rewards/core/database/database_server_publisher_info.h"
 #include "brave/components/brave_rewards/core/database/database_util.h"
-#include "brave/components/brave_rewards/core/ledger_impl.h"
-
-using std::placeholders::_1;
+#include "brave/components/brave_rewards/core/rewards_engine.h"
 
 namespace {
 
-const char kTableName[] = "server_publisher_info";
+constexpr char kTableName[] = "server_publisher_info";
 
 }  // namespace
 
-namespace brave_rewards::internal {
+namespace brave_rewards::internal::database {
 
-namespace database {
-
-DatabaseServerPublisherInfo::DatabaseServerPublisherInfo(LedgerImpl& ledger)
-    : DatabaseTable(ledger), banner_(ledger) {}
+DatabaseServerPublisherInfo::DatabaseServerPublisherInfo(RewardsEngine& engine)
+    : DatabaseTable(engine), banner_(engine) {}
 
 DatabaseServerPublisherInfo::~DatabaseServerPublisherInfo() = default;
 
 void DatabaseServerPublisherInfo::InsertOrUpdate(
     const mojom::ServerPublisherInfo& server_info,
-    LegacyResultCallback callback) {
+    ResultCallback callback) {
   if (server_info.publisher_key.empty()) {
-    BLOG(0, "Publisher key is empty");
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->LogError(FROM_HERE) << "Publisher key is empty";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
@@ -55,31 +51,32 @@ void DatabaseServerPublisherInfo::InsertOrUpdate(
   transaction->commands.push_back(std::move(command));
   banner_.InsertOrUpdate(transaction.get(), server_info);
 
-  ledger_->RunDBTransaction(std::move(transaction),
-                            std::bind(&OnResultCallback, _1, callback));
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&OnResultCallback, std::move(callback)));
 }
 
 void DatabaseServerPublisherInfo::GetRecord(
     const std::string& publisher_key,
     GetServerPublisherInfoCallback callback) {
   if (publisher_key.empty()) {
-    BLOG(1, "Publisher key is empty");
-    callback(nullptr);
+    engine_->Log(FROM_HERE) << "Publisher key is empty";
+    std::move(callback).Run(nullptr);
     return;
   }
 
   // Get banner first as is not complex struct where ServerPublisherInfo is
-  auto banner_callback =
-      std::bind(&DatabaseServerPublisherInfo::OnGetRecordBanner, this, _1,
-                publisher_key, callback);
-
-  banner_.GetRecord(publisher_key, banner_callback);
+  banner_.GetRecord(
+      publisher_key,
+      base::BindOnce(&DatabaseServerPublisherInfo::OnGetRecordBanner,
+                     weak_factory_.GetWeakPtr(), publisher_key,
+                     std::move(callback)));
 }
 
 void DatabaseServerPublisherInfo::OnGetRecordBanner(
-    mojom::PublisherBannerPtr banner,
     const std::string& publisher_key,
-    GetServerPublisherInfoCallback callback) {
+    GetServerPublisherInfoCallback callback,
+    mojom::PublisherBannerPtr banner) {
   auto transaction = mojom::DBTransaction::New();
   const std::string query = base::StringPrintf(
       "SELECT status, address, updated_at "
@@ -102,27 +99,29 @@ void DatabaseServerPublisherInfo::OnGetRecordBanner(
     banner = mojom::PublisherBanner::New();
   }
 
-  auto transaction_callback =
-      std::bind(&DatabaseServerPublisherInfo::OnGetRecord, this, _1,
-                publisher_key, *banner, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), transaction_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&DatabaseServerPublisherInfo::OnGetRecord,
+                     base::Unretained(this), std::move(callback), publisher_key,
+                     std::move(banner)));
 }
 
 void DatabaseServerPublisherInfo::OnGetRecord(
-    mojom::DBCommandResponsePtr response,
+    GetServerPublisherInfoCallback callback,
     const std::string& publisher_key,
-    const mojom::PublisherBanner& banner,
-    GetServerPublisherInfoCallback callback) {
+    mojom::PublisherBannerPtr banner,
+    mojom::DBCommandResponsePtr response) {
+  CHECK(banner);
+
   if (!response ||
       response->status != mojom::DBCommandResponse::Status::RESPONSE_OK) {
-    BLOG(0, "Response is wrong");
-    callback(nullptr);
+    engine_->LogError(FROM_HERE) << "Response is wrong";
+    std::move(callback).Run(nullptr);
     return;
   }
 
   if (response->result->get_records().size() != 1) {
-    callback(nullptr);
+    std::move(callback).Run(nullptr);
     return;
   }
 
@@ -130,17 +129,17 @@ void DatabaseServerPublisherInfo::OnGetRecord(
 
   auto info = mojom::ServerPublisherInfo::New();
   info->publisher_key = publisher_key;
-  info->status = static_cast<mojom::PublisherStatus>(GetIntColumn(record, 0));
+  info->status = PublisherStatusFromInt(GetIntColumn(record, 0));
   info->address = GetStringColumn(record, 1);
   info->updated_at = GetInt64Column(record, 2);
-  info->banner = banner.Clone();
+  info->banner = std::move(banner);
 
-  callback(std::move(info));
+  std::move(callback).Run(std::move(info));
 }
 
 void DatabaseServerPublisherInfo::DeleteExpiredRecords(
     int64_t max_age_seconds,
-    LegacyResultCallback callback) {
+    ResultCallback callback) {
   int64_t cutoff = util::GetCurrentTimeStamp() - max_age_seconds;
 
   auto transaction = mojom::DBTransaction::New();
@@ -156,20 +155,19 @@ void DatabaseServerPublisherInfo::DeleteExpiredRecords(
 
   transaction->commands.push_back(std::move(command));
 
-  auto select_callback =
-      std::bind(&DatabaseServerPublisherInfo::OnExpiredRecordsSelected, this,
-                _1, callback);
-
-  ledger_->RunDBTransaction(std::move(transaction), select_callback);
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&DatabaseServerPublisherInfo::OnExpiredRecordsSelected,
+                     base::Unretained(this), std::move(callback)));
 }
 
 void DatabaseServerPublisherInfo::OnExpiredRecordsSelected(
-    mojom::DBCommandResponsePtr response,
-    LegacyResultCallback callback) {
+    ResultCallback callback,
+    mojom::DBCommandResponsePtr response) {
   if (!response ||
       response->status != mojom::DBCommandResponse::Status::RESPONSE_OK) {
-    BLOG(0, "Unable to query for expired records");
-    callback(mojom::Result::LEDGER_ERROR);
+    engine_->LogError(FROM_HERE) << "Unable to query for expired records";
+    std::move(callback).Run(mojom::Result::FAILED);
     return;
   }
 
@@ -180,7 +178,7 @@ void DatabaseServerPublisherInfo::OnExpiredRecordsSelected(
 
   // Exit if there are no records to delete.
   if (publisher_keys.empty()) {
-    callback(mojom::Result::LEDGER_OK);
+    std::move(callback).Run(mojom::Result::OK);
     return;
   }
 
@@ -200,9 +198,9 @@ void DatabaseServerPublisherInfo::OnExpiredRecordsSelected(
 
   transaction->commands.push_back(std::move(command));
 
-  ledger_->RunDBTransaction(std::move(transaction),
-                            std::bind(&OnResultCallback, _1, callback));
+  engine_->client()->RunDBTransaction(
+      std::move(transaction),
+      base::BindOnce(&OnResultCallback, std::move(callback)));
 }
 
-}  // namespace database
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::database

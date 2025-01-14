@@ -4,9 +4,10 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "third_party/blink/renderer/modules/plugins/dom_plugin_array.h"
+
 #include "base/compiler_specific.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "brave/third_party/blink/renderer/core/farbling/brave_session_cache.h"
-#include "third_party/abseil-cpp/absl/random/random.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/page/plugin_data.h"
@@ -54,10 +55,12 @@ void FarblePlugins(DOMPluginArray* owner,
                    HeapVector<Member<DOMPlugin>>* dom_plugins) {
   // |owner| is guaranteed to be non-null here.
   // |owner->DomWindow()| might be null but function can handle it.
-  switch (brave::GetBraveFarblingLevelFor(owner->DomWindow(),
-                                          BraveFarblingLevel::OFF)) {
+  auto farbling_level = brave::GetBraveFarblingLevelFor(
+      owner->DomWindow(), ContentSettingsType::BRAVE_WEBCOMPAT_PLUGINS,
+      BraveFarblingLevel::OFF);
+  switch (farbling_level) {
     case BraveFarblingLevel::OFF: {
-      break;
+      return;
     }
     case BraveFarblingLevel::MAXIMUM: {
       dom_plugins->clear();
@@ -135,11 +138,11 @@ void FarblePlugins(DOMPluginArray* owner,
       dom_plugins->push_back(fake_dom_plugin_2);
       // Shuffle the list of plugins pseudo-randomly, based on the domain key.
       std::shuffle(dom_plugins->begin(), dom_plugins->end(), prng);
-      break;
+      return;
     }
-    default:
-      NOTREACHED();
   }
+  NOTREACHED() << "Unexpected value for farbling_level: "
+               << base::to_underlying(farbling_level);
 }
 
 }  // namespace brave
@@ -155,28 +158,3 @@ void FarblePlugins(DOMPluginArray* owner,
 
 #undef BRAVE_DOM_PLUGINS_UPDATE_PLUGIN_DATA__FARBLE_PLUGIN_DATA
 #undef BRAVE_DOM_PLUGINS_UPDATE_PLUGIN_DATA__RESET_PLUGIN_DATA
-
-namespace blink {
-
-String ToPageGraphBlinkArg(DOMPluginArray* plugins) {
-  std::stringstream result_builder;
-  for (unsigned i = 0; i < plugins->length(); i++) {
-    result_builder << i << ": ";
-    result_builder << "plugin name: " << plugins->item(i)->name() << ", ";
-    result_builder << "plugin filename: " << plugins->item(i)->filename()
-                   << ", ";
-    result_builder << "plugin description: " << plugins->item(i)->description()
-                   << ", ";
-    DOMMimeType* mime_type = plugins->item(i)->item(i);
-    if (mime_type != nullptr) {
-      result_builder << "mimetype type: " << mime_type->type() << ", ";
-      result_builder << "mimetype suffixes: " << mime_type->suffixes() << ", ";
-      result_builder << "mimetype description: " << mime_type->description()
-                     << ";";
-    }
-  }
-
-  return String(result_builder.str());
-}
-
-}  // namespace blink

@@ -5,7 +5,7 @@
 
 #include "brave/browser/extensions/api/brave_wallet_api.h"
 
-#include <memory>
+#include <optional>
 #include <string>
 
 #include "base/feature_list.h"
@@ -20,16 +20,16 @@
 #include "brave/common/extensions/api/brave_wallet.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/l10n/common/localization_util.h"
 #include "brave/grit/brave_generated_resources.h"
-#include "chrome/browser/extensions/api/tabs/tabs_constants.h"
+#include "chrome/browser/browser_process.h"
 #include "chrome/browser/extensions/extension_tab_util.h"
 #include "chrome/browser/profiles/profile.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_prefs.h"
 #include "extensions/browser/extension_util.h"
-#include "extensions/common/constants.h"
 
 namespace {
 
@@ -49,8 +49,7 @@ base::Value::Dict MakeSelectValue(const std::u16string& name,
 
 }  // namespace
 
-namespace extensions {
-namespace api {
+namespace extensions::api {
 
 ExtensionFunction::ResponseAction BraveWalletReadyFunction::Run() {
   if (browser_context()->IsTor()) {
@@ -67,9 +66,7 @@ ExtensionFunction::ResponseAction BraveWalletNotifyWalletUnlockFunction::Run() {
     return RespondNow(Error("Not available in Tor context"));
   }
 
-  Profile* profile = Profile::FromBrowserContext(browser_context());
-  ::brave_wallet::UpdateLastUnlockPref(profile->GetPrefs());
-
+  ::brave_wallet::UpdateLastUnlockPref(g_browser_process->local_state());
   return RespondNow(NoArguments());
 }
 
@@ -102,7 +99,7 @@ BraveWalletShouldPromptForSetupFunction::Run() {
 
 ExtensionFunction::ResponseAction BraveWalletGetWalletSeedFunction::Run() {
   // make sure the passed in enryption key is 32 bytes.
-  absl::optional<brave_wallet::GetWalletSeed::Params> params =
+  std::optional<brave_wallet::GetWalletSeed::Params> params =
       brave_wallet::GetWalletSeed::Params::Create(args());
   EXTENSION_FUNCTION_VALIDATE(params);
   if (params->key.size() != 32) {
@@ -153,7 +150,7 @@ ExtensionFunction::ResponseAction BraveWalletGetWeb3ProviderFunction::Run() {
       default_wallet ==
           ::brave_wallet::mojom::DefaultWallet::BraveWalletPreferExtension ||
       default_wallet == ::brave_wallet::mojom::DefaultWallet::CryptoWallets) {
-    extension_id = ethereum_remote_client_extension_id;
+    extension_id = kEthereumRemoteClientExtensionId;
   }
   return RespondNow(WithArguments(extension_id));
 }
@@ -174,7 +171,7 @@ BraveWalletGetWeb3ProviderListFunction::Run() {
   if (base::FeatureList::IsEnabled(ethereum_remote_client::features::
                                        kCryptoWalletsForNewInstallsFeature) ||
       extensions::ExtensionPrefs::Get(browser_context())
-          ->HasPrefForExtension(ethereum_remote_client_extension_id)) {
+          ->HasPrefForExtension(kEthereumRemoteClientExtensionId)) {
     list.Append(MakeSelectValue(
         brave_l10n::GetLocalizedResourceUTF16String(
             IDS_BRAVE_WALLET_WEB3_PROVIDER_CRYPTO_WALLETS_DEPRECATED),
@@ -194,5 +191,4 @@ BraveWalletIsNativeWalletEnabledFunction::Run() {
   return RespondNow(WithArguments(::brave_wallet::IsNativeWalletEnabled()));
 }
 
-}  // namespace api
-}  // namespace extensions
+}  // namespace extensions::api

@@ -18,7 +18,6 @@ BraveExtensionProvider::~BraveExtensionProvider() = default;
 std::string BraveExtensionProvider::GetDebugPolicyProviderName() const {
 #if defined(NDEBUG)
   NOTREACHED();
-  return std::string();
 #else
   return "Brave Extension Provider";
 #endif

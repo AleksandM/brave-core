@@ -8,44 +8,52 @@
 #include <utility>
 
 #include "base/functional/bind.h"
-#include "base/functional/callback.h"
 #include "base/time/time.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
 #include "brave/components/brave_ads/core/internal/account/statement/statement_util.h"
 #include "brave/components/brave_ads/core/internal/account/transactions/transactions.h"
 #include "brave/components/brave_ads/core/internal/common/logging_util.h"
 #include "brave/components/brave_ads/core/internal/common/time/time_util.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads {
 
 void BuildStatement(BuildStatementCallback callback) {
-  const base::Time from_time = GetTimeInDistantPast();
-  const base::Time to_time = GetLocalTimeAtEndOfThisMonth();
-
   GetTransactionsForDateRange(
-      from_time, to_time,
+      /*from_time=*/base::Time(), /*to_time=*/LocalTimeAtEndOfThisMonth(),
       base::BindOnce(
-          [](BuildStatementCallback callback, const bool success,
+          [](BuildStatementCallback callback, bool success,
              const TransactionList& transactions) {
             if (!success) {
               BLOG(0, "Failed to get transactions");
-              return std::move(callback).Run(/*statement*/ nullptr);
+              return std::move(callback).Run(/*statement=*/nullptr);
             }
 
-            mojom::StatementInfoPtr statement = mojom::StatementInfo::New();
-            const auto [min_last_month, max_last_month] =
-                GetEstimatedEarningsForLastMonth(transactions);
-            statement->min_earnings_last_month = min_last_month;
-            statement->max_earnings_last_month = max_last_month;
-            const auto [min_this_month, max_this_month] =
+            mojom::StatementInfoPtr mojom_statement =
+                mojom::StatementInfo::New();
+
+            const auto [min_earnings_previous_month,
+                        max_earnings_previous_month] =
+                GetEstimatedEarningsForPreviousMonth(transactions);
+            mojom_statement->min_earnings_previous_month =
+                min_earnings_previous_month;
+            mojom_statement->max_earnings_previous_month =
+                max_earnings_previous_month;
+
+            const auto [min_earnings_this_month, max_earnings_this_month] =
                 GetEstimatedEarningsForThisMonth(transactions);
-            statement->min_earnings_this_month = min_this_month;
-            statement->max_earnings_this_month = max_this_month;
-            statement->next_payment_date = GetNextPaymentDate(transactions);
-            statement->ads_received_this_month =
+            mojom_statement->min_earnings_this_month = min_earnings_this_month;
+            mojom_statement->max_earnings_this_month = max_earnings_this_month;
+
+            mojom_statement->next_payment_date =
+                GetNextPaymentDate(transactions);
+
+            mojom_statement->ads_received_this_month =
                 GetAdsReceivedThisMonth(transactions);
 
-            std::move(callback).Run(std::move(statement));
+            mojom_statement->ads_summary_this_month =
+                GetAdsSummaryThisMonth(transactions);
+
+            std::move(callback).Run(std::move(mojom_statement));
           },
           std::move(callback)));
 }

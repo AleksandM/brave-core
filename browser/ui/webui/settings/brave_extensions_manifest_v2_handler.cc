@@ -22,10 +22,10 @@
 #include "extensions/browser/extension_system.h"
 
 namespace {
-constexpr const char kNoScriptId[] = "doojmbjmlfjjnbmnoijecmcbfeoakpjm";
-constexpr const char kUBlockId[] = "cjpalhdlnbpafiamejdnhcphjbkeiagm";
-constexpr const char kUMatrixId[] = "ogfcmafjalglgifnmanfmnieipoejdcf";
-constexpr const char kAdGuardId[] = "bgnkhhnnamicmpeenaelnjfhikgbkllg";
+constexpr char kNoScriptId[] = "doojmbjmlfjjnbmnoijecmcbfeoakpjm";
+constexpr char kUBlockId[] = "cjpalhdlnbpafiamejdnhcphjbkeiagm";
+constexpr char kUMatrixId[] = "ogfcmafjalglgifnmanfmnieipoejdcf";
+constexpr char kAdGuardId[] = "gfggjaccafhcbfogfkogggoepomehbjl";
 }  // namespace
 
 BASE_FEATURE(kExtensionsManifestV2,
@@ -40,9 +40,11 @@ class ExtensionWebstoreInstaller final
       Profile* profile,
       content::WebContents* web_contents,
       extensions::WebstoreInstallWithPrompt::Callback callback)
-      : extensions::WebstoreInstallWithPrompt(webstore_item_id,
-                                              profile,
-                                              std::move(callback)),
+      : extensions::WebstoreInstallWithPrompt(
+            webstore_item_id,
+            profile,
+            web_contents->GetTopLevelNativeWindow(),
+            std::move(callback)),
         web_contents_(web_contents) {}
 
  private:
@@ -61,6 +63,7 @@ struct ExtensionManifestV2 {
   std::string id;
   std::u16string name;
   std::u16string description;
+  bool installed = false;
   bool enabled = false;
 
   base::Value ToValue() const {
@@ -68,6 +71,7 @@ struct ExtensionManifestV2 {
     v.Set("id", id);
     v.Set("name", name);
     v.Set("description", description);
+    v.Set("installed", installed);
     v.Set("enabled", enabled);
     return base::Value(std::move(v));
   }
@@ -121,6 +125,11 @@ void BraveExtensionsManifestV2Handler::RegisterMessages() {
       base::BindRepeating(
           &BraveExtensionsManifestV2Handler::EnableExtensionManifestV2,
           base::Unretained(this)));
+  web_ui()->RegisterMessageCallback(
+      "removeExtensionManifestV2",
+      base::BindRepeating(
+          &BraveExtensionsManifestV2Handler::RemoveExtensionManifestV2,
+          base::Unretained(this)));
 
   observation_.Observe(GetExtensionRegistry());
 }
@@ -129,7 +138,7 @@ void BraveExtensionsManifestV2Handler::OnExtensionLoaded(
     content::BrowserContext* browser_context,
     const extensions::Extension* extension) {
   DCHECK(extension);
-  NotifyExtensionManifestV2Changed(browser_context, extension->id(), true);
+  NotifyExtensionManifestV2Changed(browser_context, extension->id());
 }
 
 void BraveExtensionsManifestV2Handler::OnExtensionUnloaded(
@@ -137,28 +146,28 @@ void BraveExtensionsManifestV2Handler::OnExtensionUnloaded(
     const extensions::Extension* extension,
     extensions::UnloadedExtensionReason reason) {
   DCHECK(extension);
-  NotifyExtensionManifestV2Changed(browser_context, extension->id(), false);
+  NotifyExtensionManifestV2Changed(browser_context, extension->id());
 }
 
 void BraveExtensionsManifestV2Handler::OnExtensionInstalled(
     content::BrowserContext* browser_context,
     const extensions::Extension* extension,
     bool is_update) {
-  OnExtensionLoaded(browser_context, extension);
+  DCHECK(extension);
+  NotifyExtensionManifestV2Changed(browser_context, extension->id());
 }
 
 void BraveExtensionsManifestV2Handler::OnExtensionUninstalled(
     content::BrowserContext* browser_context,
     const extensions::Extension* extension,
     extensions::UninstallReason reason) {
-  OnExtensionUnloaded(browser_context, extension,
-                      extensions::UnloadedExtensionReason::UNINSTALL);
+  DCHECK(extension);
+  NotifyExtensionManifestV2Changed(browser_context, extension->id());
 }
 
 void BraveExtensionsManifestV2Handler::NotifyExtensionManifestV2Changed(
     content::BrowserContext* browser_context,
-    const std::string& id,
-    bool enabled) {
+    const std::string& id) {
   if (!IsJavascriptAllowed() ||
       browser_context != web_ui()->GetWebContents()->GetBrowserContext()) {
     return;
@@ -167,7 +176,6 @@ void BraveExtensionsManifestV2Handler::NotifyExtensionManifestV2Changed(
   if (fnd == extensions_.end()) {
     return;
   }
-  fnd->enabled = enabled;
   FireWebUIListener("brave-extension-manifest-v2-changed");
 }
 
@@ -214,10 +222,33 @@ void BraveExtensionsManifestV2Handler::EnableExtensionManifestV2(
     }
   } else {
     installer_.reset();
-    extension_service->UninstallExtension(
-        id, extensions::UNINSTALL_REASON_INTERNAL_MANAGEMENT, nullptr);
+    extension_service->DisableExtension(
+        id, extensions::disable_reason::DISABLE_USER_ACTION);
     ResolveJavascriptCallback(args[0], base::Value(true));
   }
+}
+
+void BraveExtensionsManifestV2Handler::RemoveExtensionManifestV2(
+    const base::Value::List& args) {
+  CHECK_EQ(args.size(), 2U);
+  const std::string id = args[1].GetString();
+
+  const bool installed =
+      GetExtensionRegistry()->GetInstalledExtension(id) != nullptr;
+
+  installer_.reset();
+
+  if (installed) {
+    auto* profile = Profile::FromBrowserContext(
+        web_ui()->GetWebContents()->GetBrowserContext());
+    auto* extension_service =
+        extensions::ExtensionSystem::Get(profile)->extension_service();
+    extension_service->UninstallExtension(
+        id, extensions::UNINSTALL_REASON_INTERNAL_MANAGEMENT, nullptr);
+  }
+
+  AllowJavascript();
+  ResolveJavascriptCallback(args[0], base::Value(true));
 }
 
 void BraveExtensionsManifestV2Handler::GetExtensionsManifestV2(
@@ -227,6 +258,8 @@ void BraveExtensionsManifestV2Handler::GetExtensionsManifestV2(
 
   base::Value::List result;
   for (auto& e : extensions_) {
+    e.installed =
+        GetExtensionRegistry()->GetInstalledExtension(e.id) != nullptr;
     e.enabled = GetExtensionRegistry()->enabled_extensions().Contains(e.id);
     result.Append(e.ToValue());
   }

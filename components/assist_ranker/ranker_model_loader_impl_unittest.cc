@@ -49,7 +49,7 @@ class RankerModelLoaderImplTest : public ::testing::Test {
   // Helper method used by InitRemoteModels()
   void InitModel(const GURL& model_url,
                  const base::Time& last_modified,
-                 const base::TimeDelta& cache_duration,
+                 base::TimeDelta cache_duration,
                  RankerModel* model);
 
   // Implements RankerModelLoaderImpl's ValidateModelCallback interface.
@@ -108,7 +108,7 @@ void RankerModelLoaderImplTest::InitRemoteModels() {
 
 void RankerModelLoaderImplTest::InitModel(const GURL& model_url,
                                           const base::Time& last_modified,
-                                          const base::TimeDelta& cache_duration,
+                                          base::TimeDelta cache_duration,
                                           RankerModel* model) {
   ASSERT_TRUE(model != nullptr);
   model->mutable_proto()->Clear();
@@ -136,7 +136,6 @@ void RankerModelLoaderImplTest::InitModel(const GURL& model_url,
 RankerModelStatus RankerModelLoaderImplTest::ValidateModel(
     const RankerModel& model) {
   NOTREACHED();
-  return RankerModelStatus::OK;
 }
 
 void RankerModelLoaderImplTest::OnModelAvailable(

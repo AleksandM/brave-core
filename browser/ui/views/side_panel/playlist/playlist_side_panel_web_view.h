@@ -7,7 +7,8 @@
 #define BRAVE_BROWSER_UI_VIEWS_SIDE_PANEL_PLAYLIST_PLAYLIST_SIDE_PANEL_WEB_VIEW_H_
 
 class Browser;
-class BubbleContentsWrapper;
+class WebUIContentsWrapper;
+class SidePanelEntryScope;
 
 #include "base/functional/callback_forward.h"
 #include "brave/browser/ui/webui/playlist_ui.h"
@@ -16,11 +17,17 @@ class BubbleContentsWrapper;
 class PlaylistSidePanelWebView : public SidePanelWebUIView {
  public:
   PlaylistSidePanelWebView(Browser* browser,
+                           SidePanelEntryScope& scope,
                            base::RepeatingClosure close_cb,
-                           BubbleContentsWrapper* contents_wrapper);
+                           WebUIContentsWrapper* contents_wrapper);
   PlaylistSidePanelWebView(const PlaylistSidePanelWebView&) = delete;
   PlaylistSidePanelWebView& operator=(const PlaylistSidePanelWebView&) = delete;
   ~PlaylistSidePanelWebView() override;
+
+  base::WeakPtr<PlaylistSidePanelWebView> GetWeakPtr();
+
+ private:
+  base::WeakPtrFactory<PlaylistSidePanelWebView> weak_ptr_factory_{this};
 };
 
 #endif  // BRAVE_BROWSER_UI_VIEWS_SIDE_PANEL_PLAYLIST_PLAYLIST_SIDE_PANEL_WEB_VIEW_H_

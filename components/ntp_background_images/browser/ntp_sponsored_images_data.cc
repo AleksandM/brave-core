@@ -5,15 +5,15 @@
 
 #include "brave/components/ntp_background_images/browser/ntp_sponsored_images_data.h"
 
+#include <optional>
 #include <utility>
 
 #include "base/json/json_reader.h"
 #include "base/logging.h"
-#include "base/notreached.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/stringprintf.h"
 #include "base/uuid.h"
-#include "brave/components/brave_ads/core/new_tab_page_ad_info.h"
+#include "brave/components/brave_ads/core/public/ad_units/new_tab_page_ad/new_tab_page_ad_info.h"
 #include "brave/components/ntp_background_images/browser/url_constants.h"
 #include "content/public/common/url_constants.h"
 
@@ -94,7 +94,7 @@ Logo GetLogoFromValue(const base::FilePath& installed_dir,
 
 TopSite::TopSite() = default;
 TopSite::TopSite(const std::string& i_name,
-                 const std::string i_destination_url,
+                 const std::string& i_destination_url,
                  const std::string& i_image_path,
                  const base::FilePath& i_image_file)
     : name(i_name),
@@ -140,14 +140,14 @@ NTPSponsoredImagesData::NTPSponsoredImagesData(
     const std::string& json_string,
     const base::FilePath& installed_dir)
     : NTPSponsoredImagesData() {
-  absl::optional<base::Value> json_value = base::JSONReader::Read(json_string);
+  std::optional<base::Value> json_value = base::JSONReader::Read(json_string);
   if (!json_value || !json_value->is_dict()) {
     DVLOG(2) << "Read json data failed. Invalid JSON data";
     return;
   }
   base::Value::Dict& root = json_value->GetDict();
 
-  absl::optional<int> incomingSchemaVersion = root.FindInt(kSchemaVersionKey);
+  std::optional<int> incomingSchemaVersion = root.FindInt(kSchemaVersionKey);
   const bool schemaVersionIsValid =
       incomingSchemaVersion && *incomingSchemaVersion == kExpectedSchemaVersion;
   if (!schemaVersionIsValid) {
@@ -168,8 +168,18 @@ NTPSponsoredImagesData::NTPSponsoredImagesData(
     url_prefix += kSponsoredImagesPath;
   }
 
-  auto* campaigns_value = root.FindList(kCampaignsKey);
-  if (campaigns_value) {
+  // SmartNTTs are targeted locally by the browser and are only shown to users
+  // if the configured conditions match. Non-smart capable browsers that predate
+  // the introduction of this feature should never show these NTTs. To enforce
+  // this, the existing `campaigns` array in `photo.json` never includes
+  // SmartNTTs. A new `campaigns2` array is included in `photo.json`. This
+  // includes all NTTs, including smart ones. SmartNTT capable browsers read the
+  // `campaigns2` array, fall back to `campaigns`, and then fall back to the
+  // root `campaign` for backward compatibility. Non-smart capable browsers
+  // continue to read the `campaigns` array.
+  if (auto* campaigns2_value = root.FindList(kCampaigns2Key)) {
+    ParseCampaignsList(*campaigns2_value, installed_dir);
+  } else if (auto* campaigns_value = root.FindList(kCampaignsKey)) {
     ParseCampaignsList(*campaigns_value, installed_dir);
   } else {
     // Get a global campaign directly if the campaign list doesn't exist.
@@ -218,13 +228,37 @@ Campaign NTPSponsoredImagesData::GetCampaignFromValue(
   if (auto* wallpapers = value.FindList(kWallpapersKey)) {
     for (const auto& entry : *wallpapers) {
       const auto& wallpaper = entry.GetDict();
+      const std::string* image_url = wallpaper.FindString(kImageURLKey);
+      if (!image_url) {
+        continue;
+      }
+
       SponsoredBackground background;
-      background.image_file =
-          installed_dir.AppendASCII(*wallpaper.FindString(kImageURLKey));
+      background.image_file = installed_dir.AppendASCII(*image_url);
 
       if (auto* focal_point = wallpaper.FindDict(kWallpaperFocalPointKey)) {
         background.focal_point = {focal_point->FindInt(kXKey).value_or(0),
                                   focal_point->FindInt(kYKey).value_or(0)};
+      }
+
+      if (const auto* const condition_matchers =
+              wallpaper.FindList(kWallpaperConditionMatchersKey)) {
+        for (const auto& condition_matcher : *condition_matchers) {
+          const auto& dict = condition_matcher.GetDict();
+          const auto* const pref_path =
+              dict.FindString(kWallpaperConditionMatcherPrefPathKey);
+          if (!pref_path) {
+            continue;
+          }
+
+          const auto* const condition =
+              dict.FindString(kWallpaperConditionMatcherKey);
+          if (!condition) {
+            continue;
+          }
+
+          background.condition_matchers.emplace(*pref_path, *condition);
+        }
       }
 
       if (auto* viewbox = wallpaper.FindDict(kViewboxKey)) {
@@ -300,7 +334,7 @@ bool NTPSponsoredImagesData::IsSuperReferral() const {
   return IsValid() && !theme_name.empty();
 }
 
-absl::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundAt(
+std::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundAt(
     size_t campaign_index,
     size_t background_index) {
   DCHECK(campaign_index < campaigns.size() && background_index >= 0 &&
@@ -308,7 +342,7 @@ absl::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundAt(
 
   const auto campaign = campaigns[campaign_index];
   if (!campaign.IsValid())
-    return absl::nullopt;
+    return std::nullopt;
 
   base::Value::Dict data;
   data.Set(kThemeNameKey, theme_name);
@@ -328,6 +362,17 @@ absl::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundAt(
   data.Set(kWallpaperFocalPointYKey,
            campaign.backgrounds[background_index].focal_point.y());
 
+  base::Value::List condition_matchers;
+  for (const auto& [pref_path, condition] :
+       campaign.backgrounds[background_index].condition_matchers) {
+    base::Value::Dict dict;
+    dict.Set(kWallpaperConditionMatcherPrefPathKey, pref_path);
+    dict.Set(kWallpaperConditionMatcherKey, condition);
+    condition_matchers.Append(std::move(dict));
+  }
+  data.Set(kWallpaperConditionMatchersKey, std::move(condition_matchers));
+
+  data.Set(kCampaignIdKey, campaign.campaign_id);
   data.Set(kCreativeInstanceIDKey,
            campaign.backgrounds[background_index].creative_instance_id);
 
@@ -342,7 +387,8 @@ absl::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundAt(
   return data;
 }
 
-absl::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundByAdInfo(
+std::optional<base::Value::Dict>
+NTPSponsoredImagesData::GetBackgroundFromAdInfo(
     const brave_ads::NewTabPageAdInfo& ad_info) {
   // Find campaign
   size_t campaign_index = 0;
@@ -354,7 +400,7 @@ absl::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundByAdInfo(
   if (campaign_index == campaigns.size()) {
     VLOG(0) << "The ad campaign wasn't found in the NTP sponsored images data: "
             << ad_info.campaign_id;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   const auto& sponsored_backgrounds = campaigns[campaign_index].backgrounds;
@@ -368,7 +414,7 @@ absl::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundByAdInfo(
   if (background_index == sponsored_backgrounds.size()) {
     VLOG(0) << "Creative instance wasn't found in NTP sposored images data: "
             << ad_info.creative_instance_id;
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   if (VLOG_IS_ON(0)) {
@@ -381,7 +427,7 @@ absl::optional<base::Value::Dict> NTPSponsoredImagesData::GetBackgroundByAdInfo(
     }
   }
 
-  absl::optional<base::Value::Dict> data =
+  std::optional<base::Value::Dict> data =
       GetBackgroundAt(campaign_index, background_index);
   if (data) {
     data->Set(kWallpaperIDKey, ad_info.placement_id);

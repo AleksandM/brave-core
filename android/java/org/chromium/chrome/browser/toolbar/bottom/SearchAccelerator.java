@@ -22,11 +22,10 @@ import org.chromium.chrome.browser.theme.ThemeColorProvider;
 import org.chromium.chrome.browser.theme.ThemeColorProvider.ThemeColorObserver;
 import org.chromium.chrome.browser.theme.ThemeColorProvider.TintObserver;
 import org.chromium.chrome.browser.theme.ThemeUtils;
+import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
 import org.chromium.ui.widget.ChromeImageButton;
 
-/**
- * The search accelerator.
- */
+/** The search accelerator. */
 class SearchAccelerator extends ChromeImageButton
         implements ThemeColorObserver, TintObserver, IncognitoStateObserver {
     /** The gray pill background behind the search icon. */
@@ -46,8 +45,9 @@ class SearchAccelerator extends ChromeImageButton
 
         mContext = context;
 
-        mBackground = ApiCompatibilityUtils.getDrawable(
-                mContext.getResources(), R.drawable.ntp_search_box);
+        mBackground =
+                ApiCompatibilityUtils.getDrawable(
+                        mContext.getResources(), R.drawable.home_surface_search_box_background);
         mBackground.mutate();
         setBackground(mBackground);
 
@@ -84,7 +84,10 @@ class SearchAccelerator extends ChromeImageButton
     }
 
     @Override
-    public void onTintChanged(ColorStateList tint, int brandedColorScheme) {
+    public void onTintChanged(
+            ColorStateList tint,
+            ColorStateList activityFocusTint,
+            @BrandedColorScheme int brandedColorScheme) {
         ImageViewCompat.setImageTintList(this, tint);
         updateBackground();
     }
@@ -97,9 +100,12 @@ class SearchAccelerator extends ChromeImageButton
     private void updateBackground() {
         if (mThemeColorProvider == null || mIncognitoStateProvider == null) return;
 
-        mBackground.setColorFilter(ThemeUtils.getTextBoxColorForToolbarBackgroundInNonNativePage(
-                                           mContext, mThemeColorProvider.getThemeColor(),
-                                           mIncognitoStateProvider.isIncognitoSelected()),
+        mBackground.setColorFilter(
+                ThemeUtils.getTextBoxColorForToolbarBackgroundInNonNativePage(
+                        mContext,
+                        mThemeColorProvider.getThemeColor(),
+                        mIncognitoStateProvider.isIncognitoSelected(),
+                        false /*isCustomTab*/),
                 PorterDuff.Mode.SRC_IN);
     }
 }

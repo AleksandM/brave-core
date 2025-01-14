@@ -9,40 +9,39 @@ namespace brave_ads {
 
 namespace {
 
-PageTransitionType PageTransitionGetCoreValue(const PageTransitionType type) {
+PageTransitionType PageTransitionGetCoreValue(PageTransitionType type) {
   return static_cast<PageTransitionType>(type & ~kPageTransitionQualifierMask);
 }
 
-PageTransitionType PageTransitionGetQualifier(const PageTransitionType type) {
+PageTransitionType PageTransitionGetQualifier(PageTransitionType type) {
   return static_cast<PageTransitionType>(type & kPageTransitionQualifierMask);
 }
 
 }  // namespace
 
-bool IsNewNavigation(const PageTransitionType type) {
+bool IsNewNavigation(PageTransitionType type) {
   return PageTransitionGetQualifier(type) != kPageTransitionForwardBack &&
          PageTransitionGetCoreValue(type) != kPageTransitionReload;
 }
 
-bool DidUseBackOrFowardButtonToTriggerNavigation(
-    const PageTransitionType type) {
+bool DidUseBackOrFowardButtonToTriggerNavigation(PageTransitionType type) {
   return PageTransitionGetQualifier(type) == kPageTransitionForwardBack;
 }
 
-bool DidUseAddressBarToTriggerNavigation(const PageTransitionType type) {
+bool DidUseAddressBarToTriggerNavigation(PageTransitionType type) {
   return PageTransitionGetQualifier(type) == kPageTransitionFromAddressBar;
 }
 
-bool DidNavigateToHomePage(const PageTransitionType type) {
+bool DidNavigateToHomePage(PageTransitionType type) {
   return PageTransitionGetQualifier(type) == kPageTransitionHomePage;
 }
 
-bool DidTransitionFromExternalApplication(const PageTransitionType type) {
+bool DidTransitionFromExternalApplication(PageTransitionType type) {
   return PageTransitionGetQualifier(type) == kPageTransitionFromAPI;
 }
 
-absl::optional<UserActivityEventType> ToUserActivityEventType(
-    const PageTransitionType type) {
+std::optional<UserActivityEventType> ToUserActivityEventType(
+    PageTransitionType type) {
   const PageTransitionType core_value = PageTransitionGetCoreValue(type);
 
   switch (core_value) {
@@ -79,7 +78,7 @@ absl::optional<UserActivityEventType> ToUserActivityEventType(
     }
 
     default: {
-      return absl::nullopt;
+      return std::nullopt;
     }
   }
 }

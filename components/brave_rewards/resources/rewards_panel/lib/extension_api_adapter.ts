@@ -4,7 +4,6 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 import { Notification } from '../../shared/components/notifications'
-import { GrantInfo } from '../../shared/lib/grant_info'
 import { UserType, userTypeFromString } from '../../shared/lib/user_type'
 import { ProviderPayoutStatus } from '../../shared/lib/provider_payout_status'
 import { RewardsSummaryData } from '../../shared/components/wallet_card'
@@ -22,8 +21,7 @@ import {
   EarningsInfo,
   ExchangeInfo,
   Options,
-  PublisherInfo,
-  Settings
+  PublisherInfo
 } from './interfaces'
 
 import { optional, Optional } from '../../shared/lib/optional'
@@ -39,24 +37,12 @@ export function getRewardsBalance () {
   })
 }
 
-export function getSettings () {
-  return new Promise<Settings>((resolve) => {
-    chrome.braveRewards.getPrefs((prefs) => {
-      resolve({
-        adsEnabled: prefs.adsEnabled,
-        adsPerHour: prefs.adsPerHour,
-        autoContributeEnabled: prefs.autoContributeEnabled,
-        autoContributeAmount: prefs.autoContributeAmount
-      })
-    })
-  })
-}
-
 export function getEarningsInfo () {
   return new Promise<EarningsInfo | null>((resolve) => {
     chrome.braveRewards.getAdsAccountStatement((success, statement) => {
       if (success) {
         resolve({
+          adsReceivedThisMonth: statement.adsReceivedThisMonth,
           minEarningsLastMonth: statement.minEarningsLastMonth,
           maxEarningsLastMonth: statement.maxEarningsLastMonth,
           minEarningsThisMonth: statement.minEarningsThisMonth,
@@ -90,7 +76,6 @@ export function getRewardsParameters () {
       resolve({
         options: {
           externalWalletRegions: regionMap,
-          autoContributeAmounts: parameters.autoContributeChoices,
           vbatDeadline: parameters.vbatDeadline,
           vbatExpired: parameters.vbatExpired
         },
@@ -101,6 +86,18 @@ export function getRewardsParameters () {
         payoutStatus: parameters.payoutStatus
       })
     })
+  })
+}
+
+export function getSelfCustodyInviteDismissed () {
+  return new Promise<boolean>((resolve) => {
+    chrome.braveRewards.selfCustodyInviteDismissed(resolve)
+  })
+}
+
+export function isTermsOfServiceUpdateRequired () {
+  return new Promise<boolean>((resolve) => {
+    chrome.braveRewards.isTermsOfServiceUpdateRequired(resolve)
   })
 }
 
@@ -170,39 +167,6 @@ export function getNotifications () {
         }
       }
       resolve(notifications)
-    })
-  })
-}
-
-function promotionToGrant (promotion: RewardsExtension.Promotion): GrantInfo {
-  return {
-    id: promotion.promotionId,
-    type: promotion.type === 1 ? 'ads' : 'ugp',
-    amount: promotion.amount,
-    createdAt: promotion.createdAt * 1000 || null,
-    claimableUntil: promotion.claimableUntil * 1000 || null,
-    expiresAt: promotion.expiresAt * 1000 || null
-  }
-}
-
-type GrantsUpdatedCallback = (grants: GrantInfo[]) => void
-let grantsUpdatedCallbacks: GrantsUpdatedCallback[] = []
-
-chrome.braveRewards.onPromotions.addListener((result, promotions) => {
-  const grants = promotions.map(promotionToGrant)
-  for (const callback of grantsUpdatedCallbacks) {
-    callback(grants)
-  }
-})
-
-export function onGrantsUpdated (callback: (grants: GrantInfo[]) => void) {
-  grantsUpdatedCallbacks.push(callback)
-}
-
-export function getGrants () {
-  return new Promise<GrantInfo[]>((resolve) => {
-    chrome.braveRewards.fetchPromotions((promotions) => {
-      resolve(promotions.map(promotionToGrant))
     })
   })
 }
@@ -296,6 +260,13 @@ function isPublisherURL (url: string) {
   return parsedURL && /^https?:$/.test(parsedURL.protocol)
 }
 
+function iconURL (url: string) {
+  if (url) {
+    return `chrome://favicon2/?size=64&pageUrl=${encodeURIComponent(url)}`
+  }
+  return ''
+}
+
 function defaultPublisherInfo (url: string): PublisherInfo | null {
   const parsedURL = parseURL(url)
   if (!parsedURL) {
@@ -306,10 +277,9 @@ function defaultPublisherInfo (url: string): PublisherInfo | null {
     id: parsedURL.hostname,
     name: parsedURL.hostname,
     verified: false,
-    icon: origin ? `chrome://favicon/size/64@1x/${parsedURL.origin}` : '',
+    icon: iconURL(parsedURL.origin),
     platform: null,
     attentionScore: 0,
-    autoContributeEnabled: true,
     monthlyTip: 0,
     supportedWalletProviders: []
   }
@@ -370,16 +340,13 @@ export async function getPublisherInfo (tabId: number) {
       break
   }
 
-  const iconPath = String(publisher.favIconUrl || publisher.url || '')
-
   const info: PublisherInfo = {
     id: publisherKey,
     name: String(publisher.name || ''),
     verified,
-    icon: iconPath ? `chrome://favicon/size/64@1x/${iconPath}` : '',
+    icon: iconURL(String(publisher.favIconUrl || publisher.url || '')),
     platform: getPublisherPlatform(String(publisher.provider || '')),
     attentionScore: Number(publisher.percentage) / 100 || 0,
-    autoContributeEnabled: !publisher.excluded,
     monthlyTip: await getMonthlyTipAmount(publisherKey),
     supportedWalletProviders
   }

@@ -31,6 +31,16 @@ URLSanitizerService* URLSanitizerServiceFactory::GetForBrowserContext(
       GetInstance()->GetServiceForBrowserContext(context, true));
 }
 
+#if BUILDFLAG(IS_ANDROID)
+// static
+mojo::PendingRemote<url_sanitizer::mojom::UrlSanitizerService>
+URLSanitizerServiceFactory::GetForContext(content::BrowserContext* context) {
+  return static_cast<URLSanitizerService*>(
+             GetInstance()->GetServiceForBrowserContext(context, true))
+      ->MakeRemote();
+}
+#endif  // # BUILDFLAG(IS_ANDROID)
+
 URLSanitizerServiceFactory::URLSanitizerServiceFactory()
     : BrowserContextKeyedServiceFactory(
           "URLSanitizerService",
@@ -38,13 +48,14 @@ URLSanitizerServiceFactory::URLSanitizerServiceFactory()
 
 URLSanitizerServiceFactory::~URLSanitizerServiceFactory() = default;
 
-KeyedService* URLSanitizerServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+URLSanitizerServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  auto* service = new URLSanitizerService();
+  auto service = std::make_unique<URLSanitizerService>();
   if (g_brave_browser_process &&
       g_brave_browser_process->URLSanitizerComponentInstaller()) {
     g_brave_browser_process->URLSanitizerComponentInstaller()->AddObserver(
-        service);
+        service.get());
   }
   return service;
 }
@@ -55,7 +66,7 @@ bool URLSanitizerServiceFactory::ServiceIsNULLWhileTesting() const {
 
 content::BrowserContext* URLSanitizerServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return chrome::GetBrowserContextRedirectedInIncognito(context);
+  return GetBrowserContextRedirectedInIncognito(context);
 }
 
 }  // namespace brave

@@ -1,42 +1,42 @@
 diff --git a/tools/gritsettings/resource_ids.spec b/tools/gritsettings/resource_ids.spec
-index e929bcf5899140d4ac3b8b75b4cd9a60174431d7..5fa8cfa0c1cb664ebcce65a860d3aeb6da7ba8f7 100644
+index a5b89cfbae1642cb5c714e670d4d76e4b520d961..9f4bd643dd27a7a223b9b0f98caf50e7a8ff47b2 100644
 --- a/tools/gritsettings/resource_ids.spec
 +++ b/tools/gritsettings/resource_ids.spec
-@@ -40,6 +40,9 @@
+@@ -38,6 +38,9 @@
    "chrome/app/chromium_strings.grd": {
-     "messages": [400],
+     "messages": [800],
    },
 +  "chrome/app/brave_strings.grd": {
-+    "messages": [400],
++    "messages": [800],
 +  },
    "chrome/app/google_chrome_strings.grd": {
-     "messages": [400],
+     "messages": [800],
    },
-@@ -231,7 +234,7 @@
-     "includes": [1600],
+@@ -385,7 +388,7 @@
+     "includes": [3900],
    },
-   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/history/resources.grd": {
--    "META": {"sizes": {"includes": [40]}},
-+    "META": {"sizes": {"includes": [44]}},
-     "includes": [1620],
+   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/extensions/resources.grd": {
+-    "META": {"sizes": {"includes": [120],}},
++    "META": {"sizes": {"includes": [123],}},
+     "includes": [3920],
    },
-   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/identity_internals/resources.grd": {
-@@ -342,7 +345,7 @@
-     "includes": [1940],
+   "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/feed/resources.grd": {
+@@ -553,7 +556,7 @@
+     "includes": [4720],
    },
    "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/settings/resources.grd": {
 -    "META": {"sizes": {"includes": [500],}},
 +    "META": {"sizes": {"includes": [650],}},
-     "includes": [1960],
+     "includes": [4740],
    },
    "<(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/settings_shared/resources.grd": {
-@@ -806,6 +809,9 @@
-   "components/components_chromium_strings.grd": {
-     "messages": [3520],
+@@ -919,6 +922,9 @@
+     # Big alignment at start of section.
+     "messages": [7020],
    },
 +  "components/components_brave_strings.grd": {
-+    "messages": [3520],
++    "messages": [7020],
 +  },
    "components/components_google_chrome_strings.grd": {
-     "messages": [3520],
+     "messages": [7020],
    },

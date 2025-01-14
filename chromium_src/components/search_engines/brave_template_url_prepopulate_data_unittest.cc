@@ -1,7 +1,7 @@
-// Copyright 2014 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
-
+/* Copyright (c) 2018 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 #include <stddef.h>
 
 #include <memory>
@@ -15,6 +15,8 @@
 #include "base/values.h"
 #include "brave/components/search_engines/brave_prepopulated_engines.h"
 #include "components/google/core/common/google_switches.h"
+#include "components/prefs/testing_pref_service.h"
+#include "components/search_engines/search_engine_choice/search_engine_choice_service.h"
 #include "components/search_engines/search_engines_pref_names.h"
 #include "components/search_engines/search_terms_data.h"
 #include "components/search_engines/template_url.h"
@@ -27,7 +29,7 @@
 
 namespace {
 
-const char kCountryIDAtInstall[] = "countryid_at_install";
+constexpr char kCountryIDAtInstall[] = "countryid_at_install";
 
 std::string GetHostFromTemplateURLData(const TemplateURLData& data) {
   return TemplateURL(data).url_ref().GetHost(SearchTermsData());
@@ -39,21 +41,17 @@ const PrepopulatedEngine* const kBraveAddedEngines[] = {
     &startpage,
 };
 
-const std::unordered_set<std::wstring> kOverriddenEnginesNames = {L"DuckDuckGo",
-                                                                  L"Qwant"};
-
-std::vector<const PrepopulatedEngine*> GetAllPrepopulatedEngines() {
-  std::vector<const PrepopulatedEngine*> engines =
-      TemplateURLPrepopulateData::GetAllPrepopulatedEngines();
-  engines.insert(engines.end(), std::begin(kBraveAddedEngines),
-                 std::end(kBraveAddedEngines));
-  return engines;
-}
-
+const std::unordered_set<std::u16string_view> kOverriddenEnginesNames = {
+    u"DuckDuckGo", u"Qwant"};
 }  // namespace
 
 class BraveTemplateURLPrepopulateDataTest : public testing::Test {
  public:
+  BraveTemplateURLPrepopulateDataTest()
+      : search_engine_choice_service_(
+            prefs_,
+            &local_state_,
+            /*is_profile_eligible_for_dse_guest_propagation=*/false) {}
   void SetUp() override {
     TemplateURLPrepopulateData::RegisterProfilePrefs(prefs_.registry());
     // Real registration happens in `brave/browser/brave_profile_prefs.cc`
@@ -62,21 +60,36 @@ class BraveTemplateURLPrepopulateDataTest : public testing::Test {
     registry->RegisterIntegerPref(
         prefs::kBraveDefaultSearchVersion,
         TemplateURLPrepopulateData::kBraveCurrentDataVersion);
+
+    const auto engines =
+        TemplateURLPrepopulateData::GetAllPrepopulatedEngines();
+    brave_prepopulated_engines_.insert(brave_prepopulated_engines_.end(),
+                                       engines.begin(), engines.end());
+    brave_prepopulated_engines_.insert(brave_prepopulated_engines_.end(),
+                                       std::begin(kBraveAddedEngines),
+                                       std::end(kBraveAddedEngines));
   }
 
   void CheckForCountry(char digit1, char digit2, int prepopulate_id) {
     prefs_.SetInteger(kCountryIDAtInstall, digit1 << 8 | digit2);
     prefs_.SetInteger(prefs::kBraveDefaultSearchVersion,
                       TemplateURLPrepopulateData::kBraveCurrentDataVersion);
-    size_t default_index;
-    std::vector<std::unique_ptr<TemplateURLData>> t_urls =
-        TemplateURLPrepopulateData::GetPrepopulatedEngines(&prefs_,
-                                                           &default_index);
-    EXPECT_EQ(prepopulate_id, t_urls[default_index]->prepopulate_id);
+    std::unique_ptr<TemplateURLData> fallback_t_url_data =
+        TemplateURLPrepopulateData::GetPrepopulatedFallbackSearch(
+            &prefs_, &search_engine_choice_service_);
+    EXPECT_EQ(fallback_t_url_data->prepopulate_id, prepopulate_id);
+  }
+
+  const base::span<const PrepopulatedEngine* const>
+  GetAllPrepopulatedEngines() {
+    return brave_prepopulated_engines_;
   }
 
  protected:
   sync_preferences::TestingPrefServiceSyncable prefs_;
+  TestingPrefServiceSimple local_state_;
+  search_engines::SearchEngineChoiceService search_engine_choice_service_;
+  std::vector<const PrepopulatedEngine*> brave_prepopulated_engines_;
 };
 
 // Verifies that the set of all prepopulate data doesn't contain entries with
@@ -84,9 +97,9 @@ class BraveTemplateURLPrepopulateDataTest : public testing::Test {
 // engine in the future that Brave already added.
 TEST_F(BraveTemplateURLPrepopulateDataTest, UniqueKeywords) {
   using PrepopulatedEngine = TemplateURLPrepopulateData::PrepopulatedEngine;
-  const std::vector<const PrepopulatedEngine*> all_engines =
-      ::GetAllPrepopulatedEngines();
-  std::set<std::wstring> unique_keywords;
+  const base::span<const PrepopulatedEngine* const> all_engines =
+      GetAllPrepopulatedEngines();
+  std::set<std::u16string_view> unique_keywords;
   for (const PrepopulatedEngine* engine : all_engines) {
     ASSERT_TRUE(unique_keywords.find(engine->keyword) == unique_keywords.end());
     unique_keywords.insert(engine->keyword);
@@ -96,8 +109,8 @@ TEST_F(BraveTemplateURLPrepopulateDataTest, UniqueKeywords) {
 // Verifies that engines we override are used and not the original engines.
 TEST_F(BraveTemplateURLPrepopulateDataTest, OverriddenEngines) {
   using PrepopulatedEngine = TemplateURLPrepopulateData::PrepopulatedEngine;
-  const std::vector<const PrepopulatedEngine*> all_engines =
-      ::GetAllPrepopulatedEngines();
+  const base::span<const PrepopulatedEngine* const> all_engines =
+      GetAllPrepopulatedEngines();
   for (const PrepopulatedEngine* engine : all_engines) {
     if (kOverriddenEnginesNames.count(engine->name) > 0)
       ASSERT_GE(static_cast<unsigned int>(engine->id),
@@ -108,13 +121,13 @@ TEST_F(BraveTemplateURLPrepopulateDataTest, OverriddenEngines) {
 // Verifies that the set of prepopulate data for each locale
 // doesn't contain entries with duplicate ids.
 TEST_F(BraveTemplateURLPrepopulateDataTest, UniqueIDs) {
-  const int kCountryIds[] = {'D' << 8 | 'E', 'F' << 8 | 'R', 'U' << 8 | 'S',
-                             -1};
+  static constexpr int kCountryIds[] = {'D' << 8 | 'E', 'F' << 8 | 'R',
+                                        'U' << 8 | 'S', -1};
 
   for (int country_id : kCountryIds) {
     prefs_.SetInteger(kCountryIDAtInstall, country_id);
     std::vector<std::unique_ptr<TemplateURLData>> urls =
-        GetPrepopulatedEngines(&prefs_, nullptr);
+        GetPrepopulatedEngines(&prefs_, &search_engine_choice_service_);
     std::set<int> unique_ids;
     for (auto& url : urls) {
       ASSERT_TRUE(unique_ids.find(url->prepopulate_id) == unique_ids.end());
@@ -125,10 +138,9 @@ TEST_F(BraveTemplateURLPrepopulateDataTest, UniqueIDs) {
 
 // Verifies that each prepopulate data entry has required fields
 TEST_F(BraveTemplateURLPrepopulateDataTest, ProvidersFromPrepopulated) {
-  size_t default_index;
   std::vector<std::unique_ptr<TemplateURLData>> t_urls =
-      TemplateURLPrepopulateData::GetPrepopulatedEngines(&prefs_,
-                                                         &default_index);
+      TemplateURLPrepopulateData::GetPrepopulatedEngines(
+          &prefs_, &search_engine_choice_service_);
 
   // Ensure all the URLs have the required fields populated.
   ASSERT_FALSE(t_urls.empty());
@@ -182,7 +194,7 @@ TEST_F(BraveTemplateURLPrepopulateDataTest, DefaultSearchProvidersForCanada) {
 
 TEST_F(BraveTemplateURLPrepopulateDataTest,
        DefaultSearchProvidersForAustralia) {
-  CheckForCountry('A', 'U', PREPOPULATED_ENGINE_ID_GOOGLE);
+  CheckForCountry('A', 'U', PREPOPULATED_ENGINE_ID_BRAVE);
 }
 
 TEST_F(BraveTemplateURLPrepopulateDataTest,
@@ -259,4 +271,8 @@ TEST_F(BraveTemplateURLPrepopulateDataTest,
 TEST_F(BraveTemplateURLPrepopulateDataTest,
        DefaultSearchProvidersForSouthKorea) {
   CheckForCountry('K', 'R', PREPOPULATED_ENGINE_ID_NAVER);
+}
+
+TEST_F(BraveTemplateURLPrepopulateDataTest, DefaultSearchProvidersForItaly) {
+  CheckForCountry('I', 'T', PREPOPULATED_ENGINE_ID_BRAVE);
 }

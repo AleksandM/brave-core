@@ -6,7 +6,6 @@
 #ifndef BRAVE_CHROMIUM_SRC_UI_VIEWS_CONTROLS_BUTTON_MD_TEXT_BUTTON_H_
 #define BRAVE_CHROMIUM_SRC_UI_VIEWS_CONTROLS_BUTTON_MD_TEXT_BUTTON_H_
 
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/gfx/vector_icon_types.h"
 #include "ui/views/controls/button/label_button.h"
@@ -36,6 +35,8 @@ namespace views {
 //  - Differenet hover bg color for prominent background
 //  - No shadow for prominent background
 class VIEWS_EXPORT MdTextButton : public MdTextButtonBase {
+  METADATA_HEADER(MdTextButton, views::MdTextButtonBase)
+
  public:
   struct ButtonColors {
     SkColor background_color;
@@ -43,39 +44,43 @@ class VIEWS_EXPORT MdTextButton : public MdTextButtonBase {
     SkColor text_color;
   };
 
-  enum Kind { kOld, kPrimary, kSecondary, kTertiary };
-
-  explicit MdTextButton(PressedCallback callback = PressedCallback(),
-                        const std::u16string& text = std::u16string(),
-                        int button_context = style::CONTEXT_BUTTON_MD);
+  explicit MdTextButton(
+      PressedCallback callback = PressedCallback(),
+      const std::u16string& text = std::u16string(),
+      int button_context = style::CONTEXT_BUTTON_MD,
+      bool use_text_color_for_icon = true,
+      std::unique_ptr<LabelButtonImageContainer> image_container =
+          std::make_unique<SingleImageContainer>());
   MdTextButton(const MdTextButton&) = delete;
   MdTextButton& operator=(const MdTextButton&) = delete;
   ~MdTextButton() override;
 
   SkPath GetHighlightPath() const;
 
-  Kind GetKind() const;
-  void SetKind(Kind kind);
-
   void SetIcon(const gfx::VectorIcon* icon, int icon_size = 0);
 
   bool GetLoading() const;
   void SetLoading(bool loading);
+  void set_use_default_for_tonal(bool use_default) {
+    use_default_for_tonal_ = use_default;
+  }
 
   // MdTextButtonBase:
   void UpdateTextColor() override;
   void UpdateBackgroundColor() override;
   void UpdateColors() override;
 
- protected:
-  // views::Views
-  void OnPaintBackground(gfx::Canvas* canvas) override;
-
  private:
-  ButtonColors GetButtonColors();
+  FRIEND_TEST_ALL_PREFIXES(MdTextButtonTest, ButtonColorsTest);
 
-  Kind kind_ = kOld;
+  ButtonColors GetButtonColors();
+  ui::ButtonStyle GetBraveStyle() const;
+
   bool loading_ = false;
+
+  // By default, use kDefault style for kTonal because
+  // it's not suitable to our style. Use default style instead.
+  bool use_default_for_tonal_ = true;
 
   int icon_size_ = 0;
   raw_ptr<const gfx::VectorIcon> icon_ = nullptr;

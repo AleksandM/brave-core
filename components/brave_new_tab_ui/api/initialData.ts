@@ -5,31 +5,31 @@
 
 import * as preferencesAPI from './preferences'
 import * as statsAPI from './stats'
-import * as privateTabDataAPI from './privateTabData'
 import * as wallpaper from './wallpaper'
 import * as newTabAdsDataAPI from './newTabAdsData'
 import getNTPBrowserAPI from './background'
+import getVPNServiceHandler, * as BraveVPN from '../api/braveVpn'
+import { loadTimeData } from '$web-common/loadTimeData'
 
 export type InitialData = {
   preferences: NewTab.Preferences
   stats: statsAPI.Stats
-  privateTabData: privateTabDataAPI.PrivateTabData
   wallpaperData?: NewTab.Wallpaper
   braveBackgrounds: NewTab.BraveBackground[]
   customImageBackgrounds: NewTab.ImageBackground[]
   braveRewardsSupported: boolean
   braveTalkSupported: boolean
   searchPromotionEnabled: boolean
+  purchasedState: BraveVPN.PurchasedState
 }
 
 export type PreInitialRewardsData = {
   rewardsEnabled: boolean
   userType: string
-  isUnsupportedRegion: boolean
   declaredCountry: string
-  enabledAds: boolean
-  adsSupported: boolean
   needsBrowserUpgradeToServeAds: boolean
+  selfCustodyInviteDismissed: boolean
+  isTermsOfServiceUpdateRequired: boolean
 }
 
 export type InitialRewardsData = {
@@ -51,17 +51,16 @@ export async function getInitialData (): Promise<InitialData> {
     const [
       preferences,
       stats,
-      privateTabData,
       wallpaperData,
       braveRewardsSupported,
       braveTalkSupported,
       searchPromotionEnabled,
       braveBackgrounds,
-      customImageBackgrounds
+      customImageBackgrounds,
+      purchasedState
     ] = await Promise.all([
       preferencesAPI.getPreferences(),
       statsAPI.getStats(),
-      privateTabDataAPI.getPrivateTabData(),
       !isIncognito ? wallpaper.getWallpaper() : Promise.resolve(undefined),
       new Promise((resolve) => {
         chrome.braveRewards.isSupported((supported: boolean) => {
@@ -84,19 +83,28 @@ export async function getInitialData (): Promise<InitialData> {
       }),
       getNTPBrowserAPI().pageHandler.getCustomImageBackgrounds().then(({ backgrounds }) => {
         return backgrounds.map(background => ({ type: 'image', wallpaperImageUrl: background.url.url }))
+      }),
+      new Promise((resolve) => {
+        if (loadTimeData.getBoolean('vpnWidgetSupported')) {
+          getVPNServiceHandler().getPurchasedState().then(({state}) => {
+            resolve(state.state)
+          })
+        } else {
+          resolve(BraveVPN.PurchasedState.NOT_PURCHASED)
+        }
       })
     ])
     console.timeStamp('Got all initial data.')
     return {
       preferences,
       stats,
-      privateTabData,
       wallpaperData,
       braveBackgrounds,
       customImageBackgrounds,
       braveRewardsSupported,
       braveTalkSupported,
-      searchPromotionEnabled
+      searchPromotionEnabled,
+      purchasedState
     } as InitialData
   } catch (e) {
     console.error(e)
@@ -108,24 +116,22 @@ export async function getRewardsPreInitialData (): Promise<PreInitialRewardsData
   const [
     rewardsEnabled,
     userType,
-    isUnsupportedRegion,
     declaredCountry,
-    enabledAds,
-    adsSupported,
+    selfCustodyInviteDismissed,
+    isTermsOfServiceUpdateRequired,
     adsData
   ] = await Promise.all([
     new Promise<boolean>(
       (resolve) => chrome.braveRewards.getRewardsEnabled(resolve)),
     new Promise<string>(
       (resolve) => chrome.braveRewards.getUserType(resolve)),
-    new Promise<boolean>(
-      (resolve) => chrome.braveRewards.isUnsupportedRegion(resolve)),
     new Promise<string>(
       (resolve) => chrome.braveRewards.getDeclaredCountry(resolve)),
     new Promise<boolean>(
-      (resolve) => chrome.braveRewards.getAdsEnabled(resolve)),
+        (resolve) => chrome.braveRewards.selfCustodyInviteDismissed(resolve)),
     new Promise<boolean>(
-      (resolve) => chrome.braveRewards.getAdsSupported(resolve)),
+        (resolve) => chrome.braveRewards.isTermsOfServiceUpdateRequired(resolve)
+    ),
     newTabAdsDataAPI.getNewTabAdsData()
   ])
 
@@ -134,11 +140,10 @@ export async function getRewardsPreInitialData (): Promise<PreInitialRewardsData
   return {
     rewardsEnabled,
     userType,
-    isUnsupportedRegion,
     declaredCountry,
-    enabledAds,
-    adsSupported,
-    needsBrowserUpgradeToServeAds
+    needsBrowserUpgradeToServeAds,
+    selfCustodyInviteDismissed,
+    isTermsOfServiceUpdateRequired
   }
 }
 
@@ -175,9 +180,6 @@ export async function getRewardsInitialData (): Promise<InitialRewardsData> {
       }),
       new Promise(resolve => {
         chrome.braveRewards.getPublishersVisitedCount(resolve)
-      }),
-      new Promise(resolve => {
-        chrome.braveRewards.fetchPromotions(resolve)
       })
     ])
     return {

@@ -18,6 +18,7 @@ import {
   ButtonText,
   LoadIcon
 } from './buy-option-item-styles'
+import { Row } from '../style'
 
 interface Props {
   option: BuyOption
@@ -35,20 +36,22 @@ export const BuyOptionItem = (props: Props) => {
 
   return (
     <StyledWrapper layoutType={layoutType}>
-      <Logo src={icon} />
-      <Content>
-        <Name>{name}</Name>
-        <Description>{description}</Description>
-        <StyledButton onClick={onClick}>
-          {selectedOption === id &&
-            <>
-              <LoadIcon />
-              &nbsp;
-            </>
-          }
-          <ButtonText>{actionText}</ButtonText>
-        </StyledButton>
-      </Content>
+      <Row justifyContent='flex-start'>
+        <Logo src={icon} />
+        <Content>
+          <Name>{name}</Name>
+          <Description>{description}</Description>
+        </Content>
+      </Row>
+      <StyledButton onClick={onClick}>
+        {selectedOption === id && (
+          <>
+            <LoadIcon />
+            &nbsp;
+          </>
+        )}
+        <ButtonText>{actionText}</ButtonText>
+      </StyledButton>
     </StyledWrapper>
   )
 }

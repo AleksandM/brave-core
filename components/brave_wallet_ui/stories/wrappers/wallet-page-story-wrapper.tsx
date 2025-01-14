@@ -15,58 +15,80 @@ import { createMockStore } from '../../utils/test-utils'
 import { WalletActions } from '../../common/actions'
 
 // types
-import { PageState, WalletRoutes, WalletState } from '../../constants/types'
+import {
+  PageState,
+  WalletRoutes,
+  WalletState,
+  UIState
+} from '../../constants/types'
 
-// components
-import { LibContext } from '../../common/context/lib.context'
+// theme
+import LightDarkThemeProvider from '../../../common/BraveCoreThemeProvider'
+import walletDarkTheme from '../../theme/wallet-dark'
+import walletLightTheme from '../../theme/wallet-light'
 
 // Mocks
-import * as Lib from '../../common/async/__mocks__/lib'
-import { ApiProxyContext } from '../../common/context/api-proxy.context'
-import { getMockedAPIProxy } from '../../common/async/__mocks__/bridge'
+import { WalletApiDataOverrides } from '../../constants/testing_types'
+import '../locale'
 
 export interface WalletPageStoryProps {
   walletStateOverride?: Partial<WalletState>
   pageStateOverride?: Partial<PageState>
   accountTabStateOverride?: Partial<AccountsTabState>
+  uiStateOverride?: Partial<UIState>
+  apiOverrides?: WalletApiDataOverrides
+  initialRoute?: WalletRoutes
 }
 
-const mockedProxy = getMockedAPIProxy()
-
-export const WalletPageStory: React.FC<React.PropsWithChildren<WalletPageStoryProps>> = ({
+export const WalletPageStory: React.FC<
+  React.PropsWithChildren<WalletPageStoryProps>
+> = ({
   children,
   pageStateOverride,
   walletStateOverride,
-  accountTabStateOverride
+  accountTabStateOverride,
+  uiStateOverride,
+  apiOverrides,
+  initialRoute
 }) => {
   // redux
   const store = React.useMemo(() => {
-    return createMockStore({
-      accountTabStateOverride,
-      pageStateOverride,
-      walletStateOverride
-    })
+    return createMockStore(
+      {
+        accountTabStateOverride,
+        pageStateOverride,
+        walletStateOverride,
+        uiStateOverride
+      },
+      apiOverrides
+    )
   }, [
     accountTabStateOverride,
     pageStateOverride,
-    walletStateOverride
+    walletStateOverride,
+    uiStateOverride,
+    apiOverrides
   ])
 
   React.useEffect(() => {
-    store && store.dispatch(WalletActions.initialize({}))
+    store && store.dispatch(WalletActions.initialize())
   }, [store])
 
   // render
   return (
-    <MemoryRouter initialEntries={[WalletRoutes.OnboardingWelcome]}>
-      <Provider store={store}>
-        <ApiProxyContext.Provider value={mockedProxy}>
-          <LibContext.Provider value={Lib as any}>
+    <LightDarkThemeProvider
+      initialThemeType={'Light'}
+      dark={walletDarkTheme}
+      light={walletLightTheme}
+    >
+      <MemoryRouter
+        initialEntries={[initialRoute || WalletRoutes.OnboardingWelcome]}
+      >
+        <Provider store={store}>
             {children}
-          </LibContext.Provider>
-        </ApiProxyContext.Provider>
-      </Provider>
-    </MemoryRouter>
+        </Provider>
+      </MemoryRouter>
+    </LightDarkThemeProvider>
   )
 }
 

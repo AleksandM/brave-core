@@ -5,6 +5,8 @@
 
 #include "net/base/proxy_string_util.h"
 
+#include <string_view>
+
 #include "base/strings/strcat.h"
 #include "url/third_party/mozilla/url_parse.h"
 
@@ -13,9 +15,8 @@ namespace {
 
 // Based on FromSchemeHostAndPort() from proxy_server.cc, but to consider auth
 // information when creating a ProxyServer, instead of bailing out.
-ProxyServer CreateProxyServerWithAuthInfo(
-    const ProxyServer::Scheme& scheme,
-    const base::StringPiece& host_and_port) {
+ProxyServer CreateProxyServerWithAuthInfo(const ProxyServer::Scheme& scheme,
+                                          std::string_view host_and_port) {
   url::Component username_component;
   url::Component password_component;
   url::Component hostname_component;
@@ -25,11 +26,11 @@ ProxyServer CreateProxyServerWithAuthInfo(
                       &username_component, &password_component,
                       &hostname_component, &port_component);
 
-  base::StringPiece hostname =
+  std::string_view hostname =
       host_and_port.substr(hostname_component.begin, hostname_component.len);
   if (port_component.is_valid() && !port_component.is_nonempty())
     return ProxyServer();
-  base::StringPiece port =
+  std::string_view port =
       port_component.is_nonempty()
           ? host_and_port.substr(port_component.begin, port_component.len)
           : "";
@@ -65,6 +66,12 @@ std::string GetProxyServerAuthString(const ProxyServer& proxy_server) {
 }
 
 }  // namespace
+
+// Declaring this function prototype is necessary, as the function is referenced
+// in the translation unit before its declaration, which breaks the substitution
+// below without this definition.
+std::string ProxyServerToPacResultElement_ChromiumImpl(
+    const ProxyServer& proxy_server);
 
 }  // namespace net
 

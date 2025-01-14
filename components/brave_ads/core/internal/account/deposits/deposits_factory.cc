@@ -6,43 +6,50 @@
 #include "brave/components/brave_ads/core/internal/account/deposits/deposits_factory.h"
 
 #include "base/notreached.h"
-#include "brave/components/brave_ads/core/confirmation_type.h"
-#include "brave/components/brave_ads/core/internal/account/account_util.h"
+#include "base/types/cxx23_to_underlying.h"
 #include "brave/components/brave_ads/core/internal/account/deposits/cash_deposit.h"
 #include "brave/components/brave_ads/core/internal/account/deposits/non_cash_deposit.h"
+#include "brave/components/brave_ads/core/internal/settings/settings.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads {
 
 std::unique_ptr<DepositInterface> DepositsFactory::Build(
-    const ConfirmationType& confirmation_type) {
-  if (!ShouldRewardUser()) {
+    mojom::ConfirmationType mojom_confirmation_type) {
+  if (!UserHasJoinedBraveRewards()) {
+    // User has not joined Brave Rewards, so all desposits are non-rewardable.
     return std::make_unique<NonCashDeposit>();
   }
 
-  switch (confirmation_type.value()) {
-    case ConfirmationType::kViewed: {
+  switch (mojom_confirmation_type) {
+    case mojom::ConfirmationType::kViewedImpression: {
+      // Rewardable.
       return std::make_unique<CashDeposit>();
     }
 
-    case ConfirmationType::kClicked:
-    case ConfirmationType::kDismissed:
-    case ConfirmationType::kServed:
-    case ConfirmationType::kTransferred:
-    case ConfirmationType::kSaved:
-    case ConfirmationType::kFlagged:
-    case ConfirmationType::kUpvoted:
-    case ConfirmationType::kDownvoted:
-    case ConfirmationType::kConversion: {
+    case mojom::ConfirmationType::kClicked:
+    case mojom::ConfirmationType::kDismissed:
+    case mojom::ConfirmationType::kServedImpression:
+    case mojom::ConfirmationType::kLanded:
+    case mojom::ConfirmationType::kSavedAd:
+    case mojom::ConfirmationType::kMarkAdAsInappropriate:
+    case mojom::ConfirmationType::kLikedAd:
+    case mojom::ConfirmationType::kDislikedAd:
+    case mojom::ConfirmationType::kConversion:
+    case mojom::ConfirmationType::kMediaPlay:
+    case mojom::ConfirmationType::kMedia25:
+    case mojom::ConfirmationType::kMedia100: {
+      // Non-rewardable.
       return std::make_unique<NonCashDeposit>();
     }
 
-    case ConfirmationType::kUndefined: {
-      NOTREACHED_NORETURN();
+    case mojom::ConfirmationType::kUndefined: {
+      break;
     }
   }
 
-  NOTREACHED_NORETURN() << "Unexpected value for ConfirmationType: "
-                        << confirmation_type;
+  NOTREACHED() << "Unexpected value for mojom::ConfirmationType: "
+               << base::to_underlying(mojom_confirmation_type);
 }
 
 }  // namespace brave_ads

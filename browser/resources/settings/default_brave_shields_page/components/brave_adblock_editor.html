@@ -1,6 +1,5 @@
 <style include="cr-shared-style settings-shared iron-flex">
   :host {
-    --brave-primary-hover: #ff977d;
     --cr-input-background-color: var(--google-grey-100);
   }
 
@@ -45,15 +44,12 @@
     font-size: 13px;
     line-height: 1.5;
   }
-
-  .textbox::selection {
-    background-color: var(--brave-primary-hover);
-  }
 </style>
 
 <div>
   <div class="editor-box">
     <textarea
+      disabled="[[!prefs.brave.ad_block.developer_mode.value]]"
       type="text"
       spellcheck="false"
       class="textbox"
@@ -61,7 +57,9 @@
       value="{{value}}">
     </textarea>
   </div>
-  <cr-button on-click="handleSave_">
+  <cr-button
+    on-click="handleSave_"
+    disabled="[[!prefs.brave.ad_block.developer_mode.value]]">
     $i18n{adblockSaveChangesButtonLabel}
   </cr-button>
 </div>

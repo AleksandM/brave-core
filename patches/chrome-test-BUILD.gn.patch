@@ -1,12 +1,12 @@
 diff --git a/chrome/test/BUILD.gn b/chrome/test/BUILD.gn
-index d6515aedf07677dd10c85acecb17877b041abb7f..61ecba1bc1a84619a6679d1707ba429b88ce0798 100644
+index 7a945c6bac66f8f4c579ae3e2bae6f228c453d8f..d9f876283ef21bb8067d824a7fb63d2fd2d6099e 100644
 --- a/chrome/test/BUILD.gn
 +++ b/chrome/test/BUILD.gn
-@@ -393,6 +393,7 @@ static_library("test_support") {
+@@ -602,6 +602,7 @@ static_library("test_support") {
      "//ui/gl",
    ]
  
 +  import("//brave/chromium_src/chrome/test/sources.gni") deps += brave_chromium_src_chrome_test_test_support_deps sources += brave_chromium_src_chrome_test_test_support_sources
+   data = []
    data_deps = []
  
-   if (enable_pdf) {

@@ -7,15 +7,16 @@
 #define BRAVE_BROWSER_NET_URL_CONTEXT_H_
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 
 #include "base/memory/raw_ptr.h"
+#include "content/public/browser/frame_tree_node_id.h"
 #include "net/base/network_anonymization_key.h"
 #include "net/http/http_request_headers.h"
 #include "net/http/http_response_headers.h"
 #include "net/url_request/referrer_policy.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/mojom/loader/resource_load_info.mojom-shared.h"
 #include "url/gurl.h"
 
@@ -73,9 +74,9 @@ struct BraveRequestInfo {
   GURL referrer;
   net::ReferrerPolicy referrer_policy =
       net::ReferrerPolicy::CLEAR_ON_TRANSITION_FROM_SECURE_TO_INSECURE;
-  absl::optional<GURL> new_referrer;
+  std::optional<GURL> new_referrer;
 
-  absl::optional<int> pending_error;
+  std::optional<int> pending_error;
   std::string new_url_spec;
   // TODO(iefremov): rename to shields_up.
   bool allow_brave_shields = true;
@@ -86,26 +87,25 @@ struct BraveRequestInfo {
   bool allow_http_upgradable_resource = false;
   bool allow_referrers = false;
   bool is_webtorrent_disabled = false;
-  int frame_tree_node_id = 0;
+  content::FrameTreeNodeId frame_tree_node_id;
   uint64_t request_identifier = 0;
   size_t next_url_request_index = 0;
 
-  raw_ptr<content::BrowserContext> browser_context = nullptr;
+  raw_ptr<content::BrowserContext, DanglingUntriaged> browser_context = nullptr;
   raw_ptr<net::HttpRequestHeaders> headers = nullptr;
   // The following two sets are populated by |OnBeforeStartTransactionCallback|.
   // |set_headers| contains headers which values were added or modified.
   std::set<std::string> set_headers;
   std::set<std::string> removed_headers;
-  raw_ptr<const net::HttpResponseHeaders> original_response_headers = nullptr;
-  raw_ptr<scoped_refptr<net::HttpResponseHeaders>> override_response_headers =
-      nullptr;
+  raw_ptr<const net::HttpResponseHeaders, DanglingUntriaged>
+      original_response_headers = nullptr;
+  raw_ptr<scoped_refptr<net::HttpResponseHeaders>, DanglingUntriaged>
+      override_response_headers = nullptr;
 
-  raw_ptr<GURL> allowed_unsafe_redirect_url = nullptr;
+  raw_ptr<GURL, DanglingUntriaged> allowed_unsafe_redirect_url = nullptr;
   BraveNetworkDelegateEventType event_type = kUnknownEventType;
   BlockedBy blocked_by = kNotBlocked;
   std::string mock_data_url;
-  GURL ipfs_gateway_url;
-  bool ipfs_auto_fallback = false;
 
   bool ShouldMockRequest() const {
     return blocked_by == kAdBlocked && !mock_data_url.empty();
@@ -124,10 +124,12 @@ struct BraveRequestInfo {
 
   std::string upload_data;
 
+  std::optional<std::string> devtools_request_id;
+
   static std::shared_ptr<brave::BraveRequestInfo> MakeCTX(
       const network::ResourceRequest& request,
       int render_process_id,
-      int frame_tree_node_id,
+      content::FrameTreeNodeId frame_tree_node_id,
       uint64_t request_identifier,
       content::BrowserContext* browser_context,
       std::shared_ptr<brave::BraveRequestInfo> old_ctx);
@@ -137,7 +139,7 @@ struct BraveRequestInfo {
   // We should also remove the one below.
   friend class ::BraveRequestHandler;
 
-  raw_ptr<GURL> new_url = nullptr;
+  raw_ptr<GURL, DanglingUntriaged> new_url = nullptr;
 };
 
 // ResponseListener

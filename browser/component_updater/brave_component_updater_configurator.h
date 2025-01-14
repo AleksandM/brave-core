@@ -7,33 +7,39 @@
 #define BRAVE_BROWSER_COMPONENT_UPDATER_BRAVE_COMPONENT_UPDATER_CONFIGURATOR_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "base/memory/raw_ptr.h"
+#include "base/memory/raw_ref.h"
 #include "base/memory/ref_counted.h"
 #include "base/time/time.h"
 #include "components/component_updater/configurator_impl.h"
 #include "components/update_client/configurator.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 
 class PrefRegistrySimple;
 class PrefService;
 
 namespace base {
 class CommandLine;
+class FilePath;
 }
 
 namespace net {
 class URLRequestContextGetter;
 }
 
-namespace component_updater {
+namespace network {
+class SharedURLLoaderFactory;
+}
 
+namespace component_updater {
 class BraveConfigurator : public update_client::Configurator {
  public:
-  BraveConfigurator(const base::CommandLine* cmdline,
-                    PrefService* pref_service);
+  BraveConfigurator(
+      const base::CommandLine* cmdline,
+      PrefService* pref_service,
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory);
 
   // update_client::Configurator overrides.
   base::TimeDelta InitialDelay() const override;
@@ -55,23 +61,26 @@ class BraveConfigurator : public update_client::Configurator {
       override;
   scoped_refptr<update_client::UnzipperFactory> GetUnzipperFactory() override;
   scoped_refptr<update_client::PatcherFactory> GetPatcherFactory() override;
-  bool EnabledDeltas() const override;
   bool EnabledBackgroundDownloader() const override;
   bool EnabledCupSigning() const override;
   PrefService* GetPrefService() const override;
-  update_client::ActivityDataService* GetActivityDataService() const override;
+  update_client::PersistedData* GetPersistedData() const override;
   bool IsPerUserInstall() const override;
   std::unique_ptr<update_client::ProtocolHandlerFactory>
   GetProtocolHandlerFactory() const override;
-  absl::optional<bool> IsMachineExternallyManaged() const override;
+  std::optional<bool> IsMachineExternallyManaged() const override;
   update_client::UpdaterStateProvider GetUpdaterStateProvider() const override;
+  std::optional<base::FilePath> GetCrxCachePath() const override;
+  bool IsConnectionMetered() const override;
 
  private:
   friend class base::RefCountedThreadSafe<BraveConfigurator>;
 
   ConfiguratorImpl configurator_impl_;
-  raw_ptr<PrefService> pref_service_ =
-      nullptr;  // This member is not owned by this class.
+  const raw_ref<PrefService, DanglingUntriaged>
+      pref_service_;  // This member is not owned by this class.
+  std::unique_ptr<update_client::PersistedData> persisted_data_;
+  scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   scoped_refptr<update_client::NetworkFetcherFactory> network_fetcher_factory_;
   scoped_refptr<update_client::CrxDownloaderFactory> crx_downloader_factory_;
   scoped_refptr<update_client::UnzipperFactory> unzip_factory_;

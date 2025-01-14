@@ -1,11 +1,12 @@
-/* Copyright 2019 The Brave Authors. All rights reserved.
+/* Copyright (c) 2019 The Brave Authors. All rights reserved.
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include "brave/browser/net/resource_context_data.h"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -30,9 +31,9 @@ ResourceContextData::~ResourceContextData() = default;
 void ResourceContextData::StartProxying(
     content::BrowserContext* browser_context,
     int render_process_id,
-    int frame_tree_node_id,
-    mojo::PendingReceiver<network::mojom::URLLoaderFactory> receiver,
-    mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory) {
+    content::FrameTreeNodeId frame_tree_node_id,
+    network::URLLoaderFactoryBuilder& factory_builder,
+    scoped_refptr<base::SequencedTaskRunner> navigation_response_task_runner) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 
   auto* self = static_cast<ResourceContextData*>(
@@ -49,10 +50,10 @@ void ResourceContextData::StartProxying(
 
   auto proxy = std::make_unique<BraveProxyingURLLoaderFactory>(
       *self->request_handler_, browser_context, render_process_id,
-      frame_tree_node_id, std::move(receiver), std::move(target_factory),
-      self->request_id_generator_,
+      frame_tree_node_id, factory_builder, self->request_id_generator_,
       base::BindOnce(&ResourceContextData::RemoveProxy,
-                     self->weak_factory_.GetWeakPtr()));
+                     self->weak_factory_.GetWeakPtr()),
+      navigation_response_task_runner);
 
   self->proxies_.emplace(std::move(proxy));
 }
@@ -62,13 +63,13 @@ BraveProxyingWebSocket* ResourceContextData::StartProxyingWebSocket(
     content::ContentBrowserClient::WebSocketFactory factory,
     const GURL& url,
     const net::SiteForCookies& site_for_cookies,
-    const absl::optional<std::string>& user_agent,
+    const std::optional<std::string>& user_agent,
     mojo::PendingRemote<network::mojom::WebSocketHandshakeClient>
         handshake_client,
     content::BrowserContext* browser_context,
     int render_process_id,
     int frame_id,
-    int frame_tree_node_id,
+    content::FrameTreeNodeId frame_tree_node_id,
     const url::Origin& origin) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 

@@ -192,6 +192,42 @@ TEST(BraveVPNUtilsUnitTest, AlreadyMigrated) {
       brave_vpn::prefs::kBraveVPNLocalStateMigrated));
 }
 
+#if !BUILDFLAG(IS_ANDROID)
+TEST(BraveVPNUtilsUnitTest, SelectedRegionNameMigration) {
+  TestingPrefServiceSimple local_state_pref_service;
+  brave_vpn::RegisterLocalStatePrefs(local_state_pref_service.registry());
+  EXPECT_EQ(1, local_state_pref_service.GetInteger(
+                   brave_vpn::prefs::kBraveVPNRegionListVersion));
+
+  local_state_pref_service.SetString(brave_vpn::prefs::kBraveVPNSelectedRegion,
+                                     "au-au");
+  brave_vpn::MigrateLocalStatePrefs(&local_state_pref_service);
+  EXPECT_EQ("ocn-aus", local_state_pref_service.GetString(
+                           brave_vpn::prefs::kBraveVPNSelectedRegionV2));
+  EXPECT_EQ(2, local_state_pref_service.GetInteger(
+                   brave_vpn::prefs::kBraveVPNRegionListVersion));
+
+  // Check v1's selected region is preserved.
+  EXPECT_EQ("au-au", local_state_pref_service.GetString(
+                         brave_vpn::prefs::kBraveVPNSelectedRegion));
+}
+
+TEST(BraveVPNUtilsUnitTest, InvalidSelectedRegionNameMigration) {
+  TestingPrefServiceSimple local_state_pref_service;
+  brave_vpn::RegisterLocalStatePrefs(local_state_pref_service.registry());
+  EXPECT_EQ(1, local_state_pref_service.GetInteger(
+                   brave_vpn::prefs::kBraveVPNRegionListVersion));
+
+  local_state_pref_service.SetString(brave_vpn::prefs::kBraveVPNSelectedRegion,
+                                     "invalid");
+  brave_vpn::MigrateLocalStatePrefs(&local_state_pref_service);
+  EXPECT_EQ("", local_state_pref_service.GetString(
+                    brave_vpn::prefs::kBraveVPNSelectedRegionV2));
+  EXPECT_EQ(2, local_state_pref_service.GetInteger(
+                   brave_vpn::prefs::kBraveVPNRegionListVersion));
+}
+#endif
+
 TEST(BraveVPNUtilsUnitTest, VPNPaymentsEnv) {
   EXPECT_EQ("production",
             brave_vpn::GetBraveVPNPaymentsEnv(skus::kEnvProduction));
@@ -223,3 +259,59 @@ TEST(BraveVPNUtilsUnitTest, FeatureTest) {
   EXPECT_FALSE(brave_vpn::IsBraveVPNFeatureEnabled());
 #endif
 }
+
+#if BUILDFLAG(IS_MAC)
+TEST(BraveVPNUtilsUnitTest, DefaultPrefsTest) {
+  TestingPrefServiceSimple local_state_pref_service;
+  brave_vpn::RegisterLocalStatePrefs(local_state_pref_service.registry());
+
+  // Off by default.
+  EXPECT_FALSE(local_state_pref_service.GetBoolean(
+      brave_vpn::prefs::kBraveVPNOnDemandEnabled));
+}
+
+TEST(BraveVPNUtilsUnitTest, IsBraveVPNWireguardEnabledMac) {
+  {
+    TestingPrefServiceSimple local_state_pref_service;
+    brave_vpn::RegisterLocalStatePrefs(local_state_pref_service.registry());
+
+    // Prefs are in default state, the wireguard feature is disabled.
+    base::test::ScopedFeatureList scoped_feature_list;
+    scoped_feature_list.InitWithFeatures(
+        {brave_vpn::features::kBraveVPN, skus::features::kSkusFeature}, {});
+    EXPECT_FALSE(local_state_pref_service.GetBoolean(
+        brave_vpn::prefs::kBraveVPNWireguardEnabled));
+    EXPECT_FALSE(
+        brave_vpn::IsBraveVPNWireguardEnabled(&local_state_pref_service));
+
+    // The pref is enabled but the feature is disabled
+    local_state_pref_service.SetBoolean(
+        brave_vpn::prefs::kBraveVPNWireguardEnabled, true);
+    EXPECT_FALSE(
+        brave_vpn::IsBraveVPNWireguardEnabled(&local_state_pref_service));
+  }
+
+  {
+    TestingPrefServiceSimple local_state_pref_service;
+    brave_vpn::RegisterLocalStatePrefs(local_state_pref_service.registry());
+
+    // // Prefs are in default state, the wireguard feature is enabled.
+    base::test::ScopedFeatureList scoped_feature_list;
+    scoped_feature_list.InitWithFeatures(
+        {brave_vpn::features::kBraveVPN, skus::features::kSkusFeature,
+         brave_vpn::features::kBraveVPNEnableWireguardForOSX},
+        {});
+
+    EXPECT_FALSE(local_state_pref_service.GetBoolean(
+        brave_vpn::prefs::kBraveVPNWireguardEnabled));
+    EXPECT_FALSE(
+        brave_vpn::IsBraveVPNWireguardEnabled(&local_state_pref_service));
+
+    // The pref is enabled but the feature is enabled.
+    local_state_pref_service.SetBoolean(
+        brave_vpn::prefs::kBraveVPNWireguardEnabled, true);
+    EXPECT_TRUE(
+        brave_vpn::IsBraveVPNWireguardEnabled(&local_state_pref_service));
+  }
+}
+#endif

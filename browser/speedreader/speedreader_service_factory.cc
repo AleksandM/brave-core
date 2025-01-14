@@ -5,10 +5,12 @@
 
 #include "brave/browser/speedreader/speedreader_service_factory.h"
 
+#include <memory>
+
 #include "base/no_destructor.h"
 #include "brave/components/speedreader/speedreader_service.h"
+#include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/profiles/incognito_helpers.h"
-#include "chrome/browser/profiles/profile.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 
 namespace speedreader {
@@ -19,29 +21,35 @@ SpeedreaderServiceFactory* SpeedreaderServiceFactory::GetInstance() {
   return instance.get();
 }
 
-SpeedreaderService* SpeedreaderServiceFactory::GetForProfile(Profile* profile) {
+SpeedreaderService* SpeedreaderServiceFactory::GetForBrowserContext(
+    content::BrowserContext* browser_context) {
   return static_cast<SpeedreaderService*>(
       SpeedreaderServiceFactory::GetInstance()->GetServiceForBrowserContext(
-          profile, true /*create*/));
+          browser_context, true /*create*/));
 }
 
 SpeedreaderServiceFactory::SpeedreaderServiceFactory()
     : BrowserContextKeyedServiceFactory(
           "SpeedreaderService",
-          BrowserContextDependencyManager::GetInstance()) {}
+          BrowserContextDependencyManager::GetInstance()) {
+  DependsOn(HostContentSettingsMapFactory::GetInstance());
+}
 
 SpeedreaderServiceFactory::~SpeedreaderServiceFactory() = default;
 
-content::BrowserContext*
-SpeedreaderServiceFactory::GetBrowserContextToUse(
+content::BrowserContext* SpeedreaderServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
-  return chrome::GetBrowserContextOwnInstanceInIncognito(context);
+  return GetBrowserContextOwnInstanceInIncognito(context);
 }
 
-KeyedService* SpeedreaderServiceFactory::BuildServiceInstanceFor(
+std::unique_ptr<KeyedService>
+SpeedreaderServiceFactory::BuildServiceInstanceForBrowserContext(
     content::BrowserContext* context) const {
-  return new SpeedreaderService(
-      Profile::FromBrowserContext(context)->GetPrefs());
+  if (!features::IsSpeedreaderEnabled()) {
+    return {};
+  }
+  return std::make_unique<SpeedreaderService>(
+      context, HostContentSettingsMapFactory::GetForProfile(context));
 }
 
 bool SpeedreaderServiceFactory::ServiceIsCreatedWithBrowserContext() const {

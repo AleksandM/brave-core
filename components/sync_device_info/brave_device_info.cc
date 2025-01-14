@@ -5,6 +5,8 @@
 
 #include "brave/components/sync_device_info/brave_device_info.h"
 
+#include <optional>
+
 #include "base/values.h"
 
 namespace syncer {
@@ -20,13 +22,16 @@ BraveDeviceInfo::BraveDeviceInfo(
     const std::string& signin_scoped_device_id,
     const std::string& manufacturer_name,
     const std::string& model_name,
+    const std::string& full_hardware_class,
     base::Time last_updated_timestamp,
     base::TimeDelta pulse_interval,
     bool send_tab_to_self_receiving_enabled,
-    const absl::optional<DeviceInfo::SharingInfo>& sharing_info,
-    const absl::optional<PhoneAsASecurityKeyInfo>& paask_info,
+    sync_pb::SyncEnums_SendTabReceivingType send_tab_to_self_receiving_type,
+    const std::optional<DeviceInfo::SharingInfo>& sharing_info,
+    const std::optional<PhoneAsASecurityKeyInfo>& paask_info,
     const std::string& fcm_registration_token,
-    const ModelTypeSet& interested_data_types,
+    const DataTypeSet& interested_data_types,
+    std::optional<base::Time> floating_workspace_last_signin_timestamp,
     bool is_self_delete_supported)
     : DeviceInfo(guid,
                  client_name,
@@ -38,14 +43,16 @@ BraveDeviceInfo::BraveDeviceInfo(
                  signin_scoped_device_id,
                  manufacturer_name,
                  model_name,
-                 /*full_hardware_class=*/"",
+                 full_hardware_class,
                  last_updated_timestamp,
                  pulse_interval,
                  send_tab_to_self_receiving_enabled,
+                 send_tab_to_self_receiving_type,
                  sharing_info,
                  paask_info,
                  fcm_registration_token,
-                 interested_data_types),
+                 interested_data_types,
+                 floating_workspace_last_signin_timestamp),
       is_self_delete_supported_(is_self_delete_supported) {}
 
 bool BraveDeviceInfo::is_self_delete_supported() const {
@@ -88,6 +95,12 @@ std::string BraveDeviceInfo::GetDeviceTypeString() const {
     case FormFactor::kPhone:
       return "phone";
     case FormFactor::kTablet:
+      return "tablet";
+    case FormFactor::kAutomotive:
+      return "tablet";
+    case FormFactor::kWearable:
+      return "tablet";
+    case FormFactor::kTv:
       return "tablet";
   }
 }

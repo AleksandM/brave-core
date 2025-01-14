@@ -2,14 +2,21 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at https://mozilla.org/MPL/2.0/.
+
+/**
+ *  Note these types are copied from trezor-connect so that an import is
+ *  not needed outside of the untrusted-frame. If you require new additional
+ *  types, visit https://github.com/trezor/connect/blob/develop/src/ts/types/networks/ethereum.d.ts
+ *  where they can be copied from.
+ */
+
 export interface Unsuccessful {
   success: false
-  payload: { error: string, code?: string }
+  payload: { error: string; code?: string }
 }
 
 export interface Success<T> {
   success: true
-  id: number
   payload: T
 }
 
@@ -62,24 +69,6 @@ export interface CommonParams {
   useCardanoDerivation?: boolean
 }
 
-export interface HDNodeResponse {
-  path: number[]
-  serializedPath: string
-  childNum: number
-  xpub: string
-  xpubSegwit?: string
-  chainCode: string
-  publicKey: string
-  fingerprint: number
-  depth: number
-}
-
-export interface EthereumSignedTx {
-  v: string
-  r: string
-  s: string
-}
-
 export interface EthereumSignMessage {
   path: string | number[]
   message: string
@@ -90,9 +79,31 @@ export interface EthereumSignTypedHash {
   path: string | number[]
   domain_separator_hash: string
   message_hash: string
+  metamask_v4_compat: boolean
+  data: EthereumSignTypedDataMessage<EthereumSignTypedDataTypes>
 }
 
-export type MessageSignature = {
-  address: string
-  signature: string
+export interface EthereumSignTypedDataTypeProperty {
+  name: string
+  type: string
+}
+
+export interface EthereumSignTypedDataTypes {
+  EIP712Domain: EthereumSignTypedDataTypeProperty[]
+  [additionalProperties: string]: EthereumSignTypedDataTypeProperty[]
+}
+
+export interface EthereumSignTypedDataMessage<
+  T extends EthereumSignTypedDataTypes
+> {
+  types: T
+  primaryType: keyof T
+  domain: {
+    name?: string
+    version?: string
+    chainId?: number | bigint
+    verifyingContract?: string
+    salt?: ArrayBuffer
+  }
+  message: { [fieldName: string]: any }
 }

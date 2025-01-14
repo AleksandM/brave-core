@@ -3,38 +3,34 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+#include "brave/browser/ui/webui/settings/brave_wallet_handler.h"
+
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-#include "base/json/json_reader.h"
-#include "base/json/json_writer.h"
 #include "base/run_loop.h"
-#include "base/strings/string_number_conversions.h"
-#include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/bind.h"
 #include "base/values.h"
-#include "brave/browser/brave_wallet/json_rpc_service_factory.h"
-#include "brave/browser/ui/webui/settings/brave_wallet_handler.h"
+#include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_constants.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/json_rpc_service.h"
+#include "brave/components/brave_wallet/browser/network_manager.h"
 #include "brave/components/brave_wallet/browser/pref_names.h"
-#include "brave/components/brave_wallet/common/brave_wallet.mojom-forward.h"
-#include "brave/components/brave_wallet/common/brave_wallet.mojom-shared.h"
 #include "brave/components/brave_wallet/common/brave_wallet.mojom.h"
-#include "brave/components/brave_wallet/common/features.h"
+#include "brave/components/brave_wallet/common/common_utils.h"
 #include "brave/components/brave_wallet/common/test_utils.h"
 #include "brave/components/brave_wallet/common/value_conversion_utils.h"
-#include "brave/grit/brave_generated_resources.h"
+#include "chrome/test/base/scoped_testing_local_state.h"
+#include "chrome/test/base/testing_browser_process.h"
 #include "chrome/test/base/testing_profile.h"
-#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/scoped_user_pref_update.h"
-#include "components/prefs/testing_pref_service.h"
-#include "components/prefs/testing_pref_store.h"
-#include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_task_environment.h"
 #include "content/public/test/test_web_ui.h"
@@ -42,10 +38,12 @@
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/l10n/l10n_util.h"
 
 using brave_wallet::mojom::CoinType;
+using testing::Contains;
+using testing::Eq;
+using testing::Not;
 
 namespace {
 
@@ -66,7 +64,8 @@ void UpdateCustomNetworks(PrefService* prefs,
 class TestBraveWalletHandler : public BraveWalletHandler {
  public:
   TestBraveWalletHandler()
-      : shared_url_loader_factory_(
+      : local_state_(TestingBrowserProcess::GetGlobal()),
+        shared_url_loader_factory_(
             base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
                 &url_loader_factory_)) {
     TestingProfile::Builder builder;
@@ -77,11 +76,10 @@ class TestBraveWalletHandler : public BraveWalletHandler {
 
     test_web_ui_.set_web_contents(web_contents_.get());
     set_web_ui(&test_web_ui_);
-    auto* json_rpc_service =
-        brave_wallet::JsonRpcServiceFactory::GetServiceForContext(
-            profile_.get());
-
-    json_rpc_service->SetAPIRequestHelperForTesting(shared_url_loader_factory_);
+    brave_wallet::BraveWalletServiceFactory::GetServiceForContext(
+        profile_.get())
+        ->json_rpc_service()
+        ->SetAPIRequestHelperForTesting(shared_url_loader_factory_);
   }
 
   ~TestBraveWalletHandler() override {
@@ -93,10 +91,10 @@ class TestBraveWalletHandler : public BraveWalletHandler {
                                 const std::string& chain_id) {
     url_loader_factory_.SetInterceptor(base::BindLambdaForTesting(
         [&, network_url, chain_id](const network::ResourceRequest& request) {
-          base::StringPiece request_string(request.request_body->elements()
-                                               ->at(0)
-                                               .As<network::DataElementBytes>()
-                                               .AsStringPiece());
+          std::string_view request_string(request.request_body->elements()
+                                              ->at(0)
+                                              .As<network::DataElementBytes>()
+                                              .AsStringPiece());
           url_loader_factory_.ClearResponses();
           if (request_string.find("eth_chainId") != std::string::npos) {
             url_loader_factory_.AddResponse(
@@ -108,12 +106,12 @@ class TestBraveWalletHandler : public BraveWalletHandler {
   }
 
   std::vector<brave_wallet::mojom::NetworkInfoPtr> GetAllEthCustomChains() {
-    return brave_wallet::GetAllCustomChains(prefs(), CoinType::ETH);
+    return GetNetworkManager()->GetAllCustomChains(CoinType::ETH);
   }
 
   std::vector<brave_wallet::mojom::NetworkInfoPtr> GetAllCustomChains(
       brave_wallet::mojom::CoinType coin) {
-    return brave_wallet::GetAllCustomChains(prefs(), coin);
+    return GetNetworkManager()->GetAllCustomChains(coin);
   }
 
   void RegisterMessages() override {}
@@ -136,11 +134,15 @@ class TestBraveWalletHandler : public BraveWalletHandler {
   content::TestWebUI* web_ui() { return &test_web_ui_; }
   PrefService* prefs() { return profile_->GetPrefs(); }
 
- protected:
-  std::unique_ptr<brave_wallet::JsonRpcService> json_rpc_service_;
+  brave_wallet::NetworkManager* GetNetworkManager() {
+    return brave_wallet::BraveWalletServiceFactory::GetServiceForContext(
+               profile_.get())
+        ->network_manager();
+  }
 
  private:
-  content::BrowserTaskEnvironment browser_task_environment;
+  ScopedTestingLocalState local_state_;
+  content::BrowserTaskEnvironment browser_task_environment_;
   std::unique_ptr<TestingProfile> profile_;
   std::unique_ptr<content::WebContents> web_contents_;
   network::TestURLLoaderFactory url_loader_factory_;
@@ -200,6 +202,21 @@ TEST(TestBraveWalletHandler, ResetChain) {
 
 TEST(TestBraveWalletHandler, AddChain) {
   TestBraveWalletHandler handler;
+
+  auto expected_token = brave_wallet::mojom::BlockchainToken::New();
+  expected_token->coin = brave_wallet::mojom::CoinType::ETH;
+  expected_token->chain_id = "0x999";
+  expected_token->name = "symbol_name";
+  expected_token->symbol = "symbol";
+  expected_token->decimals = 11;
+  expected_token->logo = "https://url1.com";
+  expected_token->visible = true;
+  expected_token->spl_token_program =
+      brave_wallet::mojom::SPLTokenProgram::kUnsupported;
+
+  EXPECT_THAT(brave_wallet::GetAllUserAssets(handler.prefs()),
+              Not(Contains(Eq(std::ref(expected_token)))));
+
   brave_wallet::mojom::NetworkInfo chain1 =
       brave_wallet::GetTestNetworkInfo1("0x999");
   EXPECT_EQ(handler.GetAllEthCustomChains().size(), 0u);
@@ -216,20 +233,8 @@ TEST(TestBraveWalletHandler, AddChain) {
   EXPECT_EQ(handler.GetAllEthCustomChains().size(), 1u);
   EXPECT_EQ(handler.GetAllEthCustomChains()[0], chain1.Clone());
 
-  const auto& assets_pref = handler.prefs()->GetDict(kBraveWalletUserAssets);
-  const base::Value::List& list =
-      *assets_pref.FindListByDottedPath("ethereum.0x999");
-  ASSERT_EQ(list.size(), 1u);
-
-  EXPECT_EQ(*list[0].GetDict().FindString("address"), "");
-  EXPECT_EQ(*list[0].GetDict().FindString("name"), "symbol_name");
-  EXPECT_EQ(*list[0].GetDict().FindString("symbol"), "symbol");
-  EXPECT_EQ(*list[0].GetDict().FindBool("is_erc20"), false);
-  EXPECT_EQ(*list[0].GetDict().FindBool("is_erc721"), false);
-  EXPECT_EQ(*list[0].GetDict().FindBool("is_erc1155"), false);
-  EXPECT_EQ(*list[0].GetDict().FindInt("decimals"), 11);
-  EXPECT_EQ(*list[0].GetDict().FindString("logo"), "https://url1.com");
-  EXPECT_EQ(*list[0].GetDict().FindBool("visible"), true);
+  EXPECT_THAT(brave_wallet::GetAllUserAssets(handler.prefs()),
+              Contains(Eq(std::ref(expected_token))));
 
   base::Value::List args2;
   args2.Append(base::Value("id"));
@@ -300,7 +305,7 @@ TEST(TestBraveWalletHandler, GetNetworkListEth) {
 
   size_t index = 0u;
   for (auto& known_chain :
-       brave_wallet::GetAllKnownChains(handler.prefs(), CoinType::ETH)) {
+       handler.GetNetworkManager()->GetAllKnownChains(CoinType::ETH)) {
     EXPECT_EQ(*brave_wallet::ValueToNetworkInfo(networks[index++]),
               *known_chain);
   }
@@ -325,7 +330,7 @@ TEST(TestBraveWalletHandler, GetNetworkListFilSol) {
 
     size_t index = 0u;
     for (auto& known_chain :
-         brave_wallet::GetAllKnownChains(handler.prefs(), coin)) {
+         handler.GetNetworkManager()->GetAllKnownChains(coin)) {
       EXPECT_EQ(*brave_wallet::ValueToNetworkInfo(networks[index++]),
                 *known_chain);
     }
@@ -357,8 +362,8 @@ TEST(TestBraveWalletHandler, SetDefaultNetwork) {
     ASSERT_TRUE(data.arg3()->is_bool());
     EXPECT_EQ(data.arg3()->GetBool(), true);
 
-    EXPECT_EQ(brave_wallet::GetCurrentChainId(handler.prefs(), CoinType::ETH,
-                                              absl::nullopt),
+    EXPECT_EQ(handler.GetNetworkManager()->GetCurrentChainId(CoinType::ETH,
+                                                             std::nullopt),
               "chain_id2");
   }
   {
@@ -372,8 +377,8 @@ TEST(TestBraveWalletHandler, SetDefaultNetwork) {
     ASSERT_TRUE(data.arg3()->is_bool());
     EXPECT_EQ(data.arg3()->GetBool(), false);
 
-    EXPECT_EQ(brave_wallet::GetCurrentChainId(handler.prefs(), CoinType::ETH,
-                                              absl::nullopt),
+    EXPECT_EQ(handler.GetNetworkManager()->GetCurrentChainId(CoinType::ETH,
+                                                             std::nullopt),
               "chain_id2");
   }
 }

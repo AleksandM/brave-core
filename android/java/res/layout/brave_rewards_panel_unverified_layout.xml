@@ -15,16 +15,11 @@
     android:padding="16dp"
     android:orientation="vertical">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:orientation="horizontal">
-
         <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
+            android:layout_marginBottom="16dp"
             android:orientation="vertical">
 
             <TextView
@@ -40,8 +35,6 @@
                 android:id="@+id/unverified_toggle_sub_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
                 android:fontFamily="sans-serif"
                 android:textColor="@color/rewards_panel_secondary_text_color"
                 android:text="@string/rewards_panel_unverified_switch_off_sub_text"
@@ -49,14 +42,7 @@
 
         </LinearLayout>
 
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/brave_rewards_switch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:theme="@style/BraveRewardsSwitchTheme" />
 
-    </LinearLayout>
 
     <androidx.cardview.widget.CardView
         android:id="@+id/rewards_panel_unverified_on_section"
@@ -69,7 +55,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/rewards_settings_gradient_bg"
+            android:background="@drawable/rewards_wallet_balance_bg"
             android:padding="16dp"
             android:orientation="vertical">
 

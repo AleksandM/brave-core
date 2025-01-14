@@ -5,21 +5,22 @@
 
 #include "brave/components/brave_perf_predictor/browser/named_third_party_registry.h"
 
+#include <optional>
+#include <string_view>
 #include <tuple>
+#include <utility>
 
 #include "base/containers/flat_set.h"
 #include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/strings/string_piece.h"
 #include "base/strings/string_util.h"
 #include "base/task/thread_pool.h"
 #include "base/values.h"
 #include "brave/components/brave_perf_predictor/browser/bandwidth_linreg_parameters.h"
 #include "components/grit/brave_components_resources.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
-#include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/base/resource/resource_bundle.h"
 #include "url/gurl.h"
 
@@ -27,14 +28,16 @@ namespace brave_perf_predictor {
 
 namespace {
 
-std::tuple<base::flat_map<std::string, std::string>,
-           base::flat_map<std::string, std::string>>
-ParseMappings(const base::StringPiece entities, bool discard_irrelevant) {
-  base::flat_map<std::string, std::string> entity_by_domain;
-  base::flat_map<std::string, std::string> entity_by_root_domain;
+std::pair<base::flat_map<std::string, std::string>,
+          base::flat_map<std::string, std::string>>
+ParseMappings(std::string_view entities, bool discard_irrelevant) {
+  std::pair<base::flat_map<std::string, std::string>,
+            base::flat_map<std::string, std::string>>
+      result;
+  auto& [entity_by_domain, entity_by_root_domain] = result;
 
   // Parse the JSON
-  absl::optional<base::Value> document = base::JSONReader::Read(entities);
+  std::optional<base::Value> document = base::JSONReader::Read(entities);
   if (!document || !document->is_list()) {
     LOG(ERROR) << "Cannot parse the third-party entities list";
     return {};
@@ -59,7 +62,7 @@ ParseMappings(const base::StringPiece entities, bool discard_irrelevant) {
       if (!entity_domain_it.is_string()) {
         continue;
       }
-      const base::StringPiece entity_domain(entity_domain_it.GetString());
+      const std::string_view entity_domain(entity_domain_it.GetString());
 
       const auto inserted =
           entity_by_domain.emplace(entity_domain, *entity_name);
@@ -83,11 +86,11 @@ ParseMappings(const base::StringPiece entities, bool discard_irrelevant) {
 
   entity_by_domain.shrink_to_fit();
   entity_by_root_domain.shrink_to_fit();
-  return std::make_tuple(entity_by_domain, entity_by_root_domain);
+  return result;
 }
 
-std::tuple<base::flat_map<std::string, std::string>,
-           base::flat_map<std::string, std::string>>
+std::pair<base::flat_map<std::string, std::string>,
+          base::flat_map<std::string, std::string>>
 ParseFromResource(int resource_id) {
   // TODO(AndriusA): insert trace event here
   SCOPED_UMA_HISTOGRAM_TIMER(
@@ -101,14 +104,14 @@ ParseFromResource(int resource_id) {
 
 }  // namespace
 
-bool NamedThirdPartyRegistry::LoadMappings(const base::StringPiece entities,
+bool NamedThirdPartyRegistry::LoadMappings(std::string_view entities,
                                            bool discard_irrelevant) {
   // Reset previous mappings
   entity_by_domain_.clear();
   entity_by_root_domain_.clear();
   initialized_ = false;
 
-  tie(entity_by_domain_, entity_by_root_domain_) =
+  std::tie(entity_by_domain_, entity_by_root_domain_) =
       ParseMappings(entities, discard_irrelevant);
   if (entity_by_domain_.size() == 0 || entity_by_root_domain_.size() == 0)
     return false;
@@ -118,24 +121,25 @@ bool NamedThirdPartyRegistry::LoadMappings(const base::StringPiece entities,
 }
 
 void NamedThirdPartyRegistry::UpdateMappings(
-    std::tuple<base::flat_map<std::string, std::string>,
-               base::flat_map<std::string, std::string>> entity_mappings) {
-  tie(entity_by_domain_, entity_by_root_domain_) = entity_mappings;
+    std::pair<base::flat_map<std::string, std::string>,
+              base::flat_map<std::string, std::string>> entity_mappings) {
+  std::tie(entity_by_domain_, entity_by_root_domain_) =
+      std::move(entity_mappings);
   VLOG(2) << "Loaded " << entity_by_domain_.size() << " mappings by domain and "
           << entity_by_root_domain_.size() << " by root domain; size";
   initialized_ = true;
 }
 
-absl::optional<std::string> NamedThirdPartyRegistry::GetThirdParty(
-    const base::StringPiece request_url) const {
+std::optional<std::string> NamedThirdPartyRegistry::GetThirdParty(
+    std::string_view request_url) const {
   if (!IsInitialized()) {
     VLOG(2) << "Named Third Party Registry not initialized";
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   const GURL url(request_url);
   if (!url.is_valid())
-    return absl::nullopt;
+    return std::nullopt;
 
   if (url.has_host()) {
     auto domain_entry = entity_by_domain_.find(url.host());
@@ -150,7 +154,7 @@ absl::optional<std::string> NamedThirdPartyRegistry::GetThirdParty(
       return root_domain_entry->second;
   }
 
-  return absl::nullopt;
+  return std::nullopt;
 }
 
 NamedThirdPartyRegistry::NamedThirdPartyRegistry() = default;

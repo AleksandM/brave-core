@@ -4,13 +4,21 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #define ShouldShowPromo ShouldShowPromo_ChromiumImpl
+#define ShouldShowSyncPromo ShouldShowSyncPromo_ChromiumImpl
 #include "src/chrome/browser/signin/signin_promo_util.cc"
+#undef ShouldShowSyncPromo
 #undef ShouldShowPromo
 
 namespace signin {
 
-bool ShouldShowPromo(Profile* profile) {
+bool ShouldShowPromo(Profile& profile, ConsentLevel promo_type) {
   return false;
 }
+
+#if !BUILDFLAG(IS_ANDROID)
+bool ShouldShowSyncPromo(Profile& profile) {
+  return false;
+}
+#endif  // !BUILDFLAG(IS_ANDROID)
 
 }  // namespace signin

@@ -5,8 +5,6 @@
 
 #include "brave/components/brave_ads/core/internal/common/strings/string_conversions_util.h"
 
-#include "base/strings/string_split.h"
-
 namespace brave_ads {
 
 namespace {
@@ -16,24 +14,8 @@ constexpr char kFalse[] = "false";
 
 }  // namespace
 
-std::string BoolToString(const bool value) {
+std::string BoolToString(bool value) {
   return value ? kTrue : kFalse;
-}
-
-std::vector<float> DelimitedStringToVector(const std::string& string,
-                                           const base::StringPiece delimiter) {
-  const std::vector<std::string> string_components = base::SplitString(
-      string, delimiter, base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-
-  std::vector<float> vector_components;
-  vector_components.reserve(string_components.size());
-  for (const auto& string_component : string_components) {
-    double value;
-    base::StringToDouble(string_component, &value);
-    vector_components.push_back(static_cast<float>(value));
-  }
-
-  return vector_components;
 }
 
 }  // namespace brave_ads

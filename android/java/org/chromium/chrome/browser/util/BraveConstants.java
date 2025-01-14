@@ -29,4 +29,10 @@ public final class BraveConstants {
     public static final String INDIA_COUNTRY_CODE = "IN";
 
     public static final String BRAVE_NEWS_PREFERENCES_TYPE = "BraveNewsPreferencesType";
+
+    // Deeplinks
+    public static final String DEEPLINK_ANDROID_PLAYLIST = "deeplink-android-playlist";
+    public static final String DEEPLINK_ANDROID_VPN = "deeplink-android-vpn";
+
+    public static final String YOUTUBE_DOMAIN = "youtube.com";
 }

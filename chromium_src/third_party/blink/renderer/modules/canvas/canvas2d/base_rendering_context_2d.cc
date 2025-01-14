@@ -8,14 +8,37 @@
 #include "base/notreached.h"
 #include "brave/third_party/blink/renderer/core/farbling/brave_session_cache.h"
 #include "third_party/blink/renderer/platform/graphics/image_data_buffer.h"
+#include "third_party/blink/renderer/platform/weborigin/kurl.h"
 
-#define BRAVE_GET_IMAGE_DATA                                                  \
-  if (ExecutionContext* context = ExecutionContext::From(script_state)) {     \
-    SkPixmap image_data_pixmap = image_data->GetSkPixmap();                   \
-    brave::BraveSessionCache::From(*context).PerturbPixels(                   \
-        static_cast<const unsigned char*>(image_data_pixmap.writable_addr()), \
-        image_data_pixmap.computeByteSize());                                 \
+namespace {
+
+bool IsGoogleMaps(const blink::KURL& url) {
+  const auto host = url.Host().ToString();
+  if (!host.StartsWith("google.") && !host.Contains(".google.")) {
+    return false;
   }
+  const auto path = url.GetPath();
+  return path == "/maps" || path.ToString().StartsWith("/maps/");
+}
+
+}  // namespace
+
+#define BRAVE_GET_IMAGE_DATA                                              \
+  if (ExecutionContext* context = ExecutionContext::From(script_state)) { \
+    if (!IsGoogleMaps(context->Url())) {                                  \
+      SkPixmap image_data_pixmap = image_data->GetSkPixmap();             \
+      brave::BraveSessionCache::From(*context).PerturbPixels(             \
+          static_cast<const unsigned char*>(                              \
+              image_data_pixmap.writable_addr()),                         \
+          image_data_pixmap.computeByteSize());                           \
+    }                                                                     \
+  }
+
+#define BRAVE_BASE_RENDERING_CONTEXT_2D_MEASURE_TEXT      \
+  if (!brave::AllowFingerprinting(                        \
+          GetTopExecutionContext(),                       \
+          ContentSettingsType::BRAVE_WEBCOMPAT_LANGUAGE)) \
+    return MakeGarbageCollected<TextMetrics>();
 
 #define BRAVE_GET_IMAGE_DATA_PARAMS ScriptState *script_state,
 #define getImageData getImageData_Unused
@@ -23,12 +46,14 @@
 #undef getImageData
 #undef BRAVE_GET_IMAGE_DATA_PARAMS
 #undef BRAVE_GET_IMAGE_DATA
+#undef BRAVE_BASE_RENDERING_CONTEXT_2D_MEASURE_TEXT
 
 namespace {
 
 bool AllowFingerprintingFromScriptState(blink::ScriptState* script_state) {
   return brave::AllowFingerprinting(
-      blink::ExecutionContext::From(script_state));
+      blink::ExecutionContext::From(script_state),
+      ContentSettingsType::BRAVE_WEBCOMPAT_CANVAS);
 }
 
 }  // namespace
@@ -42,7 +67,6 @@ ImageData* BaseRenderingContext2D::getImageData(
     int sh,
     ExceptionState& exception_state) {
   NOTREACHED();
-  return nullptr;
 }
 
 ImageData* BaseRenderingContext2D::getImageData(
@@ -53,7 +77,6 @@ ImageData* BaseRenderingContext2D::getImageData(
     ImageDataSettings* image_data_settings,
     ExceptionState& exception_state) {
   NOTREACHED();
-  return nullptr;
 }
 
 ImageData* BaseRenderingContext2D::getImageDataInternal(
@@ -64,7 +87,6 @@ ImageData* BaseRenderingContext2D::getImageDataInternal(
     ImageDataSettings* image_data_settings,
     ExceptionState& exception_state) {
   NOTREACHED();
-  return nullptr;
 }
 
 ImageData* BaseRenderingContext2D::getImageDataInternal_Unused(
@@ -75,7 +97,6 @@ ImageData* BaseRenderingContext2D::getImageDataInternal_Unused(
     ImageDataSettings* image_data_settings,
     ExceptionState& exception_state) {
   NOTREACHED();
-  return nullptr;
 }
 
 ImageData* BaseRenderingContext2D::getImageData(
@@ -104,20 +125,20 @@ ImageData* BaseRenderingContext2D::getImageData(
 bool BaseRenderingContext2D::isPointInPath(ScriptState* script_state,
                                            const double x,
                                            const double y,
-                                           const String& winding_rule_string) {
+                                           const V8CanvasFillRule& winding) {
   if (!AllowFingerprintingFromScriptState(script_state))
     return false;
-  return isPointInPath(x, y, winding_rule_string);
+  return isPointInPath(x, y, winding);
 }
 
 bool BaseRenderingContext2D::isPointInPath(ScriptState* script_state,
                                            Path2D* dom_path,
                                            const double x,
                                            const double y,
-                                           const String& winding_rule_string) {
+                                           const V8CanvasFillRule& winding) {
   if (!AllowFingerprintingFromScriptState(script_state))
     return false;
-  return isPointInPath(dom_path, x, y, winding_rule_string);
+  return isPointInPath(dom_path, x, y, winding);
 }
 
 bool BaseRenderingContext2D::isPointInStroke(ScriptState* script_state,

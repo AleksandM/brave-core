@@ -6,67 +6,43 @@
 import("//mojo/public/tools/bindings/mojom.gni")
 
 mojom("mojom") {
+  generate_java = true
+
   sources = [
+    "rewards.mojom",
+    "rewards_database.mojom",
+  ]
+
+  public_deps = [ "//mojo/public/mojom/base" ]
+}
+
+mojom("engine") {
+  sources = [ "rewards_engine.mojom" ]
+
+  public_deps = [ "//mojo/public/mojom/base" ]
+
+  deps = [ ":mojom" ]
+}
+
+mojom("core") {
+  sources = [ "rewards_core.mojom" ]
+
+  public_deps = [ "//mojo/public/mojom/base" ]
+
+  deps = [ ":mojom" ]
+}
+
+mojom("webui") {
+  sources = [
+    "rewards_page.mojom",
     "rewards_panel.mojom",
-    "tip_panel.mojom",
+    "rewards_tip_panel.mojom",
   ]
-
-  deps = [
-    ":ledger_interfaces",
-    ":ledger_types",
-  ]
-
-  public_deps = [ "//mojo/public/mojom/base" ]
-}
-
-mojom("ledger_interfaces") {
-  generate_java = true
-  sources = [
-    "ledger.mojom",
-    "ledger_database.mojom",
-    "ledger_endpoints.mojom",
-  ]
-
-  public_deps = [ "//mojo/public/mojom/base" ]
-}
-
-mojom("ledger_types") {
-  generate_java = true
-  sources = [ "ledger_types.mojom" ]
-
-  cpp_typemaps = [
-    {
-      types = [
-        {
-          mojom = "brave_rewards.mojom.ConnectExternalWalletResult"
-          cpp = "base::expected<void, mojom::ConnectExternalWalletError>"
-          move_only = true
-        },
-        {
-          mojom = "brave_rewards.mojom.FetchBalanceResult"
-          cpp = "base::expected<mojom::BalancePtr, mojom::FetchBalanceError>"
-          move_only = true
-        },
-        {
-          mojom = "brave_rewards.mojom.GetExternalWalletResult"
-          cpp = "base::expected<mojom::ExternalWalletPtr, mojom::GetExternalWalletError>"
-          move_only = true
-        },
-      ]
-
-      traits_headers = [ "ledger_types_mojom_traits.h" ]
-      traits_sources = [ "ledger_types_mojom_traits.cc" ]
-    },
-  ]
-}
-
-mojom("interfaces") {
-  sources = [ "bat_ledger.mojom" ]
 
   public_deps = [ "//mojo/public/mojom/base" ]
 
   deps = [
-    "//brave/components/brave_rewards/common/mojom:ledger_interfaces",
-    "//brave/components/brave_rewards/common/mojom:ledger_types",
+    ":mojom",
+    "//brave/components/services/bat_ads/public/interfaces",
   ]
 }

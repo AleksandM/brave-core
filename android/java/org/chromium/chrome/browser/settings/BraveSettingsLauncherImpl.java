@@ -13,41 +13,49 @@ import android.os.Bundle;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import org.chromium.chrome.browser.browsing_data.BraveClearBrowsingDataFragmentAdvanced;
+import org.chromium.chrome.browser.browsing_data.ClearBrowsingDataFragmentAdvanced;
 import org.chromium.chrome.browser.download.settings.BraveDownloadSettings;
 import org.chromium.chrome.browser.download.settings.DownloadSettings;
 import org.chromium.chrome.browser.safe_browsing.settings.BraveStandardProtectionSettingsFragment;
 import org.chromium.chrome.browser.safe_browsing.settings.StandardProtectionSettingsFragment;
 
-public class BraveSettingsLauncherImpl extends SettingsLauncherImpl {
+public class BraveSettingsLauncherImpl extends SettingsNavigationImpl {
     public BraveSettingsLauncherImpl() {
         super();
     }
 
     @Override
-    public void launchSettingsActivity(Context context,
-            @Nullable Class<? extends Fragment> fragment, @Nullable Bundle fragmentArgs) {
+    public void startSettings(
+            Context context,
+            @Nullable Class<? extends Fragment> fragment,
+            @Nullable Bundle fragmentArgs) {
         if (fragment != null) {
             // Substitute with our version of class
             if (fragment.equals(StandardProtectionSettingsFragment.class)) {
                 fragment = BraveStandardProtectionSettingsFragment.class;
             } else if (fragment.equals(DownloadSettings.class)) {
                 fragment = BraveDownloadSettings.class;
+            } else if (fragment.equals(ClearBrowsingDataFragmentAdvanced.class)) {
+                fragment = BraveClearBrowsingDataFragmentAdvanced.class;
             }
         }
-        super.launchSettingsActivity(context, fragment, fragmentArgs);
+        super.startSettings(context, fragment, fragmentArgs);
     }
 
     @Override
-    public Intent createSettingsActivityIntent(
-            Context context, @Nullable String fragmentName, @Nullable Bundle fragmentArgs) {
-        Intent intent = super.createSettingsActivityIntent(context, fragmentName, fragmentArgs);
+    public Intent createSettingsIntent(
+            Context context,
+            @Nullable Class<? extends Fragment> fragment,
+            @Nullable Bundle fragmentArgs) {
+        Intent intent = super.createSettingsIntent(context, fragment, fragmentArgs);
         intent.setClass(context, BraveSettingsActivity.class);
         if (!(context instanceof Activity)) {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         }
-        if (fragmentName != null) {
-            intent.putExtra(SettingsActivity.EXTRA_SHOW_FRAGMENT, fragmentName);
+        if (fragment != null) {
+            intent.putExtra(SettingsActivity.EXTRA_SHOW_FRAGMENT, fragment.getName());
         }
         if (fragmentArgs != null) {
             intent.putExtra(SettingsActivity.EXTRA_SHOW_FRAGMENT_ARGUMENTS, fragmentArgs);

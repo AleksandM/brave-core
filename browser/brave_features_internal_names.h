@@ -9,14 +9,11 @@
 #include "brave/components/brave_vpn/common/buildflags/buildflags.h"
 #include "build/build_config.h"
 
-constexpr char kPlaylistFeatureInternalName[] = "playlist";
-constexpr char kPlaylistFakeUAFeatureInternalName[] = "playlist-fake-ua";
-#if BUILDFLAG(ENABLE_BRAVE_VPN)
-constexpr char kBraveVPNFeatureInternalName[] = "brave-vpn";
-#if BUILDFLAG(IS_WIN)
-constexpr char kBraveVPNDnsFeatureInternalName[] = "brave-vpn-dns";
-constexpr char kBraveVPNWireguardFeatureInternalName[] = "brave-vpn-wireguard";
-#endif
+inline constexpr char kPlaylistFeatureInternalName[] = "playlist";
+inline constexpr char kPlaylistFakeUAFeatureInternalName[] = "playlist-fake-ua";
+
+#if !BUILDFLAG(IS_ANDROID)
+inline constexpr char kSplitViewFeatureInternalName[] = "brave-split-view";
 #endif
 
 #endif  // BRAVE_BROWSER_BRAVE_FEATURES_INTERNAL_NAMES_H_

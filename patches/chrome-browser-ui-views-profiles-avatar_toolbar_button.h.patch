@@ -1,9 +1,9 @@
 diff --git a/chrome/browser/ui/views/profiles/avatar_toolbar_button.h b/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
-index d7406d949b6c5b7baabce4b86612333cdd31cfa1..1c13ab565dd6f68218110d410956fcd981308ec4 100644
+index 55feb2df5d3cbd6b29db7e4029ec43306cc2d5b6..bf3509a5a27466db486bd5761beb3ab26581e391 100644
 --- a/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
 +++ b/chrome/browser/ui/views/profiles/avatar_toolbar_button.h
-@@ -68,6 +68,7 @@ class AvatarToolbarButton : public ToolbarButton {
-   static void SetIPHMinDelayAfterCreationForTesting(base::TimeDelta delay);
+@@ -144,6 +144,7 @@ class AvatarToolbarButton : public ToolbarButton {
+   CreateScopedZeroDelayOverrideSigninPendingTextForTesting();
  
   private:
 +  BRAVE_AVATAR_BUTTON_H

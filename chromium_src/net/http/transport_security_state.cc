@@ -5,23 +5,16 @@
 
 #include "net/http/transport_security_state.h"
 
+#include <optional>
+
+#include "base/strings/strcat.h"
 #include "build/build_config.h"
 #include "net/base/network_anonymization_key.h"
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "url/gurl.h"
 #include "url/url_util.h"
 
-#if !BUILDFLAG(IS_ANDROID)
-
 #define BRAVE_ENABLE_STATIC_PINS enable_static_pins_ = true;
-
-#else
-
-// Leave static pins disabled on Android and iOS, like upstream.
-#define BRAVE_ENABLE_STATIC_PINS \
-  {}
-
-#endif
 
 #define TransportSecurityState TransportSecurityState_ChromiumImpl
 
@@ -94,10 +87,10 @@ TransportSecurityState::HashedHost GetHSTSPartitionHash(
 // HSTS state storage. Check top frame site for equality with site for cookies,
 // don't store HSTS if it differs. IsolationInfo is not available everywhere,
 // that's why we're using it only when parsing new HSTS state.
-absl::optional<TransportSecurityState::HashedHost>
-GetPartitionHashForAddingHSTS(const IsolationInfo& isolation_info) {
+std::optional<TransportSecurityState::HashedHost> GetPartitionHashForAddingHSTS(
+    const IsolationInfo& isolation_info) {
   if (!base::FeatureList::IsEnabled(features::kBravePartitionHSTS)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   // If the top frame scheme is secure and SiteForCookies doesn't match
@@ -113,24 +106,27 @@ GetPartitionHashForAddingHSTS(const IsolationInfo& isolation_info) {
   return GetHSTSPartitionHash(isolation_info.network_anonymization_key());
 }
 
-// Use NetworkIsolationKey to create PartitionHash for accessing/storing data.
-absl::optional<TransportSecurityState::HashedHost> GetPartitionHashForHSTS(
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data.
+std::optional<TransportSecurityState::HashedHost> GetPartitionHashForHSTS(
     const NetworkAnonymizationKey& network_anonymization_key) {
   if (!base::FeatureList::IsEnabled(features::kBravePartitionHSTS)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
   return GetHSTSPartitionHash(network_anonymization_key);
 }
 
-// Use host-bound NetworkIsolationKey in cases when no NetworkIsolationKey is
-// available. Such cases may include net-internals page, PasswordManager.
-// All network::NetworkContext HSTS-related public methods will use this.
-absl::optional<TransportSecurityState::HashedHost>
-GetHostBoundPartitionHashForHSTS(const std::string& host) {
+// Use host-bound NetworkAnonymizationKey in cases when no
+// NetworkAnonymizationKey is available. Such cases may include net-internals
+// page, PasswordManager. All network::NetworkContext HSTS-related public
+// methods will use this.
+std::optional<TransportSecurityState::HashedHost>
+GetHostBoundPartitionHashForHSTS(std::string_view host) {
   if (!base::FeatureList::IsEnabled(features::kBravePartitionHSTS)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
-  SchemefulSite schemeful_site(url::Origin::Create(GURL("https://" + host)));
+  SchemefulSite schemeful_site(
+      url::Origin::Create(GURL(base::StrCat({"https://", host}))));
   auto network_anonymization_key =
       net::NetworkAnonymizationKey::CreateFromFrameSite(schemeful_site,
                                                         schemeful_site);
@@ -139,6 +135,20 @@ GetHostBoundPartitionHashForHSTS(const std::string& host) {
 
 }  // namespace
 
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data before calling Chromium implementation
+SSLUpgradeDecision TransportSecurityState::GetSSLUpgradeDecision(
+    const NetworkAnonymizationKey& network_anonymization_key,
+    const std::string& host,
+    const NetLogWithSource& net_log) {
+  auto auto_reset_partition_hash = enabled_sts_hosts_.SetScopedPartitionHash(
+      GetPartitionHashForHSTS(network_anonymization_key));
+  return TransportSecurityState_ChromiumImpl::GetSSLUpgradeDecision(host,
+                                                                    net_log);
+}
+
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data before calling Chromium implementation
 bool TransportSecurityState::ShouldSSLErrorsBeFatal(
     const NetworkAnonymizationKey& network_anonymization_key,
     const std::string& host) {
@@ -148,6 +158,8 @@ bool TransportSecurityState::ShouldSSLErrorsBeFatal(
   return TransportSecurityState_ChromiumImpl::ShouldSSLErrorsBeFatal(host);
 }
 
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data before calling Chromium implementation
 bool TransportSecurityState::ShouldUpgradeToSSL(
     const NetworkAnonymizationKey& network_anonymization_key,
     const std::string& host,
@@ -158,9 +170,11 @@ bool TransportSecurityState::ShouldUpgradeToSSL(
   return TransportSecurityState_ChromiumImpl::ShouldUpgradeToSSL(host, net_log);
 }
 
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data before calling Chromium implementation
 bool TransportSecurityState::AddHSTSHeader(const IsolationInfo& isolation_info,
-                                           const std::string& host,
-                                           const std::string& value) {
+                                           std::string_view host,
+                                           std::string_view value) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto auto_reset_partition_hash = enabled_sts_hosts_.SetScopedPartitionHash(
       GetPartitionHashForAddingHSTS(isolation_info));
@@ -171,7 +185,9 @@ bool TransportSecurityState::AddHSTSHeader(const IsolationInfo& isolation_info,
   return TransportSecurityState_ChromiumImpl::AddHSTSHeader(host, value);
 }
 
-void TransportSecurityState::AddHSTS(const std::string& host,
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data before calling Chromium implementation
+void TransportSecurityState::AddHSTS(std::string_view host,
                                      const base::Time& expiry,
                                      bool include_subdomains) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -181,6 +197,8 @@ void TransportSecurityState::AddHSTS(const std::string& host,
                                                include_subdomains);
 }
 
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data before calling Chromium implementation
 bool TransportSecurityState::ShouldSSLErrorsBeFatal(const std::string& host) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
   auto auto_reset_partition_hash = enabled_sts_hosts_.SetScopedPartitionHash(
@@ -188,6 +206,8 @@ bool TransportSecurityState::ShouldSSLErrorsBeFatal(const std::string& host) {
   return TransportSecurityState_ChromiumImpl::ShouldSSLErrorsBeFatal(host);
 }
 
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data before calling Chromium implementation
 bool TransportSecurityState::ShouldUpgradeToSSL(
     const std::string& host,
     const NetLogWithSource& net_log) {
@@ -197,6 +217,8 @@ bool TransportSecurityState::ShouldUpgradeToSSL(
   return TransportSecurityState_ChromiumImpl::ShouldUpgradeToSSL(host, net_log);
 }
 
+// Use NetworkAnonymizationKey to create PartitionHash for accessing/storing
+// data before calling Chromium implementation
 bool TransportSecurityState::GetDynamicSTSState(const std::string& host,
                                                 STSState* result) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);

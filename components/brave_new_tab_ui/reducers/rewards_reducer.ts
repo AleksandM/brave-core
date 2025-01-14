@@ -1,4 +1,5 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
+/* Copyright (c) 2020 The Brave Authors. All rights reserved.
+ * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
@@ -11,11 +12,6 @@ const rewardsReducer: Reducer<NewTab.State | undefined> = (state: NewTab.State, 
   const payload = action.payload
 
   switch (action.type) {
-    case types.ON_ADS_ENABLED:
-      state = { ...state }
-      state.rewardsState.enabledAds = payload.enabled
-      break
-
     case types.ON_ADS_ACCOUNT_STATEMENT:
       state = { ...state }
       state.rewardsState.adsAccountStatement = payload.adsAccountStatement
@@ -32,46 +28,6 @@ const rewardsReducer: Reducer<NewTab.State | undefined> = (state: NewTab.State, 
       const dismissedNotifications = state.rewardsState.dismissedNotifications
       dismissedNotifications.push(payload.id)
       state.rewardsState.dismissedNotifications = dismissedNotifications
-
-      state.rewardsState.promotions = state.rewardsState.promotions.filter((promotion) => {
-        return promotion.promotionId !== payload.id
-      })
-      break
-
-    case types.ON_PROMOTIONS: {
-      if (action.payload.result === 1) {
-        break
-      }
-
-      state = { ...state }
-      const { rewardsState } = state
-      const dismissedNotifications = rewardsState.dismissedNotifications || []
-
-      rewardsState.promotions = payload.promotions.filter((promotion: any) => {
-        return !dismissedNotifications.includes(promotion.promotionId)
-      })
-
-      break
-    }
-
-    case types.ON_PROMOTION_FINISH:
-      if (payload.result !== 0) {
-        break
-      }
-
-      if (!state.rewardsState.promotions) {
-        state.rewardsState.promotions = []
-      }
-
-      state = { ...state }
-      const oldNotifications = state.rewardsState.dismissedNotifications
-
-      oldNotifications.push(payload.promotion.promotionId)
-      state.rewardsState.dismissedNotifications = oldNotifications
-
-      state.rewardsState.promotions = state.rewardsState.promotions.filter((promotion: NewTab.Promotion) => {
-        return promotion.promotionId !== payload.promotion.promotionId
-      })
       break
 
     case types.ON_BALANCE:
@@ -87,11 +43,10 @@ const rewardsReducer: Reducer<NewTab.State | undefined> = (state: NewTab.State, 
           ...state.rewardsState,
           rewardsEnabled: preInitialRewardsDataPayload.rewardsEnabled,
           userType: preInitialRewardsDataPayload.userType,
-          isUnsupportedRegion: preInitialRewardsDataPayload.isUnsupportedRegion,
           declaredCountry: preInitialRewardsDataPayload.declaredCountry,
-          enabledAds: preInitialRewardsDataPayload.enabledAds,
-          adsSupported: preInitialRewardsDataPayload.adsSupported,
-          needsBrowserUpgradeToServeAds: preInitialRewardsDataPayload.needsBrowserUpgradeToServeAds
+          needsBrowserUpgradeToServeAds: preInitialRewardsDataPayload.needsBrowserUpgradeToServeAds,
+          selfCustodyInviteDismissed: preInitialRewardsDataPayload.selfCustodyInviteDismissed,
+          isTermsOfServiceUpdateRequired: preInitialRewardsDataPayload.isTermsOfServiceUpdateRequired
         }
       }
       break
@@ -126,8 +81,7 @@ const rewardsReducer: Reducer<NewTab.State | undefined> = (state: NewTab.State, 
         ...state,
         rewardsState: {
           ...state.rewardsState,
-          rewardsEnabled: false,
-          enabledAds: false
+          rewardsEnabled: false
         }
       }
       break

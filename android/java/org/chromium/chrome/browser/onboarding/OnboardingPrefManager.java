@@ -12,29 +12,29 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 
 import org.chromium.base.ContextUtils;
+import org.chromium.base.Log;
 import org.chromium.chrome.browser.BraveAdsNativeHelper;
+import org.chromium.chrome.browser.app.BraveActivity;
+import org.chromium.chrome.browser.app.BraveActivity.BraveActivityNotFoundException;
 import org.chromium.chrome.browser.notifications.BraveOnboardingNotification;
 import org.chromium.chrome.browser.notifications.retention.RetentionNotificationUtil;
-import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.profiles.ProfileManager;
+import org.chromium.misc_metrics.mojom.MiscAndroidMetrics;
 
 import java.util.Calendar;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Provides information regarding onboarding.
  */
 public class OnboardingPrefManager {
+    private static final String TAG = "OnboardingPrefMgr";
+
     private static final String PREF_ONBOARDING = "onboarding";
     private static final String PREF_P3A_ONBOARDING = "p3a_onboarding";
-    private static final String PREF_CROSS_PROMO_MODAL = "cross_promo_modal";
     private static final String PREF_ONBOARDING_V2 = "onboarding_v2";
-    private static final String PREF_NEXT_ONBOARDING_DATE = "next_onboarding_date";
-    private static final String PREF_NEXT_CROSS_PROMO_MODAL_DATE = "next_cross_promo_modal_date";
     private static final String PREF_SEARCH_ENGINE_ONBOARDING = "search_engine_onboarding";
-    private static final String PREF_SHOW_DEFAULT_BROWSER_MODAL_AFTER_P3A =
-            "show_default_browser_modal_after_p3a";
     public static final String PREF_BRAVE_STATS = "brave_stats";
     public static final String PREF_BRAVE_STATS_NOTIFICATION = "brave_stats_notification";
     public static final String FROM_NOTIFICATION = "from_notification";
@@ -63,7 +63,7 @@ public class OnboardingPrefManager {
     public static final int EXISTING_USER_REWARDS_OFF_ONBOARDING = 1;
     public static final int EXISTING_USER_REWARDS_ON_ONBOARDING = 2;
 
-    private static boolean isOnboardingNotificationShown;
+    private static boolean sIsOnboardingNotificationShown;
 
     public static boolean isNotification;
 
@@ -168,6 +168,15 @@ public class OnboardingPrefManager {
         SharedPreferences.Editor sharedPreferencesEditor = mSharedPreferences.edit();
         sharedPreferencesEditor.putBoolean(PREF_BRAVE_STATS, enabled);
         sharedPreferencesEditor.apply();
+        try {
+            BraveActivity activity = BraveActivity.getBraveActivity();
+            MiscAndroidMetrics miscAndroidMetrics = activity.getMiscAndroidMetrics();
+            if (miscAndroidMetrics != null) {
+                miscAndroidMetrics.recordPrivacyHubEnabledStatus(enabled);
+            }
+        } catch (BraveActivityNotFoundException e) {
+            Log.e(TAG, "Could not report privacy hub enabled change to P3A: " + e);
+        }
     }
 
     public boolean isBraveStatsNotificationEnabled() {
@@ -201,20 +210,22 @@ public class OnboardingPrefManager {
     }
 
     public boolean isAdsAvailable() {
-        return BraveAdsNativeHelper.nativeIsSupportedRegion(Profile.getLastUsedRegularProfile());
+        return BraveAdsNativeHelper.nativeIsSupportedRegion(
+                ProfileManager.getLastUsedRegularProfile());
     }
 
     public void showOnboarding(Context context) {
         Intent intent = new Intent(context, OnboardingActivity.class);
+        intent.setAction(Intent.ACTION_VIEW);
         context.startActivity(intent);
     }
 
     public boolean isOnboardingNotificationShown() {
-        return isOnboardingNotificationShown;
+        return sIsOnboardingNotificationShown;
     }
 
     public void setOnboardingNotificationShown(boolean isShown) {
-        isOnboardingNotificationShown = isShown;
+        sIsOnboardingNotificationShown = isShown;
     }
 
     public void onboardingNotification() {
@@ -224,48 +235,18 @@ public class OnboardingPrefManager {
         }
     }
 
-    private long getNextCrossPromoModalDate() {
-        return mSharedPreferences.getLong(PREF_NEXT_CROSS_PROMO_MODAL_DATE, 0);
-    }
-
-    public void setNextCrossPromoModalDate(long nextDate) {
-        SharedPreferences.Editor sharedPreferencesEditor = mSharedPreferences.edit();
-        sharedPreferencesEditor.putLong(PREF_NEXT_CROSS_PROMO_MODAL_DATE, nextDate);
-        sharedPreferencesEditor.apply();
-    }
-
-    public void setCrossPromoModalShown(boolean isShown) {
-        SharedPreferences.Editor sharedPreferencesEditor = mSharedPreferences.edit();
-        sharedPreferencesEditor.putBoolean(PREF_CROSS_PROMO_MODAL, isShown);
-        sharedPreferencesEditor.apply();
-    }
-
-    private boolean hasCrossPromoModalShown() {
-        return mSharedPreferences.getBoolean(PREF_CROSS_PROMO_MODAL, false);
-    }
-
-    public boolean showCrossPromoModal() {
-        boolean shouldShow = !hasCrossPromoModalShown()
-                             && (getNextCrossPromoModalDate() > 0
-                                 && System.currentTimeMillis() > getNextCrossPromoModalDate());
-        return shouldShow;
-    }
-
     public static Map<String, SearchEngineEnum> searchEngineMap =
-    new HashMap<String, SearchEngineEnum>() {
-        {
-            put(GOOGLE, SearchEngineEnum.GOOGLE);
-            put(BRAVE, SearchEngineEnum.BRAVE);
-            put(DUCKDUCKGO, SearchEngineEnum.DUCKDUCKGO);
-            put(QWANT, SearchEngineEnum.QWANT);
-            put(BING, SearchEngineEnum.BING);
-            put(STARTPAGE, SearchEngineEnum.STARTPAGE);
-            put(YANDEX, SearchEngineEnum.YANDEX);
-            put(ECOSIA, SearchEngineEnum.ECOSIA);
-            put(DAUM, SearchEngineEnum.DAUM);
-            put(NAVER, SearchEngineEnum.NAVER);
-        }
-    };
+            Map.ofEntries(
+                    Map.entry(GOOGLE, SearchEngineEnum.GOOGLE),
+                    Map.entry(BRAVE, SearchEngineEnum.BRAVE),
+                    Map.entry(DUCKDUCKGO, SearchEngineEnum.DUCKDUCKGO),
+                    Map.entry(QWANT, SearchEngineEnum.QWANT),
+                    Map.entry(BING, SearchEngineEnum.BING),
+                    Map.entry(STARTPAGE, SearchEngineEnum.STARTPAGE),
+                    Map.entry(YANDEX, SearchEngineEnum.YANDEX),
+                    Map.entry(ECOSIA, SearchEngineEnum.ECOSIA),
+                    Map.entry(DAUM, SearchEngineEnum.DAUM),
+                    Map.entry(NAVER, SearchEngineEnum.NAVER));
 
     public boolean isFromNotification() {
         return mSharedPreferences.getBoolean(FROM_NOTIFICATION, false);

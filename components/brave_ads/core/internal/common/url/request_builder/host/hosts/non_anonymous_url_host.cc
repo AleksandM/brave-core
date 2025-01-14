@@ -5,11 +5,8 @@
 
 #include "brave/components/brave_ads/core/internal/common/url/request_builder/host/hosts/non_anonymous_url_host.h"
 
-#include <ostream>
-
-#include "base/check.h"
-#include "brave/components/brave_ads/common/interfaces/brave_ads.mojom.h"
 #include "brave/components/brave_ads/core/internal/global_state/global_state.h"
+#include "brave/components/brave_ads/core/mojom/brave_ads.mojom.h"
 
 namespace brave_ads {
 
@@ -21,11 +18,10 @@ constexpr char kStagingHost[] = "https://mywallet.ads.bravesoftware.com";
 }  // namespace
 
 std::string NonAnonymousUrlHost::Get() const {
-  const mojom::EnvironmentType environment_type =
+  const mojom::EnvironmentType mojom_environment_type =
       GlobalState::GetInstance()->Flags().environment_type;
-  CHECK(mojom::IsKnownEnumValue(environment_type));
 
-  switch (environment_type) {
+  switch (mojom_environment_type) {
     case mojom::EnvironmentType::kProduction: {
       return kProductionHost;
     }

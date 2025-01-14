@@ -9,17 +9,20 @@ import("//build/config/ui.gni")
 group("ui") {
   deps = [ "//brave/components/brave_vpn/common/buildflags" ]
 
+  if (is_mac) {
+    deps += [ "//brave/browser:mac_features" ]
+  }
+
   if (toolkit_views) {
     deps += [
-      "//brave/components/ai_chat",
-      "//brave/components/sidebar",
+      "//brave/components/ai_chat/content/browser",
+      "//brave/components/ai_chat/core/browser",
+      "//brave/components/ai_chat/core/common",
+      "//brave/components/sidebar/browser",
     ]
   }
 
   if (enable_brave_webtorrent) {
-    deps += [
-      "//brave/browser/extensions",
-      "//brave/components/brave_webtorrent/browser",
-    ]
+    deps += [ "//brave/components/brave_webtorrent/browser" ]
   }
 }

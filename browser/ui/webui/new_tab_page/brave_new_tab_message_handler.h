@@ -8,10 +8,10 @@
 
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
-#include "base/scoped_observation.h"
-#include "brave/components/brave_ads/browser/ads_service.h"
+#include "brave/components/brave_ads/core/browser/service/ads_service.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "content/public/browser/web_ui_message_handler.h"
+#include "mojo/public/cpp/bindings/receiver.h"
 
 class Profile;
 
@@ -30,9 +30,9 @@ class PrefService;
 // TODO(simonhong): Migrate to brave_new_tab_page.mojom.
 // Handles messages to and from the New Tab Page javascript
 class BraveNewTabMessageHandler : public content::WebUIMessageHandler,
-                                  public brave_ads::AdsServiceObserver {
+                                  public bat_ads::mojom::BatAdsObserver {
  public:
-  BraveNewTabMessageHandler(Profile* profile, bool was_invisible_and_restored);
+  BraveNewTabMessageHandler(Profile* profile, bool was_restored);
   BraveNewTabMessageHandler(const BraveNewTabMessageHandler&) = delete;
   BraveNewTabMessageHandler& operator=(const BraveNewTabMessageHandler&) =
       delete;
@@ -45,7 +45,7 @@ class BraveNewTabMessageHandler : public content::WebUIMessageHandler,
   static BraveNewTabMessageHandler* Create(
       content::WebUIDataSource* html_source,
       Profile* profile,
-      bool was_invisible_and_restored);
+      bool was_restored);
 
  private:
   // WebUIMessageHandler implementation.
@@ -55,11 +55,8 @@ class BraveNewTabMessageHandler : public content::WebUIMessageHandler,
 
   void HandleGetPreferences(const base::Value::List& args);
   void HandleGetStats(const base::Value::List& args);
-  void HandleGetPrivateProperties(const base::Value::List& args);
   void HandleGetNewTabAdsData(const base::Value::List& args);
   void HandleSaveNewTabPagePref(const base::Value::List& args);
-  void HandleToggleAlternativeSearchEngineProvider(
-      const base::Value::List& args);
   void HandleRegisterNewTabPageView(const base::Value::List& args);
   void HandleBrandedWallpaperLogoClicked(const base::Value::List& args);
   void HandleGetWallpaperData(const base::Value::List& args);
@@ -67,22 +64,24 @@ class BraveNewTabMessageHandler : public content::WebUIMessageHandler,
 
   void OnStatsChanged();
   void OnPreferencesChanged();
-  void OnPrivatePropertiesChanged();
 
   base::Value::Dict GetAdsDataDictionary() const;
 
-  // brave_ads::AdsServiceObserver:
-  void OnNeedsBrowserUpgradeToServeAds() override;
+  // bat_ads::mojom::BatAdsObserver:
+  void OnAdRewardsDidChange() override {}
+  void OnBrowserUpgradeRequiredToServeAds() override;
+  void OnIneligibleWalletToServeAds() override {}
+  void OnRemindUser(brave_ads::mojom::ReminderType type) override {}
 
   PrefChangeRegistrar pref_change_registrar_;
   // Weak pointer.
   raw_ptr<Profile> profile_ = nullptr;
+
   raw_ptr<brave_ads::AdsService> ads_service_ = nullptr;
+  mojo::Receiver<bat_ads::mojom::BatAdsObserver> bat_ads_observer_receiver_{
+      this};
 
-  bool was_invisible_and_restored_ = false;
-
-  base::ScopedObservation<brave_ads::AdsService, brave_ads::AdsServiceObserver>
-      ads_service_observation_{this};
+  bool was_restored_ = false;
 
   base::WeakPtrFactory<BraveNewTabMessageHandler> weak_ptr_factory_;
 };

@@ -8,17 +8,19 @@
 #include "base/path_service.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/thread_test_helper.h"
-#include "brave/browser/brave_content_browser_client.h"
 #include "brave/browser/extensions/brave_base_local_data_files_browsertest.h"
 #include "brave/components/brave_component_updater/browser/local_data_files_service.h"
-#include "brave/components/brave_shields/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/content/browser/brave_shields_util.h"
+#include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/constants/brave_paths.h"
 #include "brave/components/constants/pref_names.h"
+#include "brave/components/webcompat/core/common/features.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/extensions/extension_browsertest.h"
+#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser.h"
-#include "chrome/common/chrome_content_client.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/permissions/permission_request.h"
@@ -30,24 +32,27 @@
 
 using brave_shields::ControlType;
 
-const char kHardwareConcurrencyScript[] = "navigator.hardwareConcurrency;";
-const char kTitleScript[] = "document.title;";
+constexpr char kHardwareConcurrencyScript[] = "navigator.hardwareConcurrency;";
+constexpr char kTitleScript[] = "document.title;";
 
 class BraveNavigatorHardwareConcurrencyFarblingBrowserTest
     : public InProcessBrowserTest {
  public:
+  BraveNavigatorHardwareConcurrencyFarblingBrowserTest() {
+    scoped_feature_list_.InitWithFeatures(
+        {
+            brave_shields::features::kBraveShowStrictFingerprintingMode,
+            webcompat::features::kBraveWebcompatExceptionsService,
+        },
+        {});
+  }
+
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
-
-    content_client_ = std::make_unique<ChromeContentClient>();
-    content::SetContentClient(content_client_.get());
-    browser_content_client_ = std::make_unique<BraveContentBrowserClient>();
-    content::SetBrowserClientForTesting(browser_content_client_.get());
 
     host_resolver()->AddRule("*", "127.0.0.1");
     content::SetupCrossSiteRedirector(embedded_test_server());
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     embedded_test_server()->ServeFilesFromDirectory(test_data_dir);
@@ -56,11 +61,6 @@ class BraveNavigatorHardwareConcurrencyFarblingBrowserTest
 
     top_level_page_url_ = embedded_test_server()->GetURL("a.com", "/");
     farbling_url_ = embedded_test_server()->GetURL("a.com", "/simple.html");
-  }
-
-  void TearDown() override {
-    browser_content_client_.reset();
-    content_client_.reset();
   }
 
   const GURL& farbling_url() { return farbling_url_; }
@@ -84,15 +84,21 @@ class BraveNavigatorHardwareConcurrencyFarblingBrowserTest
         content_settings(), ControlType::DEFAULT, top_level_page_url_);
   }
 
+  void EnableWebcompatException() {
+    brave_shields::SetWebcompatEnabled(
+        content_settings(),
+        ContentSettingsType::BRAVE_WEBCOMPAT_HARDWARE_CONCURRENCY, true,
+        top_level_page_url_, nullptr);
+  }
+
   content::WebContents* contents() {
     return browser()->tab_strip_model()->GetActiveWebContents();
   }
 
  private:
+  base::test::ScopedFeatureList scoped_feature_list_;
   GURL top_level_page_url_;
   GURL farbling_url_;
-  std::unique_ptr<ChromeContentClient> content_client_;
-  std::unique_ptr<BraveContentBrowserClient> browser_content_client_;
 };
 
 // Tests results of farbling known values
@@ -125,7 +131,15 @@ IN_PROC_BROWSER_TEST_F(BraveNavigatorHardwareConcurrencyFarblingBrowserTest,
       content::EvalJs(contents(), kHardwareConcurrencyScript).ExtractInt();
   // For this domain (a.com) + the random seed (constant for browser tests),
   // the value will always be the same.
-  EXPECT_EQ(completely_fake_value, 5);
+  EXPECT_EQ(completely_fake_value, 8);
+
+  // Farbling level: default, but with webcompat exception enabled
+  SetFingerprintingDefault();
+  EnableWebcompatException();
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), farbling_url()));
+  int real_value2 =
+      content::EvalJs(contents(), kHardwareConcurrencyScript).ExtractInt();
+  ASSERT_GE(real_value, real_value2);
 }
 
 IN_PROC_BROWSER_TEST_F(BraveNavigatorHardwareConcurrencyFarblingBrowserTest,
@@ -150,6 +164,7 @@ IN_PROC_BROWSER_TEST_F(BraveNavigatorHardwareConcurrencyFarblingBrowserTest,
                     &real_value);
   ASSERT_GE(real_value, 2);
 
+  // Farbling level: default
   SetFingerprintingDefault();
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   while (content::EvalJs(contents(), kTitleScript).ExtractString() == "") {
@@ -160,6 +175,7 @@ IN_PROC_BROWSER_TEST_F(BraveNavigatorHardwareConcurrencyFarblingBrowserTest,
   EXPECT_GE(fake_value, 2);
   EXPECT_LE(fake_value, real_value);
 
+  // Farbling level: maximum
   BlockFingerprinting();
   ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
   while (content::EvalJs(contents(), kTitleScript).ExtractString() == "") {
@@ -169,5 +185,17 @@ IN_PROC_BROWSER_TEST_F(BraveNavigatorHardwareConcurrencyFarblingBrowserTest,
                     &completely_fake_value);
   // For this domain (a.com) + the random seed (constant for browser tests),
   // the value will always be the same.
-  EXPECT_EQ(completely_fake_value, 5);
+  EXPECT_EQ(completely_fake_value, 8);
+
+  // Farbling level: default, but with webcompat exception enabled
+  // get real navigator.hardwareConcurrency
+  SetFingerprintingDefault();
+  EnableWebcompatException();
+  ASSERT_TRUE(ui_test_utils::NavigateToURL(browser(), url));
+  while (content::EvalJs(contents(), kTitleScript).ExtractString() == "") {
+  }
+  int real_value2;
+  base::StringToInt(content::EvalJs(contents(), kTitleScript).ExtractString(),
+                    &real_value2);
+  ASSERT_GE(real_value, real_value2);
 }

@@ -4,8 +4,11 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include <map>
+#include <optional>
+#include <string_view>
 
 #include "base/functional/bind.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/lock.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_window.h"
@@ -18,7 +21,7 @@
 
 namespace {
 
-const char kDefaultAcceptHeaderValue[] = "*/*";
+constexpr char kDefaultAcceptHeaderValue[] = "*/*";
 
 }  // namespace
 
@@ -30,7 +33,7 @@ class SignedExchangeRequestBrowserTest : public InProcessBrowserTest {
   ~SignedExchangeRequestBrowserTest() override = default;
 
  protected:
-  void NavigateAndWaitForTitle(const GURL& url, const std::string title) {
+  void NavigateAndWaitForTitle(const GURL& url, std::string_view title) {
     std::u16string expected_title = base::ASCIIToUTF16(title);
     content::TitleWatcher title_watcher(
         browser()->tab_strip_model()->GetActiveWebContents(), expected_title);
@@ -52,8 +55,7 @@ class SignedExchangeRequestBrowserTest : public InProcessBrowserTest {
 
   static std::unique_ptr<net::test_server::HttpResponse>
   RedirectResponseHandler(const net::test_server::HttpRequest& request) {
-    if (!base::StartsWith(request.relative_url, "/r?",
-                          base::CompareCase::SENSITIVE)) {
+    if (!request.relative_url.starts_with("/r?")) {
       return nullptr;
     }
     std::unique_ptr<net::test_server::BasicHttpResponse> http_response(
@@ -69,8 +71,7 @@ class SignedExchangeRequestBrowserTest : public InProcessBrowserTest {
   std::unique_ptr<net::test_server::HttpResponse> FallbackSxgResponseHandler(
       const net::test_server::HttpRequest& request) {
     const std::string prefix = "/fallback_sxg?";
-    if (!base::StartsWith(request.relative_url, prefix,
-                          base::CompareCase::SENSITIVE)) {
+    if (!request.relative_url.starts_with(prefix)) {
       return nullptr;
     }
     std::string fallback_url(request.relative_url.substr(prefix.length()));
@@ -113,12 +114,11 @@ class SignedExchangeRequestBrowserTest : public InProcessBrowserTest {
                             : std::string(kDefaultAcceptHeaderValue));
   }
 
-  absl::optional<std::string> GetInterceptedAcceptHeader(
-      const GURL& url) const {
+  std::optional<std::string> GetInterceptedAcceptHeader(const GURL& url) const {
     base::AutoLock lock(url_accept_header_map_lock_);
     const auto it = url_accept_header_map_.find(url);
     if (it == url_accept_header_map_.end())
-      return absl::nullopt;
+      return std::nullopt;
     return it->second;
   }
 

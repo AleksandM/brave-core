@@ -3,17 +3,21 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // you can obtain one at http://mozilla.org/MPL/2.0/.
 
+#include "brave/browser/ui/webui/brave_wallet/wallet_panel_ui.h"
+
 #include <string>
+#include <string_view>
 
 #include "base/memory/raw_ptr.h"
 #include "base/run_loop.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/test/bind.h"
-#include "brave/browser/brave_wallet/json_rpc_service_factory.h"
-#include "brave/browser/brave_wallet/keyring_service_factory.h"
+#include "brave/browser/brave_wallet/asset_ratio_service_factory.h"
+#include "brave/browser/brave_wallet/brave_wallet_service_factory.h"
 #include "brave/browser/ui/webui/brave_settings_ui.h"
-#include "brave/browser/ui/webui/brave_wallet/wallet_panel_ui.h"
+#include "brave/components/brave_wallet/browser/asset_ratio_service.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_service.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/json_rpc_service.h"
 #include "brave/components/brave_wallet/browser/keyring_service.h"
@@ -27,6 +31,7 @@
 #include "chrome/test/base/in_process_browser_test.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_utils.h"
 #include "services/network/public/cpp/weak_wrapper_shared_url_loader_factory.h"
 #include "services/network/test/test_url_loader_factory.h"
@@ -55,8 +60,8 @@ std::string DoubleClickOn(const std::string& element) {
          ";return e;})())";
 }
 
-std::string FantomNetwork() {
-  return "[data-test-chain-id='chain-0xfa']";
+std::string NeonEVMNetwork() {
+  return "[data-test-chain-id='chain-0xe9ac0d6']";
 }
 
 std::string PolygonNetwork() {
@@ -67,12 +72,16 @@ std::string NetworkNameSpan() {
   return "[class|='NetworkName']";
 }
 
-std::string FantomNetworkHideButton() {
-  return FantomNetwork() + " .hide-network-button";
+std::string NeonEVMNetworkHideButton() {
+  return NeonEVMNetwork() + " .hide-network-button";
 }
 
-std::string FantomNetworkChainName() {
-  return FantomNetwork() + " .chainName";
+std::string NeonEVMNetworkChainName() {
+  return NeonEVMNetwork() + " .chainName";
+}
+
+std::string DAppSettingsButton() {
+  return R"([data-test-id='dapp-settings-button'])";
 }
 
 std::string NetworksButton() {
@@ -89,7 +98,7 @@ std::string Select(const std::string& selector1, const std::string& selector2) {
                             selector1.c_str(), selector2.c_str());
 }
 
-void NonBlockingDelay(const base::TimeDelta& delay) {
+void NonBlockingDelay(base::TimeDelta delay) {
   base::RunLoop run_loop(base::RunLoop::Type::kNestableTasksAllowed);
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostDelayedTask(
       FROM_HERE, run_loop.QuitWhenIdleClosure(), delay);
@@ -108,11 +117,16 @@ bool WaitFor(content::WebContents* web_contents, const std::string& selector) {
 
 bool WaitAndClickElement(content::WebContents* web_contents,
                          const std::string& selector) {
-  if (!WaitFor(web_contents, selector)) {
-    return false;
+  for (int i = 0; i < 10; ++i) {
+    if (!WaitFor(web_contents, selector)) {
+      return false;
+    }
+    auto result = EvalJs(web_contents, selector + ".click()");
+    if (result.value.is_none() && result.error.empty()) {
+      return true;
+    }
   }
-
-  return EvalJs(web_contents, selector + ".click()").value.is_none();
+  return false;
 }
 
 }  // namespace
@@ -124,28 +138,32 @@ class WalletPanelUIBrowserTest : public InProcessBrowserTest {
   void SetUpOnMainThread() override {
     InProcessBrowserTest::SetUpOnMainThread();
 
-    // Disabling CSP on webui pages so EvalJS could be run in main world.
-    BraveSettingsUI::ShouldDisableCSPForTesting() = true;
     BraveSettingsUI::ShouldExposeElementsForTesting() = true;
-    WalletPanelUI::ShouldDisableCSPForTesting() = true;
 
     auto* profile = browser()->profile();
 
     shared_url_loader_factory_ =
         base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
             &url_loader_factory_);
-    JsonRpcServiceFactory::GetServiceForContext(profile)
-        ->SetAPIRequestHelperForTesting(shared_url_loader_factory_);
 
-    KeyringServiceFactory::GetServiceForContext(profile)->CreateWallet(
-        "password_123", base::DoNothing());
+    brave_wallet_service_ =
+        BraveWalletServiceFactory::GetServiceForContext(profile);
+
+    brave_wallet_service_->json_rpc_service()->SetAPIRequestHelperForTesting(
+        shared_url_loader_factory_);
+
+    AssetRatioServiceFactory::GetServiceForContext(profile)
+        ->EnableDummyPricesForTesting();
+
+    brave_wallet_service_->keyring_service()->CreateWallet("password_123",
+                                                           base::DoNothing());
 
     SetEthChainIdInterceptor(
-        {GURL(kSomeEndpoint),
-         GetKnownChain(profile->GetPrefs(), mojom::kFantomMainnetChainId,
-                       mojom::CoinType::ETH)
-             ->rpc_endpoints.front()},
-        mojom::kFantomMainnetChainId);
+        {GURL(kSomeEndpoint), brave_wallet_service_->network_manager()
+                                  ->GetKnownChain(mojom::kNeonEVMMainnetChainId,
+                                                  mojom::CoinType::ETH)
+                                  ->rpc_endpoints.front()},
+        mojom::kNeonEVMMainnetChainId);
 
     CreateWalletTab();
   }
@@ -186,11 +204,11 @@ class WalletPanelUIBrowserTest : public InProcessBrowserTest {
   void SetEthChainIdInterceptor(const std::vector<GURL>& network_urls,
                                 const std::string& chain_id) {
     url_loader_factory_.SetInterceptor(base::BindLambdaForTesting(
-        [=](const network::ResourceRequest& request) {
-          base::StringPiece request_string(request.request_body->elements()
-                                               ->at(0)
-                                               .As<network::DataElementBytes>()
-                                               .AsStringPiece());
+        [=, this](const network::ResourceRequest& request) {
+          std::string_view request_string(request.request_body->elements()
+                                              ->at(0)
+                                              .As<network::DataElementBytes>()
+                                              .AsStringPiece());
           url_loader_factory_.ClearResponses();
           if (request_string.find("eth_chainId") != std::string::npos) {
             const std::string response = base::StringPrintf(
@@ -202,11 +220,11 @@ class WalletPanelUIBrowserTest : public InProcessBrowserTest {
         }));
   }
 
-  void WaitForFantomNetworkUrl(const GURL& url) {
+  void WaitForNeonEVMNetworkUrl(const GURL& url) {
     auto* prefs = browser()->profile()->GetPrefs();
 
-    if (GetNetworkURL(prefs, mojom::kFantomMainnetChainId,
-                      mojom::CoinType::ETH) == url) {
+    if (brave_wallet_service()->network_manager()->GetNetworkURL(
+            mojom::kNeonEVMMainnetChainId, mojom::CoinType::ETH) == url) {
       return;
     }
 
@@ -214,10 +232,9 @@ class WalletPanelUIBrowserTest : public InProcessBrowserTest {
     PrefChangeRegistrar pref_change_registrar;
     pref_change_registrar.Init(prefs);
     pref_change_registrar.Add(
-        kBraveWalletCustomNetworks,
-        base::BindLambdaForTesting([&run_loop, &prefs, &url] {
-          if (GetNetworkURL(prefs, mojom::kFantomMainnetChainId,
-                            mojom::CoinType::ETH) == url) {
+        kBraveWalletCustomNetworks, base::BindLambdaForTesting([&] {
+          if (brave_wallet_service()->network_manager()->GetNetworkURL(
+                  mojom::kNeonEVMMainnetChainId, mojom::CoinType::ETH) == url) {
             run_loop.Quit();
           }
         }));
@@ -227,9 +244,15 @@ class WalletPanelUIBrowserTest : public InProcessBrowserTest {
   content::WebContents* wallet() { return wallet_; }
   content::WebContents* settings() { return settings_; }
 
+  brave_wallet::BraveWalletService* brave_wallet_service() {
+    return brave_wallet_service_;
+  }
+
  private:
-  raw_ptr<content::WebContents> wallet_ = nullptr;
-  raw_ptr<content::WebContents> settings_ = nullptr;
+  raw_ptr<content::WebContents, DanglingUntriaged> wallet_ = nullptr;
+  raw_ptr<content::WebContents, DanglingUntriaged> settings_ = nullptr;
+  raw_ptr<brave_wallet::BraveWalletService, DanglingUntriaged>
+      brave_wallet_service_ = nullptr;
   network::TestURLLoaderFactory url_loader_factory_;
   scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory_;
 };
@@ -248,60 +271,70 @@ IN_PROC_BROWSER_TEST_F(WalletPanelUIBrowserTest, InitialUIRendered) {
 #endif
 IN_PROC_BROWSER_TEST_F(WalletPanelUIBrowserTest, MAYBE_HideNetworkInSettings) {
   ActivateWalletTab();
+  // Wait and click on DApp settings button.
+  ASSERT_TRUE(
+      WaitAndClickElement(wallet(), QuerySelectorJS(DAppSettingsButton())));
   // Wait and click on select network button.
   ASSERT_TRUE(WaitAndClickElement(wallet(), QuerySelectorJS(NetworksButton())));
 
-  // Both Polygon and Fantom are listed.
+  // Both Polygon and Neon EVM are listed.
   ASSERT_TRUE(WaitFor(wallet(), QuerySelectorJS(PolygonNetwork())));
   ASSERT_TRUE(
       EvalJs(wallet(), QuerySelectorJS(PolygonNetwork())).value.is_dict());
   ASSERT_TRUE(
-      EvalJs(wallet(), QuerySelectorJS(FantomNetwork())).value.is_dict());
+      EvalJs(wallet(), QuerySelectorJS(NeonEVMNetwork())).value.is_dict());
 
-  // Wait and click on hide button for Fantom network in settings.
+  // Wait and click on hide button for Neon EVM network in settings.
   CreateSettingsTab();
   ActivateSettingsTab();
   ASSERT_TRUE(WaitAndClickElement(
-      settings(), SelectInNetworkList(FantomNetworkHideButton())));
+      settings(), SelectInNetworkList(NeonEVMNetworkHideButton())));
 
   ActivateWalletTab();
   wallet()->GetController().Reload(content::ReloadType::NORMAL, true);
+  EXPECT_TRUE(WaitForLoadStop(wallet()));
+  // Wait and click on DApp settings button.
+  ASSERT_TRUE(
+      WaitAndClickElement(wallet(), QuerySelectorJS(DAppSettingsButton())));
   // Wait and click on select network button.
   ASSERT_TRUE(WaitAndClickElement(wallet(), QuerySelectorJS(NetworksButton())));
 
-  // Polygon is listed but Fantom is not.
+  // Polygon is listed but Neon EVM is not.
   ASSERT_TRUE(WaitFor(wallet(), QuerySelectorJS(PolygonNetwork())));
   ASSERT_TRUE(
       EvalJs(wallet(), QuerySelectorJS(PolygonNetwork())).value.is_dict());
   ASSERT_TRUE(
-      EvalJs(wallet(), QuerySelectorJS(FantomNetwork())).value.is_none());
+      EvalJs(wallet(), QuerySelectorJS(NeonEVMNetwork())).value.is_none());
 }
 
 IN_PROC_BROWSER_TEST_F(WalletPanelUIBrowserTest, CustomNetworkInSettings) {
   CreateSettingsTab();
 
   ActivateWalletTab();
+  // Wait and click on DApp settings button.
+  ASSERT_TRUE(
+      WaitAndClickElement(wallet(), QuerySelectorJS(DAppSettingsButton())));
   // Wait and click on select network button.
   ASSERT_TRUE(WaitAndClickElement(wallet(), QuerySelectorJS(NetworksButton())));
 
-  // Fantom is listed in wallet.
-  ASSERT_TRUE(WaitFor(wallet(), Select(FantomNetwork(), NetworkNameSpan()) +
-                                    "?.innerText === 'Fantom Opera'"));
+  // Neon EVM is listed in wallet.
+  ASSERT_TRUE(WaitFor(wallet(), Select(NeonEVMNetwork(), NetworkNameSpan()) +
+                                    "?.innerText === 'Neon EVM'"));
 
-  // Go to wallet network settings and wait for Fantom network to appear.
+  // Go to wallet network settings and wait for Neon EVM network to appear.
   ActivateSettingsTab();
   ASSERT_TRUE(
-      WaitFor(settings(), SelectInNetworkList(FantomNetworkChainName()) +
-                              "?.innerText === 'Fantom Opera'"));
+      WaitFor(settings(), SelectInNetworkList(NeonEVMNetworkChainName()) +
+                              "?.innerText === 'Neon EVM'"));
 
-  // Double-click on Fantom network.
+  // Double-click on Neon EVM network.
   ASSERT_TRUE(
-      EvalJs(settings(), DoubleClickOn(SelectInNetworkList(FantomNetwork())))
+      EvalJs(settings(), DoubleClickOn(SelectInNetworkList(NeonEVMNetwork())))
           .ExtractBool());
 
-  // Wait for edit network dialog with Fantom as chain name.
+  // Wait for edit network dialog with Neon EVM as chain name.
   ASSERT_TRUE(WaitFor(settings(), SelectInAddNetworkDialog("#chainName") +
-                                      "?.value === 'Fantom Opera'"));
+                                      "?.value === 'Neon EVM'"));
 
   // Change name to 'Custom Network'.
   ASSERT_EQ("Custom Network",
@@ -313,41 +346,41 @@ IN_PROC_BROWSER_TEST_F(WalletPanelUIBrowserTest, CustomNetworkInSettings) {
   ASSERT_TRUE(WaitAndClickElement(settings(),
                                   SelectInAddNetworkDialog(".action-button")));
 
-  // Chain name for Fantom changes to 'Custom Network' in settings.
+  // Chain name for Neon EVM changes to 'Custom Network' in settings.
   ASSERT_TRUE(
-      WaitFor(settings(), SelectInNetworkList(FantomNetworkChainName()) +
+      WaitFor(settings(), SelectInNetworkList(NeonEVMNetworkChainName()) +
                               "?.innerText === 'Custom Network'"));
 
-  // Chain name for Fantom changes to 'Custom Network' in wallet.
+  // Chain name for Neon EVM changes to 'Custom Network' in wallet.
   ActivateWalletTab();
-  ASSERT_TRUE(WaitFor(wallet(), Select(FantomNetwork(), NetworkNameSpan()) +
+  ASSERT_TRUE(WaitFor(wallet(), Select(NeonEVMNetwork(), NetworkNameSpan()) +
                                     "?.innerText === 'Custom Network'"));
 }
 
 IN_PROC_BROWSER_TEST_F(WalletPanelUIBrowserTest, SelectRpcEndpoint) {
   CreateSettingsTab();
-  auto* prefs = browser()->profile()->GetPrefs();
-
-  auto known_fantom_rpc =
-      GetKnownChain(prefs, mojom::kFantomMainnetChainId, mojom::CoinType::ETH)
+  auto known_neon_evm_rpc =
+      brave_wallet_service()
+          ->network_manager()
+          ->GetKnownChain(mojom::kNeonEVMMainnetChainId, mojom::CoinType::ETH)
           ->rpc_endpoints.front();
-  // Fantom rpc is from known info.
-  WaitForFantomNetworkUrl(known_fantom_rpc);
+  // Neon EVM rpc is from known info.
+  WaitForNeonEVMNetworkUrl(known_neon_evm_rpc);
 
-  // Go to wallet network settings and wait for Fantom network to appear.
+  // Go to wallet network settings and wait for Neon EVM network to appear.
   ActivateSettingsTab();
   ASSERT_TRUE(
-      WaitFor(settings(), SelectInNetworkList(FantomNetworkChainName()) +
-                              "?.innerText === 'Fantom Opera'"));
+      WaitFor(settings(), SelectInNetworkList(NeonEVMNetworkChainName()) +
+                              "?.innerText === 'Neon EVM'"));
 
-  // Double-click on Fantom network.
+  // Double-click on Neon EVM network.
   ASSERT_TRUE(
-      EvalJs(settings(), DoubleClickOn(SelectInNetworkList(FantomNetwork())))
+      EvalJs(settings(), DoubleClickOn(SelectInNetworkList(NeonEVMNetwork())))
           .ExtractBool());
 
-  // Wait for edit network dialog with Fantom as chain name.
+  // Wait for edit network dialog with Neon EVM as chain name.
   ASSERT_TRUE(WaitFor(settings(), SelectInAddNetworkDialog("#chainName") +
-                                      "?.value === 'Fantom Opera'"));
+                                      "?.value === 'Neon EVM'"));
 
   // Click rpc + button.
   ASSERT_TRUE(WaitAndClickElement(
@@ -370,21 +403,22 @@ IN_PROC_BROWSER_TEST_F(WalletPanelUIBrowserTest, SelectRpcEndpoint) {
   ASSERT_TRUE(WaitAndClickElement(
       settings(), SelectInAddNetworkDialog("cr-button.action-button")));
 
-  // Wait for custom endpoint for Fantom.
-  WaitForFantomNetworkUrl(GURL(kSomeEndpoint));
+  // Wait for custom endpoint for Neon EVM.
+  WaitForNeonEVMNetworkUrl(GURL(kSomeEndpoint));
 
-  // Wait for custom endpoint listed for Fantom.
-  ASSERT_TRUE(WaitFor(settings(),
-                      SelectInNetworkList(FantomNetwork() + " .secondary") +
-                          "?.innerText === '0xfa https://some.endpoint.com/'"));
-
-  // Double-click on Fantom network.
+  // Wait for custom endpoint listed for Neon EVM.
   ASSERT_TRUE(
-      EvalJs(settings(), DoubleClickOn(SelectInNetworkList(FantomNetwork())))
+      WaitFor(settings(),
+              SelectInNetworkList(NeonEVMNetwork() + " .secondary") +
+                  "?.innerText === '0xe9ac0d6 https://some.endpoint.com/'"));
+
+  // Double-click on Neon EVM network.
+  ASSERT_TRUE(
+      EvalJs(settings(), DoubleClickOn(SelectInNetworkList(NeonEVMNetwork())))
           .ExtractBool());
-  // Wait for edit network dialog with Fantom as chain name.
+  // Wait for edit network dialog with Neon EVM as chain name.
   ASSERT_TRUE(WaitFor(settings(), SelectInAddNetworkDialog("#chainName") +
-                                      "?.value === 'Fantom Opera'"));
+                                      "?.value === 'Neon EVM'"));
   // Click on second item(known rpc) in rpc list.
   ASSERT_TRUE(WaitAndClickElement(
       settings(),
@@ -395,7 +429,7 @@ IN_PROC_BROWSER_TEST_F(WalletPanelUIBrowserTest, SelectRpcEndpoint) {
       settings(), SelectInAddNetworkDialog("cr-button.action-button")));
 
   // Wait for endpoint to become known one.
-  WaitForFantomNetworkUrl(known_fantom_rpc);
+  WaitForNeonEVMNetworkUrl(known_neon_evm_rpc);
 }
 
 }  // namespace brave_wallet

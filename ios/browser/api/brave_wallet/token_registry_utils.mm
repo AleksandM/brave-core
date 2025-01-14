@@ -5,19 +5,21 @@
 
 #include "brave/ios/browser/api/brave_wallet/token_registry_utils.h"
 
+#include <optional>
+
 #include "base/files/file_path.h"
 #include "base/path_service.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/version.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_constants.h"
 #include "brave/components/brave_wallet/browser/wallet_data_files_installer.h"
-#include "ios/chrome/browser/paths/paths.h"
+#include "ios/chrome/browser/shared/model/paths/paths.h"
 
 @implementation BraveWalletTokenRegistryUtils
 
 + (nullable NSURL*)tokenLogoBaseURL {
   base::FilePath path;
-  absl::optional<base::Version> version =
+  std::optional<base::Version> version =
       brave_wallet::GetLastInstalledWalletVersion();
   if (base::PathService::Get(ios::DIR_USER_DATA, &path) && version) {
     path = path.AppendASCII(brave_wallet::kWalletBaseDirectory);

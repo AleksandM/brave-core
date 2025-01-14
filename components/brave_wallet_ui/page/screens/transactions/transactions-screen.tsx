@@ -4,31 +4,27 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import * as React from 'react'
-import { useHistory } from 'react-router'
+import { useHistory, useLocation } from 'react-router'
 
 // types
 import {
   BraveWallet,
-  WalletAccountType,
-  WalletRoutes
+  SerializableTransactionInfo
 } from '../../../constants/types'
 
 // options
 import { AllNetworksOption } from '../../../options/network-filter-options'
-import { AllAccountsOption } from '../../../options/account-filter-options'
 
 // utils
 import { getLocale } from 'brave-ui'
-import {
-  accountInfoEntityAdaptor,
-  accountInfoEntityAdaptorInitialState
-} from '../../../common/slices/entities/account-info.entity'
+import { accountInfoEntityAdaptorInitialState } from '../../../common/slices/entities/account-info.entity'
+import { useAccountFromAddressQuery } from '../../../common/slices/api.slice.extra'
 import {
   selectAllUserAssetsFromQueryResult,
   selectAllBlockchainTokensFromQueryResult
 } from '../../../common/slices/entities/blockchain-token.entity'
 import {
-  networkEntityAdapter
+  networkEntityAdapter //
 } from '../../../common/slices/entities/network.entity'
 import {
   filterTransactionsBySearchValue,
@@ -41,33 +37,33 @@ import {
   useGetNetworksRegistryQuery,
   useGetUserTokensRegistryQuery,
   useGetTokensRegistryQuery,
-  useGetTransactionsQuery,
+  useGetTransactionsQuery
 } from '../../../common/slices/api.slice'
+import { useSafeUISelector } from '../../../common/hooks/use-safe-selector'
+import { UISelectors } from '../../../common/selectors'
 
 // components
-import { AccountFilterSelector } from '../../../components/desktop/account-filter-selector/account-filter-selector'
-import { NetworkFilterSelector } from '../../../components/desktop/network-filter-selector/index'
-import { PortfolioTransactionItem } from '../../../components/desktop'
-import { SearchBar } from '../../../components/shared'
+import {
+  PortfolioTransactionItem //
+} from '../../../components/desktop/portfolio_transaction_item/portfolio_transaction_item'
+import {
+  WalletPageWrapper //
+} from '../../../components/desktop/wallet-page-wrapper/wallet-page-wrapper'
+import {
+  ActivityPageHeader //
+} from '../../../components/desktop/card-headers/activity_page_header'
+import { SearchBar } from '../../../components/shared/search-bar'
+import {
+  TransactionDetailsModal //
+} from '../../../components/desktop/popup-modals/transaction_details_modal/transaction_details_modal'
 
 // styles
-import {
-  Column,
-  LoadingIcon,
-  Text,
-  VerticalSpacer
-} from '../../../components/shared/style'
+import { Column, Text, VerticalSpacer } from '../../../components/shared/style'
 import {
   LoadingSkeletonStyleProps,
   Skeleton
 } from '../../../components/shared/loading-skeleton/styles'
-import { SearchAndFiltersRow } from './transaction-screen.styles'
-
-interface Params {
-  address?: string | null
-  chainId?: string | null
-  chainCoinType?: BraveWallet.CoinType | null
-}
+import { EmptyTransactionsIcon } from './transaction-screen.styles'
 
 const txListItemSkeletonProps: LoadingSkeletonStyleProps = {
   width: '100%',
@@ -75,19 +71,26 @@ const txListItemSkeletonProps: LoadingSkeletonStyleProps = {
   enableAnimation: true
 }
 
-export const TransactionsScreen: React.FC = () => {
+interface Props {
+  isPortfolio?: boolean
+}
+
+export const TransactionsScreen = (props: Props) => {
+  const { isPortfolio } = props
+
   // routing
   const history = useHistory()
+  const { hash: selectedTransactionIdHash } = useLocation()
+  const selectedTransactionId = selectedTransactionIdHash.replace('#', '')
+
+  // UI Selectors (safe)
+  const isPanel = useSafeUISelector(UISelectors.isPanel)
 
   // state
   const [searchValue, setSearchValue] = React.useState<string>('')
 
   // route params
-  const {
-    address,
-    chainId,
-    chainCoinType
-  } = React.useMemo(() => {
+  const { address, chainId, chainCoinType } = React.useMemo(() => {
     const searchParams = new URLSearchParams(history.location.search)
     return {
       address: searchParams.get('address'),
@@ -102,11 +105,10 @@ export const TransactionsScreen: React.FC = () => {
     data: accountInfosRegistry = accountInfoEntityAdaptorInitialState,
     isLoading: isLoadingAccounts
   } = useGetAccountInfosRegistryQuery(undefined)
-  const foundAccountFromParam = address
-    ? accountInfosRegistry.entities[
-        accountInfoEntityAdaptor.selectId({ address })
-      ]
-    : undefined
+
+  const { account: foundAccountFromParam } = useAccountFromAddressQuery(
+    address ?? undefined
+  )
 
   const { data: knownTokensList } = useGetTokensRegistryQuery(undefined, {
     selectFromResult: (res) => ({
@@ -115,15 +117,12 @@ export const TransactionsScreen: React.FC = () => {
     })
   })
 
-  const { data: userTokensList } = useGetUserTokensRegistryQuery(
-    undefined,
-    {
-      selectFromResult: (res) => ({
-        isLoading: res.isLoading,
-        data: selectAllUserAssetsFromQueryResult(res)
-      })
-    }
-  )
+  const { data: userTokensList } = useGetUserTokensRegistryQuery(undefined, {
+    selectFromResult: (res) => ({
+      isLoading: res.isLoading,
+      data: selectAllUserAssetsFromQueryResult(res)
+    })
+  })
 
   const { data: networksRegistry } = useGetNetworksRegistryQuery()
 
@@ -150,12 +149,12 @@ export const TransactionsScreen: React.FC = () => {
     useGetTransactionsQuery(
       foundAccountFromParam
         ? {
-            address: foundAccountFromParam.address,
+            accountId: foundAccountFromParam.accountId,
             coinType: foundAccountFromParam.accountId.coin,
             chainId: chainId !== AllNetworksOption.chainId ? chainId : null
           }
         : {
-            address: null,
+            accountId: null,
             chainId:
               foundNetworkFromParam?.chainId === AllNetworksOption.chainId
                 ? null
@@ -167,13 +166,30 @@ export const TransactionsScreen: React.FC = () => {
           }
     )
 
+  const selectedTransaction = txsForSelectedChain.find(
+    (tx) => tx.id === selectedTransactionId
+  )
+
+  // Methods
+  const onClickTransaction = React.useCallback(
+    (
+      tx: Pick<BraveWallet.TransactionInfo | SerializableTransactionInfo, 'id'>
+    ): void => {
+      history.push(
+        window.location.pathname + window.location.search + '#' + tx.id
+      )
+    },
+    [history]
+  )
+
+  // Memos
   const combinedTokensList = React.useMemo(() => {
     return userTokensList.concat(knownTokensList)
   }, [userTokensList, knownTokensList])
 
   const combinedTokensListForSelectedChain = React.useMemo(() => {
     return chainId && chainId !== AllNetworksOption.chainId
-      ? combinedTokensList.filter(token => token.chainId === chainId)
+      ? combinedTokensList.filter((token) => token.chainId === chainId)
       : combinedTokensList
   }, [chainId, combinedTokensList])
 
@@ -202,70 +218,30 @@ export const TransactionsScreen: React.FC = () => {
       searchableTransactions,
       searchValue.toLowerCase()
     )
-  }, [
-    searchValue,
-    searchableTransactions
-  ])
+  }, [searchValue, searchableTransactions])
 
-  // methods
-  const onSelectAccount = React.useCallback(
-    ({ accountId }: WalletAccountType): void => {
-      history.push(
-        updatePageParams({
-          address: accountId.address,
-          // reset chains filter on account select
-          chainId: AllNetworksOption.chainId,
-          chainCoinType: accountId.coin
-        })
-      )
-    },
-    [history]
-  )
-
-  const onSelectNetwork = React.useCallback(
-    ({ chainId, coin }: BraveWallet.NetworkInfo) => {
-      history.push(
-        updatePageParams({
-          address: foundAccountFromParam?.address,
-          chainId,
-          chainCoinType: coin
-        })
-      )
-    },
-    [history, foundAccountFromParam?.address]
-  )
-
-  // render
-  if (isLoadingAccounts || isLoadingTxsList) {
-    return <Column fullHeight>
-      <LoadingIcon opacity={100} size='50px' color='interactive05' />
-    </Column>
-  }
-
-  return (
-    <>
-      <SearchAndFiltersRow>
-        <Column flex={1} style={{ minWidth: '25%' }} alignItems='flex-start'>
-          <SearchBar
-            placeholder={getLocale('braveWalletSearchText')}
-            action={(e) => setSearchValue(e.target.value)}
-            value={searchValue}
-          />
-        </Column>
-        <AccountFilterSelector
-          selectedAccount={foundAccountFromParam || AllAccountsOption}
-          onSelectAccount={onSelectAccount}
-          selectedNetwork={foundNetworkFromParam || AllNetworksOption}
-        />
-        <NetworkFilterSelector
-          selectedAccount={foundAccountFromParam || AllAccountsOption}
-          selectedNetwork={foundNetworkFromParam || AllNetworksOption}
-          onSelectNetwork={onSelectNetwork}
-        />
-      </SearchAndFiltersRow>
-
-      {isLoadingTxsList
-        ? <Column fullHeight fullWidth>
+  const transactionsView = React.useMemo(() => {
+    return (
+      <>
+        {isPortfolio && (
+          <Column
+            flex={1}
+            style={{ minWidth: '100%' }}
+          >
+            <SearchBar
+              placeholder={getLocale('braveWalletSearchText')}
+              action={(e) => setSearchValue(e.target.value)}
+              value={searchValue}
+              isV2={true}
+            />
+            <VerticalSpacer space={24} />
+          </Column>
+        )}
+        {isLoadingAccounts || isLoadingTxsList ? (
+          <Column
+            fullHeight
+            fullWidth
+          >
             <VerticalSpacer space={8} />
             <Skeleton {...txListItemSkeletonProps} />
             <VerticalSpacer space={8} />
@@ -274,60 +250,111 @@ export const TransactionsScreen: React.FC = () => {
             <Skeleton {...txListItemSkeletonProps} />
             <VerticalSpacer space={8} />
           </Column>
-        : <>
-            {txsForSelectedChain?.length === 0 &&
-              <Column fullHeight gap={'24px'}>
-                <VerticalSpacer space={14} />
-                <Text textSize='18px' isBold>
+        ) : (
+          <>
+            {txsForSelectedChain?.length === 0 && (
+              <Column
+                fullHeight
+                gap={'24px'}
+                padding={isPanel ? '0px 0px 32px 0px' : '0px'}
+              >
+                <EmptyTransactionsIcon />
+                <Text
+                  textSize='18px'
+                  isBold
+                >
                   {getLocale('braveWalletNoTransactionsYet')}
                 </Text>
                 <Text textSize='14px'>
                   {getLocale('braveWalletNoTransactionsYetDescription')}
                 </Text>
               </Column>
-            }
+            )}
 
-            {filteredTransactions.map(tx =>
-              <PortfolioTransactionItem
-                key={tx.id}
-                displayAccountName
-                transaction={tx}
-              />
+            {filteredTransactions.length !== 0 && (
+              <Column
+                fullWidth={true}
+                fullHeight={true}
+                justifyContent='flex-start'
+                gap='16px'
+              >
+                {filteredTransactions.map((tx) => (
+                  <PortfolioTransactionItem
+                    key={tx.id}
+                    transaction={tx}
+                    onClick={onClickTransaction}
+                  />
+                ))}
+              </Column>
             )}
 
             {txsForSelectedChain &&
               txsForSelectedChain.length !== 0 &&
-              filteredTransactions.length === 0 &&
-              <Column fullHeight>
-                <Text textSize='14px'>
-                  {getLocale('braveWalletConnectHardwareSearchNothingFound')}
-                </Text>
-              </Column>
-            }
+              filteredTransactions.length === 0 && (
+                <Column
+                  fullHeight
+                  padding={isPanel ? '32px 0px 64px 0px' : '0px'}
+                >
+                  <Text textSize='14px'>
+                    {getLocale('braveWalletConnectHardwareSearchNothingFound')}
+                  </Text>
+                </Column>
+              )}
           </>
+        )}
+      </>
+    )
+  }, [
+    filteredTransactions,
+    isLoadingTxsList,
+    isPanel,
+    isPortfolio,
+    onClickTransaction,
+    searchValue,
+    txsForSelectedChain,
+    isLoadingAccounts
+  ])
+
+  // render
+  if (isPortfolio) {
+    return (
+      <>
+        {transactionsView}
+        {selectedTransaction && (
+          <TransactionDetailsModal
+            onClose={() => {
+              // remove the transaction id from the URL hash
+              history.push(window.location.pathname + window.location.search)
+            }}
+            transaction={selectedTransaction}
+          />
+        )}
+      </>
+    )
+  }
+
+  return (
+    <WalletPageWrapper
+      wrapContentInBox={true}
+      cardHeader={
+        <ActivityPageHeader
+          searchValue={searchValue}
+          onSearchValueChange={(e) => setSearchValue(e.target.value)}
+        />
       }
-    </>
+    >
+      {transactionsView}
+      {selectedTransaction && (
+        <TransactionDetailsModal
+          onClose={() => {
+            // remove the transaction id from the URL hash
+            history.push(window.location.pathname + window.location.search)
+          }}
+          transaction={selectedTransaction}
+        />
+      )}
+    </WalletPageWrapper>
   )
 }
 
 export default TransactionsScreen
-
-const updatePageParams = ({
-  address,
-  chainId,
-  chainCoinType
-}: Params) => {
-  const params = new URLSearchParams()
-  if (address) {
-    params.append('address', address)
-  }
-  if (chainId) {
-    params.append('chainId', chainId)
-  }
-  if (chainCoinType) {
-    params.append('chainCoinType', chainCoinType.toString())
-  }
-  const paramsString = params.toString()
-
-  return `${WalletRoutes.Activity}${paramsString ? `?${paramsString}` : ''}`
-}

@@ -9,8 +9,7 @@
 #include "components/sync/base/user_selectable_type.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-namespace brave_sync {
-namespace p3a {
+namespace brave_sync::p3a {
 
 TEST(BraveSyncP3ATest, TestEnabledTypes) {
   using syncer::UserSelectableType;
@@ -58,23 +57,50 @@ TEST(BraveSyncP3ATest, TestSyncedObjectsCount) {
   base::HistogramTester histogram_tester;
 
   RecordSyncedObjectsCount(0);
-  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramName, 0, 1);
+  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramNameV2, 0, 1);
   RecordSyncedObjectsCount(1000);
-  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramName, 0, 2);
+  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramNameV2, 0, 2);
 
   RecordSyncedObjectsCount(1001);
-  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramName, 1, 1);
+  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramNameV2, 1, 1);
   RecordSyncedObjectsCount(10000);
-  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramName, 1, 2);
+  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramNameV2, 1, 2);
 
   RecordSyncedObjectsCount(10001);
-  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramName, 2, 1);
+  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramNameV2, 2, 1);
   RecordSyncedObjectsCount(49000);
-  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramName, 2, 2);
+  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramNameV2, 2, 2);
 
   RecordSyncedObjectsCount(49001);
-  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramName, 3, 1);
+  histogram_tester.ExpectBucketCount(kSyncedObjectsCountHistogramNameV2, 3, 1);
 }
 
-}  // namespace p3a
-}  // namespace brave_sync
+TEST(BraveSyncP3ATest, TestSyncCodeMonitor) {
+  base::HistogramTester histogram_tester;
+  SyncCodeMonitor monitor;
+
+  monitor.RecordCodeGenerated();
+  histogram_tester.ExpectUniqueSample(
+      kSyncJoinTypeHistogramName, static_cast<int>(SyncJoinType::kChainCreated),
+      1);
+
+  monitor.RecordCodeSet();
+  histogram_tester.ExpectUniqueSample(
+      kSyncJoinTypeHistogramName, static_cast<int>(SyncJoinType::kChainCreated),
+      1);
+
+  monitor.RecordCodeSet();
+  histogram_tester.ExpectBucketCount(
+      kSyncJoinTypeHistogramName, static_cast<int>(SyncJoinType::kChainJoined),
+      1);
+
+  SyncCodeMonitor monitor2;
+  monitor2.RecordCodeSet();
+  histogram_tester.ExpectBucketCount(
+      kSyncJoinTypeHistogramName, static_cast<int>(SyncJoinType::kChainJoined),
+      2);
+
+  histogram_tester.ExpectTotalCount(kSyncJoinTypeHistogramName, 3);
+}
+
+}  // namespace brave_sync::p3a

@@ -5,15 +5,26 @@
 
 #include "brave/components/brave_wallet/common/hex_utils.h"
 
-#include <limits>
+#include <optional>
 
+#include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
-#include "base/strings/stringprintf.h"
 
 namespace brave_wallet {
 
-std::string ToHex(const std::string& data) {
+namespace {
+
+char NibbleToChar(uint8_t val) {
+  if (val >= 0 && val < 0xa) {
+    return '0' + val;
+  }
+  return 'a' + val - 0xa;
+}
+
+}  // namespace
+
+std::string ToHex(std::string_view data) {
   if (data.empty()) {
     return "0x0";
   }
@@ -29,20 +40,16 @@ std::string ToHex(base::span<const uint8_t> data) {
 
 // Returns a hex string representation of a binary buffer. The returned hex
 // string will be in lower case, without the 0x prefix.
-std::string HexEncodeLower(const void* bytes, size_t size) {
-  return base::ToLowerASCII(base::HexEncode(bytes, size));
-}
-
 std::string HexEncodeLower(base::span<const uint8_t> bytes) {
   return base::ToLowerASCII(base::HexEncode(bytes));
 }
 
 // Determines if the passed in hex string is valid
-bool IsValidHexString(const std::string& hex_input) {
+bool IsValidHexString(std::string_view hex_input) {
   if (hex_input.length() < 2) {
     return false;
   }
-  if (!base::StartsWith(hex_input, "0x")) {
+  if (!hex_input.starts_with("0x")) {
     return false;
   }
   for (const auto& c : hex_input.substr(2)) {
@@ -55,7 +62,7 @@ bool IsValidHexString(const std::string& hex_input) {
 
 // Pads a hex encoded parameter to 32-bytes
 // i.e. 64 hex characters.
-bool PadHexEncodedParameter(const std::string& hex_input, std::string* out) {
+bool PadHexEncodedParameter(std::string_view hex_input, std::string* out) {
   if (!out) {
     return false;
   }
@@ -66,18 +73,18 @@ bool PadHexEncodedParameter(const std::string& hex_input, std::string* out) {
     *out = hex_input;
     return true;
   }
-  std::string hex_substr = hex_input.substr(2);
+  std::string_view hex_substr = hex_input.substr(2);
   size_t padding_len = 64 - hex_substr.length();
   std::string padding(padding_len, '0');
 
-  *out = "0x" + padding + hex_substr;
+  *out = base::StrCat({"0x", padding, hex_substr});
   return true;
 }
 
 // Takes 2 inputs prefixed by 0x and combines them into an output with a single
 // 0x. For example 0x1 and 0x2 would return 0x12
-bool ConcatHexStrings(const std::string& hex_input1,
-                      const std::string& hex_input2,
+bool ConcatHexStrings(std::string_view hex_input1,
+                      std::string_view hex_input2,
                       std::string* out) {
   if (!out) {
     return false;
@@ -85,7 +92,7 @@ bool ConcatHexStrings(const std::string& hex_input1,
   if (!IsValidHexString(hex_input1) || !IsValidHexString(hex_input2)) {
     return false;
   }
-  *out = hex_input1 + hex_input2.substr(2);
+  *out = base::StrCat({hex_input1, hex_input2.substr(2)});
   return true;
 }
 
@@ -113,7 +120,7 @@ bool ConcatHexStrings(const std::vector<std::string>& hex_inputs,
   return true;
 }
 
-bool HexValueToUint256(const std::string& hex_input, uint256_t* out) {
+bool HexValueToUint256(std::string_view hex_input, uint256_t* out) {
   if (!out) {
     return false;
   }
@@ -133,7 +140,7 @@ bool HexValueToUint256(const std::string& hex_input, uint256_t* out) {
   return true;
 }
 
-bool HexValueToInt256(const std::string& hex_input, int256_t* out) {
+bool HexValueToInt256(std::string_view hex_input, int256_t* out) {
   if (!out) {
     return false;
   }
@@ -149,22 +156,24 @@ bool HexValueToInt256(const std::string& hex_input, int256_t* out) {
 }
 
 std::string Uint256ValueToHex(uint256_t input) {
-  std::string result;
-  result.reserve(32);
+  if (input == 0) {
+    return "0x0";  // Special case for zero.
+  }
 
-  static constexpr char kHexChars[] = "0123456789abcdef";
-  while (input) {
-    uint8_t i = static_cast<uint8_t>(input & static_cast<uint256_t>(0x0F));
-    result.insert(result.begin(), kHexChars[i]);
-    input >>= 4;
+  uint32_t significant_bits_count = 256 - (__builtin_clzg(input) / 4) * 4;
+
+  std::string result;
+  result.reserve(2 + significant_bits_count / 4);
+  result.append("0x");
+
+  for (uint32_t i = 4; i <= significant_bits_count; i += 4) {
+    result += NibbleToChar((input >> (significant_bits_count - i)) & 0xF);
   }
-  if (result.empty()) {
-    return "0x0";
-  }
-  return "0x" + result;
+
+  return result;
 }
 
-bool PrefixedHexStringToBytes(const std::string& input,
+bool PrefixedHexStringToBytes(std::string_view input,
                               std::vector<uint8_t>* bytes) {
   CHECK(bytes);
   bytes->clear();
@@ -176,7 +185,7 @@ bool PrefixedHexStringToBytes(const std::string& input,
     DCHECK_EQ(input, "0x");
     return true;
   }
-  std::string hex_substr = input.substr(2);
+  std::string hex_substr = std::string(input.substr(2));
   if (hex_substr.length() % 2 == 1) {
     hex_substr = "0" + hex_substr;
   }
@@ -186,11 +195,11 @@ bool PrefixedHexStringToBytes(const std::string& input,
   return true;
 }
 
-absl::optional<std::vector<uint8_t>> PrefixedHexStringToBytes(
-    const std::string& input) {
+std::optional<std::vector<uint8_t>> PrefixedHexStringToBytes(
+    std::string_view input) {
   std::vector<uint8_t> result;
   if (!PrefixedHexStringToBytes(input, &result)) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   return result;

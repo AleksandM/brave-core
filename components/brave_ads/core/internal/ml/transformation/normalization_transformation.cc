@@ -17,9 +17,13 @@ NormalizationTransformation::NormalizationTransformation()
 
 std::unique_ptr<Data> NormalizationTransformation::Apply(
     const std::unique_ptr<Data>& input_data) const {
-  CHECK(input_data->GetType() == DataType::kVector);
+  CHECK(input_data);
 
-  auto* vector_data = static_cast<VectorData*>(input_data.get());
+  if (input_data->GetType() != DataType::kVector) {
+    return {};
+  }
+
+  const auto* const vector_data = static_cast<VectorData*>(input_data.get());
 
   VectorData vector_data_copy = *vector_data;
   vector_data_copy.Normalize();

@@ -63,16 +63,17 @@ export default {
           allowedJsList: LIST_JS,
           httpRedirectsList: [],
           fingerprintsList: [],
-          faviconUrl: { url: 'https://brave.com/static-assets/images/brave-favicon.png' }
+          faviconUrl: { url: 'https://brave.com/static-assets/images/brave-favicon.png' },
+          invokedWebcompatList: []
         },
         siteSettings: {
           adBlockMode: AdBlockMode.ALLOW,
-          fingerprintMode: FingerprintMode.ALLOW,
+          fingerprintMode: FingerprintMode.ALLOW_MODE,
           cookieBlockMode: CookieBlockMode.ALLOW,
-          isHttpsEverywhereEnabled: true,
-          httpsUpgradeMode: HttpsUpgradeMode.DISABLED,
+          httpsUpgradeMode: HttpsUpgradeMode.DISABLED_MODE,
           isNoscriptEnabled: false,
-          isForgetFirstPartyStorageEnabled: false
+          isForgetFirstPartyStorageEnabled: false,
+          webcompatSettings: {}
         },
         viewType: ViewType.Main
       }
@@ -92,29 +93,33 @@ export default {
   ]
 }
 
-export const _Main = () => {
-  return (
-    <S.PanelFrame>
-      <MainPanel />
-    </S.PanelFrame>
-  )
+export const _Main = {
+  render: () => {
+    return (
+      <S.PanelFrame>
+        <MainPanel />
+      </S.PanelFrame>
+    )
+  }
 }
 
-export const _ResourceList = () => {
-  const { siteBlockInfo } = React.useContext(DataContext)
+export const _ResourceList = {
+  render: () => {
+    const { siteBlockInfo } = React.useContext(DataContext)
 
-  if (!siteBlockInfo) {
-    return
+    if (!siteBlockInfo) {
+      return
+    }
+
+    return (
+      <S.PanelFrame>
+        <TreeList
+          blockedList={siteBlockInfo?.blockedJsList}
+          allowedList={siteBlockInfo?.allowedJsList}
+          totalAllowedTitle={getLocale('braveShieldsAllowedScriptsLabel')}
+          totalBlockedTitle={getLocale('braveShieldsBlockedScriptsLabel')}
+        />
+      </S.PanelFrame>
+    )
   }
-
-  return (
-    <S.PanelFrame>
-      <TreeList
-        blockedList={ siteBlockInfo?.blockedJsList }
-        allowedList={ siteBlockInfo?.allowedJsList }
-        totalAllowedTitle={getLocale('braveShieldsAllowedScriptsLabel')}
-        totalBlockedTitle={getLocale('braveShieldsBlockedScriptsLabel')}
-      />
-    </S.PanelFrame>
-  )
 }

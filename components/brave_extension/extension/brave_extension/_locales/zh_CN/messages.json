@@ -1,7 +1,7 @@
 {
   "appName": {
     "message": " Brave 扩展名",
-    "description": "The name of the the extension."
+    "description": "The name of the extension."
   },
   "shields": {
     "message": "屏蔽",
@@ -60,7 +60,7 @@
     "description": "Message for the option in the ads and trackers blocking select field in read only view"
   },
   "aggressiveAdsTrackersBlocking": {
-    "message": "跟踪器和广告被屏蔽（攻击性）",
+    "message": "跟踪器和广告被屏蔽（积极地）",
     "description": "Message for the option in the ads and trackers blocking select field to block ads and trackers with aggressive heuristics"
   },
   "standardAdsTrackersBlocking": {

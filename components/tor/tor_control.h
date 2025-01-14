@@ -15,6 +15,7 @@
 
 #include "base/files/file_path.h"
 #include "base/functional/callback_forward.h"
+#include "base/gtest_prod_util.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "brave/components/tor/tor_control_event.h"
@@ -50,7 +51,7 @@ class TorControl {
   using CmdCallback = base::OnceCallback<
       void(bool error, const std::string& status, const std::string& reply)>;
 
-  class Delegate : public base::SupportsWeakPtr<Delegate> {
+  class Delegate {
    public:
     virtual ~Delegate() = default;
     virtual void OnTorControlReady() = 0;
@@ -69,6 +70,9 @@ class TorControl {
                              const std::string& line) {}
     virtual void OnTorRawEnd(const std::string& status,
                              const std::string& line) {}
+
+    // Returns a WeakPtr to the implementation instance.
+    virtual base::WeakPtr<Delegate> AsWeakPtr() = 0;
   };
 
   TorControl(base::WeakPtr<TorControl::Delegate> delegate,
@@ -103,6 +107,7 @@ class TorControl {
   friend class TorControlTest;
   FRIEND_TEST_ALL_PREFIXES(TorControlTest, ParseQuoted);
   FRIEND_TEST_ALL_PREFIXES(TorControlTest, ParseKV);
+  FRIEND_TEST_ALL_PREFIXES(TorControlTest, ReadDone);
   FRIEND_TEST_ALL_PREFIXES(TorControlTest, ReadLine);
   FRIEND_TEST_ALL_PREFIXES(TorControlTest, GetCircuitEstablishedDone);
 
@@ -203,7 +208,7 @@ class TorControl {
   void DoReads();
   void ReadDoneAsync(int rv);
   void ReadDone(int rv);
-  bool ReadLine(const std::string& line);
+  bool ReadLine(std::string_view line);
 
   void Error();
 
@@ -228,7 +233,7 @@ class TorControl {
   std::queue<std::pair<PerLineCallback, CmdCallback>> cmdq_;
   bool reading_;
   scoped_refptr<net::GrowableIOBuffer> readiobuf_;
-  int read_start_;  // offset where the current line starts
+  size_t read_start_;  // offset where the current line starts
   bool read_cr_;    // true if we have parsed a CR
 
   // Asynchronous command response callback state machine.

@@ -20,24 +20,10 @@
 
 namespace {
 
-GURL GetURLForUIType(const std::string& type, GURL manage_url) {
-  if (type == "recover" || type == "checkout") {
-    DCHECK(manage_url.is_valid());
-    std::string query = "intent=" + type + "&product=vpn";
-    GURL::Replacements replacements;
-    replacements.SetQueryStr(query);
-    return manage_url.ReplaceComponents(replacements);
-  } else if (type == "privacy") {
-    return GURL("https://brave.com/privacy/browser/#vpn");
-  } else if (type == "about") {
-    return GURL(brave_vpn::kAboutUrl);
-  }
-  DCHECK_EQ(type, "manage");
-  return manage_url;
-}
-
-bool ShouldOpenSingletonTab(const std::string& type) {
-  return type == "manage" || type == "privacy" || type == "about";
+bool ShouldOpenSingletonTab(brave_vpn::mojom::ManageURLType type) {
+  return type == brave_vpn::mojom::ManageURLType::MANAGE ||
+         type == brave_vpn::mojom::ManageURLType::PRIVACY ||
+         type == brave_vpn::mojom::ManageURLType::ABOUT;
 }
 
 void ShowSingletonVPNTab(Browser* browser, const GURL& url) {
@@ -71,7 +57,7 @@ void VPNPanelHandler::ShowUI() {
   auto embedder = panel_controller_->embedder();
   brave_vpn::BraveVpnService* vpn_service =
       brave_vpn::BraveVpnServiceFactory::GetForProfile(profile_);
-  DCHECK(vpn_service);
+  CHECK(vpn_service);
   if (embedder) {
     embedder->ShowUI();
     vpn_service->ReloadPurchasedState();
@@ -86,10 +72,11 @@ void VPNPanelHandler::CloseUI() {
 }
 
 void VPNPanelHandler::OpenVpnUIUrl(
-    const std::string& type,
+    brave_vpn::mojom::ManageURLType type,
     brave_vpn::mojom::ProductUrlsPtr product_urls) {
   auto* browser = chrome::FindLastActiveWithProfile(profile_);
-  auto url = GetURLForUIType(type, GURL(product_urls->manage));
+  const auto url =
+      brave_vpn::GetManageURLForUIType(type, GURL(product_urls->manage));
   if (ShouldOpenSingletonTab(type)) {
     ShowSingletonVPNTab(browser, url);
   } else {
@@ -97,10 +84,10 @@ void VPNPanelHandler::OpenVpnUIUrl(
   }
 }
 
-void VPNPanelHandler::OpenVpnUI(const std::string& type) {
+void VPNPanelHandler::OpenVpnUI(brave_vpn::mojom::ManageURLType type) {
   brave_vpn::BraveVpnService* vpn_service =
       brave_vpn::BraveVpnServiceFactory::GetForProfile(profile_);
-  DCHECK(vpn_service);
+  CHECK(vpn_service);
   vpn_service->GetProductUrls(base::BindOnce(&VPNPanelHandler::OpenVpnUIUrl,
                                              base::Unretained(this), type));
 }

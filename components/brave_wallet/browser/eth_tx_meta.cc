@@ -5,11 +5,13 @@
 
 #include "brave/components/brave_wallet/browser/eth_tx_meta.h"
 
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
+#include "brave/components/brave_wallet/browser/brave_wallet_constants.h"
 #include "brave/components/brave_wallet/browser/brave_wallet_utils.h"
 #include "brave/components/brave_wallet/browser/eip1559_transaction.h"
 #include "brave/components/brave_wallet/browser/eip2930_transaction.h"
@@ -22,18 +24,18 @@ namespace brave_wallet {
 
 namespace {
 
-absl::optional<std::string> GetFinalRecipient(
+std::optional<std::string> GetFinalRecipient(
     const std::string& chain_id,
     const std::string& base_to,
     mojom::TransactionType tx_type,
     const std::vector<std::string>& tx_args) {
   if (tx_type == mojom::TransactionType::ETHFilForwarderTransfer) {
     if (tx_args.empty()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     std::vector<uint8_t> bytes;
     if (!PrefixedHexStringToBytes(tx_args.at(0), &bytes)) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     std::string fil_chain_id =
         chain_id == mojom::kFilecoinEthereumMainnetChainId
@@ -41,14 +43,14 @@ absl::optional<std::string> GetFinalRecipient(
             : mojom::kFilecoinTestnet;
     auto fil_address = FilAddress::FromBytes(fil_chain_id, bytes);
     if (fil_address.IsEmpty()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     return fil_address.EncodeAsString();
   }
 
   if (tx_type == mojom::TransactionType::ERC20Transfer) {
     if (tx_args.empty()) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     return tx_args.at(0);
   }
@@ -56,7 +58,7 @@ absl::optional<std::string> GetFinalRecipient(
   if (tx_type == mojom::TransactionType::ERC721TransferFrom ||
       tx_type == mojom::TransactionType::ERC721SafeTransferFrom) {
     if (tx_args.size() < 2) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     // (address owner, address to, uint256 tokenId)
     return tx_args.at(1);
@@ -68,7 +70,12 @@ absl::optional<std::string> GetFinalRecipient(
 }  // namespace
 
 EthTxMeta::EthTxMeta() : tx_(std::make_unique<EthTransaction>()) {}
-EthTxMeta::EthTxMeta(std::unique_ptr<EthTransaction> tx) : tx_(std::move(tx)) {}
+EthTxMeta::EthTxMeta(const mojom::AccountIdPtr& from,
+                     std::unique_ptr<EthTransaction> tx)
+    : tx_(std::move(tx)) {
+  DCHECK_EQ(from->coin, mojom::CoinType::ETH);
+  set_from(from.Clone());
+}
 
 EthTxMeta::~EthTxMeta() = default;
 
@@ -110,27 +117,41 @@ mojom::TransactionInfoPtr EthTxMeta::ToTransactionInfo() const {
   mojom::TransactionType tx_type;
   std::vector<std::string> tx_params;
   std::vector<std::string> tx_args;
+  mojom::SwapInfoPtr swap_info;
   std::vector<uint8_t> data{0x0};
   if (tx_->data().size() > 0) {
     data = tx_->data();
   }
 
   auto tx_info = GetTransactionInfoFromData(data);
-  absl::optional<std::string> final_recepient;
+  std::optional<std::string> final_recipient;
   if (!tx_info) {
     LOG(ERROR) << "Error parsing transaction data: " << ToHex(data);
   } else {
-    std::tie(tx_type, tx_params, tx_args) = *tx_info;
-    final_recepient = GetFinalRecipient(chain_id, tx_->to().ToChecksumAddress(),
+    std::tie(tx_type, tx_params, tx_args, swap_info) = std::move(*tx_info);
+    final_recipient = GetFinalRecipient(chain_id, tx_->to().ToChecksumAddress(),
                                         tx_type, tx_args);
   }
-  absl::optional<std::string> signed_transaction;
+  std::optional<std::string> signed_transaction;
   if (tx_->IsSigned()) {
     signed_transaction = tx_->GetSignedTransaction();
   }
 
+  if (swap_info) {
+    swap_info->from_chain_id = chain_id_;
+
+    if (swap_info->to_chain_id.empty()) {
+      swap_info->to_chain_id = chain_id_;
+    }
+
+    if (swap_info->from_amount.empty() &&
+        swap_info->from_asset == kNativeEVMAssetContractAddress) {
+      swap_info->from_amount = Uint256ValueToHex(tx_->value());
+    }
+  }
+
   return mojom::TransactionInfo::New(
-      id_, from_, tx_hash_,
+      id_, from_->address, from_.Clone(), tx_hash_,
       mojom::TxDataUnion::NewEthTxData1559(mojom::TxData1559::New(
           mojom::TxData::New(
               tx_->nonce() ? Uint256ValueToHex(tx_->nonce().value()) : "",
@@ -141,11 +162,19 @@ mojom::TransactionInfoPtr EthTxMeta::ToTransactionInfo() const {
           chain_id, max_priority_fee_per_gas, max_fee_per_gas,
           std::move(gas_estimation_1559_ptr))),
       status_, tx_type, tx_params, tx_args,
-      base::Milliseconds(created_time_.ToJavaTime()),
-      base::Milliseconds(submitted_time_.ToJavaTime()),
-      base::Milliseconds(confirmed_time_.ToJavaTime()),
-      origin_.has_value() ? MakeOriginInfo(*origin_) : nullptr, group_id_,
-      chain_id_, final_recepient);
+      base::Milliseconds(created_time_.InMillisecondsSinceUnixEpoch()),
+      base::Milliseconds(submitted_time_.InMillisecondsSinceUnixEpoch()),
+      base::Milliseconds(confirmed_time_.InMillisecondsSinceUnixEpoch()),
+      origin_.has_value() ? MakeOriginInfo(*origin_) : nullptr, chain_id_,
+      final_recipient, IsRetriable(), std::move(swap_info));
+}
+
+mojom::CoinType EthTxMeta::GetCoinType() const {
+  return mojom::CoinType::ETH;
+}
+
+bool EthTxMeta::IsRetriable() const {
+  return IsRetriableStatus(status_);
 }
 
 }  // namespace brave_wallet

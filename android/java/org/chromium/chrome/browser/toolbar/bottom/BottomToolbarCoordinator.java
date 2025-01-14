@@ -35,12 +35,10 @@ import org.chromium.chrome.browser.layouts.LayoutStateProvider;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.omnibox.OmniboxFocusReason;
 import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider;
-import org.chromium.chrome.browser.tasks.ReturnToChromeUtil;
-import org.chromium.chrome.browser.tasks.tab_management.TabUiFeatureUtilities;
+import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.theme.ThemeColorProvider;
-import org.chromium.chrome.browser.toolbar.HomeButton;
 import org.chromium.chrome.browser.toolbar.LocationBarModel;
-import org.chromium.chrome.browser.toolbar.TabCountProvider;
+import org.chromium.chrome.browser.toolbar.home_button.HomeButton;
 import org.chromium.chrome.browser.ui.appmenu.AppMenuButtonHelper;
 import org.chromium.chrome.browser.util.TabUtils;
 
@@ -60,31 +58,26 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
     /** The tab switcher mode bottom toolbar stub that will be inflated when native is ready. */
     private final ViewStub mTabSwitcherModeStub;
 
-    /** A provider that notifies components when the theme color changes.*/
+    /** A provider that notifies components when the theme color changes. */
     private final ThemeColorProvider mThemeColorProvider;
 
     private LayoutStateProvider.LayoutStateObserver mLayoutStateObserver;
-    private OneshotSupplier<LayoutStateProvider> mLayoutStateProviderSupplier;
     private LayoutStateProvider mLayoutStateProvider;
-
-    /** The activity tab provider. */
-    private ActivityTabProvider mTabProvider;
 
     private ObservableSupplierImpl<OnClickListener> mShareButtonListenerSupplier =
             new ObservableSupplierImpl<>();
     private CallbackController mCallbackController = new CallbackController();
     ObservableSupplier<AppMenuButtonHelper> mMenuButtonHelperSupplier;
-    private BottomControlsMediator mBottomControlsMediator;
     private Runnable mOriginalHomeButtonRunnable;
     private final BraveScrollingBottomViewResourceFrameLayout mScrollingBottomView;
     private HomeButton mHomeButton;
     private BookmarksButton mBookmarksButton;
-    private SearchAccelerator mSearchAccelerator;
     private BottomToolbarNewTabButton mNewTabButton;
     private View mBottomContainerTopShadow;
-
+    private boolean mBookmarkButtonFilled;
     private ObservableSupplier<BookmarkModel> mBookmarkModelSupplier;
     private LocationBarModel mLocationBarModel;
+    private HomepageManager mHomepageManager;
 
     private final Context mContext = ContextUtils.getApplicationContext();
 
@@ -100,25 +93,32 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
         layoutStateProviderSupplier.onAvailable(
                 mCallbackController.makeCancelable(this::setLayoutStateProvider));
 
-        final OnClickListener homeButtonListener = v -> {
-            openHomepageAction.run();
-        };
+        final OnClickListener homeButtonListener =
+                v -> {
+                    openHomepageAction.run();
+                };
 
-        final OnClickListener searchAcceleratorListener = v -> {
-            setUrlBarFocusAction.onResult(OmniboxFocusReason.ACCELERATOR_TAP);
-        };
+        final OnClickListener searchAcceleratorListener =
+                v -> {
+                    setUrlBarFocusAction.onResult(OmniboxFocusReason.ACCELERATOR_TAP);
+                };
 
-        mBrowsingModeCoordinator = new BrowsingModeBottomToolbarCoordinator(root, tabProvider,
-                homeButtonListener, searchAcceleratorListener, mShareButtonListenerSupplier,
-                tabsSwitcherLongClickListner);
+        mHomepageManager = HomepageManager.getInstance();
+
+        mBrowsingModeCoordinator =
+                new BrowsingModeBottomToolbarCoordinator(
+                        root,
+                        tabProvider,
+                        homeButtonListener,
+                        searchAcceleratorListener,
+                        mShareButtonListenerSupplier,
+                        tabsSwitcherLongClickListner);
 
         mTabSwitcherModeStub = root.findViewById(R.id.bottom_toolbar_tab_switcher_mode_stub);
 
         mThemeColorProvider = themeColorProvider;
-        mTabProvider = tabProvider;
 
         mMenuButtonHelperSupplier = menuButtonHelperSupplier;
-        mBottomControlsMediator = bottomControlsMediator;
         mOriginalHomeButtonRunnable = openHomepageAction;
         mScrollingBottomView = (BraveScrollingBottomViewResourceFrameLayout) scrollingBottomView;
 
@@ -132,39 +132,55 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
     /**
      * Initialize the bottom toolbar with the components that had native initialization
      * dependencies.
-     * <p>
-     * Calling this must occur after the native library have completely loaded.
-     * @param tabSwitcherListener An {@link OnClickListener} that is triggered when the
-     *                            tab switcher button is clicked.
-     * @param newTabClickListener An {@link OnClickListener} that is triggered when the
-     *                            new tab button is clicked.
-     * @param tabCountProvider Updates the tab count number in the tab switcher button and in the
-     *                         incognito toggle tab layout.
+     *
+     * <p>Calling this must occur after the native library have completely loaded.
+     *
+     * @param tabSwitcherListener An {@link OnClickListener} that is triggered when the tab switcher
+     *     button is clicked.
+     * @param newTabClickListener An {@link OnClickListener} that is triggered when the new tab
+     *     button is clicked.
+     * @param tabModelSelector Updates the tab count number in the tab switcher button and in the
+     *     incognito toggle tab layout.
      * @param incognitoStateProvider Notifies components when incognito mode is entered or exited.
      * @param topToolbarRoot The root {@link ViewGroup} of the top toolbar.
      * @param closeAllTabsAction The runnable that closes all tabs in the current tab model.
      */
-    void initializeWithNative(OnClickListener tabSwitcherListener,
-            OnClickListener newTabClickListener, TabCountProvider tabCountProvider,
-            IncognitoStateProvider incognitoStateProvider, ViewGroup topToolbarRoot,
+    void initializeWithNative(
+            OnClickListener tabSwitcherListener,
+            OnClickListener newTabClickListener,
+            TabModelSelector tabModelSelector,
+            IncognitoStateProvider incognitoStateProvider,
+            ViewGroup topToolbarRoot,
             Runnable closeAllTabsAction) {
-        final OnClickListener closeTabsClickListener = v -> {
-            final boolean isIncognito = incognitoStateProvider.isIncognitoSelected();
-            if (isIncognito) {
-                RecordUserAction.record("MobileToolbarCloseAllIncognitoTabsButtonTap");
-            } else {
-                RecordUserAction.record("MobileToolbarCloseAllRegularTabsButtonTap");
-            }
+        final OnClickListener closeTabsClickListener =
+                v -> {
+                    final boolean isIncognito = incognitoStateProvider.isIncognitoSelected();
+                    if (isIncognito) {
+                        RecordUserAction.record("MobileToolbarCloseAllIncognitoTabsButtonTap");
+                    } else {
+                        RecordUserAction.record("MobileToolbarCloseAllRegularTabsButtonTap");
+                    }
 
-            closeAllTabsAction.run();
-        };
+                    closeAllTabsAction.run();
+                };
 
-        mBrowsingModeCoordinator.initializeWithNative(newTabClickListener, tabSwitcherListener,
-                mMenuButtonHelperSupplier, tabCountProvider, mThemeColorProvider,
+        mBrowsingModeCoordinator.initializeWithNative(
+                newTabClickListener,
+                tabSwitcherListener,
+                mMenuButtonHelperSupplier,
+                tabModelSelector,
+                mThemeColorProvider,
                 incognitoStateProvider);
-        mTabSwitcherModeCoordinator = new TabSwitcherBottomToolbarCoordinator(mTabSwitcherModeStub,
-                topToolbarRoot, incognitoStateProvider, mThemeColorProvider, newTabClickListener,
-                closeTabsClickListener, mMenuButtonHelperSupplier, tabCountProvider);
+        mTabSwitcherModeCoordinator =
+                new TabSwitcherBottomToolbarCoordinator(
+                        mTabSwitcherModeStub,
+                        topToolbarRoot,
+                        incognitoStateProvider,
+                        mThemeColorProvider,
+                        newTabClickListener,
+                        closeTabsClickListener,
+                        mMenuButtonHelperSupplier,
+                        tabModelSelector.getModel(false).getProfile());
 
         ChromeActivity activity = null;
         try {
@@ -172,61 +188,72 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
         } catch (BraveActivity.BraveActivityNotFoundException e) {
             Log.e(TAG, "initializeWithNative " + e);
         }
-        // Do not change bottom bar if StartSurface Single Pane is enabled and HomePage is not
-        // customized.
-        if (!ReturnToChromeUtil.shouldShowStartSurfaceAsTheHomePage(
-                    activity != null ? activity : mContext)
-                && BottomToolbarVariationManager.shouldBottomToolbarBeVisibleInOverviewMode()) {
-            mLayoutStateObserver = new LayoutStateProvider.LayoutStateObserver() {
-                @Override
-                public void onStartedShowing(@LayoutType int layoutType, boolean showToolbar) {
-                    if (layoutType != LayoutType.TAB_SWITCHER) return;
+        // Do not change bottom bar if HomePage is not customized.
+        if (BottomToolbarVariationManager.shouldBottomToolbarBeVisibleInOverviewMode()) {
+            mLayoutStateObserver =
+                    new LayoutStateProvider.LayoutStateObserver() {
+                        @Override
+                        public void onStartedShowing(@LayoutType int layoutType) {
+                            if (layoutType != LayoutType.TAB_SWITCHER) return;
 
-                    BrowsingModeBottomToolbarCoordinator browsingModeCoordinator =
-                            (BrowsingModeBottomToolbarCoordinator) mBrowsingModeCoordinator;
-                    browsingModeCoordinator.getSearchAccelerator().setVisibility(View.GONE);
-                    if (BottomToolbarVariationManager.isHomeButtonOnBottom()) {
-                        browsingModeCoordinator.getHomeButton().setVisibility(View.INVISIBLE);
-                    }
-                    if (BottomToolbarVariationManager.isBookmarkButtonOnBottom()) {
-                        browsingModeCoordinator.getBookmarkButton().setVisibility(View.INVISIBLE);
-                    }
-                    if (BottomToolbarVariationManager.isTabSwitcherOnBottom()) {
-                        browsingModeCoordinator.getTabSwitcherButtonView().setVisibility(
-                                View.INVISIBLE);
-                    }
-                    if (BottomToolbarVariationManager.isNewTabButtonOnBottom()) {
-                        browsingModeCoordinator.getNewTabButtonParent().setVisibility(View.VISIBLE);
-                    }
+                            BrowsingModeBottomToolbarCoordinator browsingModeCoordinator =
+                                    (BrowsingModeBottomToolbarCoordinator) mBrowsingModeCoordinator;
+                            browsingModeCoordinator.getSearchAccelerator().setVisibility(View.GONE);
+                            if (BottomToolbarVariationManager.isHomeButtonOnBottom()) {
+                                browsingModeCoordinator
+                                        .getHomeButton()
+                                        .setVisibility(View.INVISIBLE);
+                            }
+                            if (BottomToolbarVariationManager.isBookmarkButtonOnBottom()) {
+                                browsingModeCoordinator
+                                        .getBookmarkButton()
+                                        .setVisibility(View.INVISIBLE);
+                            }
+                            if (BottomToolbarVariationManager.isTabSwitcherOnBottom()) {
+                                browsingModeCoordinator
+                                        .getTabSwitcherButtonView()
+                                        .setVisibility(View.INVISIBLE);
+                            }
+                            if (BottomToolbarVariationManager.isNewTabButtonOnBottom()) {
+                                browsingModeCoordinator
+                                        .getNewTabButtonParent()
+                                        .setVisibility(View.VISIBLE);
+                            }
 
-                    mBottomContainerTopShadow.setVisibility(View.GONE);
-                }
+                            mBottomContainerTopShadow.setVisibility(View.GONE);
+                        }
 
-                @Override
-                public void onStartedHiding(
-                        @LayoutType int layoutType, boolean showToolbar, boolean delayAnimation) {
-                    if (layoutType != LayoutType.TAB_SWITCHER) return;
+                        @Override
+                        public void onStartedHiding(@LayoutType int layoutType) {
+                            if (layoutType != LayoutType.TAB_SWITCHER) return;
 
-                    BrowsingModeBottomToolbarCoordinator browsingModeCoordinator =
-                            (BrowsingModeBottomToolbarCoordinator) mBrowsingModeCoordinator;
-                    browsingModeCoordinator.getSearchAccelerator().setVisibility(View.VISIBLE);
-                    if (BottomToolbarVariationManager.isHomeButtonOnBottom()) {
-                        browsingModeCoordinator.getHomeButton().setVisibility(View.VISIBLE);
-                    }
-                    if (BottomToolbarVariationManager.isBookmarkButtonOnBottom()) {
-                        browsingModeCoordinator.getBookmarkButton().setVisibility(View.VISIBLE);
-                    }
-                    if (BottomToolbarVariationManager.isTabSwitcherOnBottom()) {
-                        browsingModeCoordinator.getTabSwitcherButtonView().setVisibility(
-                                View.VISIBLE);
-                    }
-                    if (BottomToolbarVariationManager.isNewTabButtonOnBottom()) {
-                        browsingModeCoordinator.getNewTabButtonParent().setVisibility(View.GONE);
-                    }
+                            BrowsingModeBottomToolbarCoordinator browsingModeCoordinator =
+                                    (BrowsingModeBottomToolbarCoordinator) mBrowsingModeCoordinator;
+                            browsingModeCoordinator
+                                    .getSearchAccelerator()
+                                    .setVisibility(View.VISIBLE);
+                            if (BottomToolbarVariationManager.isHomeButtonOnBottom()) {
+                                browsingModeCoordinator.getHomeButton().setVisibility(View.VISIBLE);
+                            }
+                            if (BottomToolbarVariationManager.isBookmarkButtonOnBottom()) {
+                                browsingModeCoordinator
+                                        .getBookmarkButton()
+                                        .setVisibility(View.VISIBLE);
+                            }
+                            if (BottomToolbarVariationManager.isTabSwitcherOnBottom()) {
+                                browsingModeCoordinator
+                                        .getTabSwitcherButtonView()
+                                        .setVisibility(View.VISIBLE);
+                            }
+                            if (BottomToolbarVariationManager.isNewTabButtonOnBottom()) {
+                                browsingModeCoordinator
+                                        .getNewTabButtonParent()
+                                        .setVisibility(View.GONE);
+                            }
 
-                    mBottomContainerTopShadow.setVisibility(View.VISIBLE);
-                }
-            };
+                            mBottomContainerTopShadow.setVisibility(View.VISIBLE);
+                        }
+                    };
         }
 
         View root = (View) topToolbarRoot.getParent();
@@ -238,18 +265,19 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
             updateHomeButtonState();
             mHomeButton.setOnLongClickListener(this);
 
-            final OnClickListener homeButtonListener = v -> {
-                if (HomepageManager.isHomepageEnabled()) {
-                    try {
-                        BraveActivity.getBraveActivity().setComesFromNewTab(true);
-                    } catch (BraveActivity.BraveActivityNotFoundException e) {
-                        Log.e(TAG, "HomeButton click " + e);
-                    }
-                    mOriginalHomeButtonRunnable.run();
-                } else {
-                    newTabClickListener.onClick(v);
-                }
-            };
+            final OnClickListener homeButtonListener =
+                    v -> {
+                        if (mHomepageManager.isHomepageEnabled()) {
+                            try {
+                                BraveActivity.getBraveActivity().setComesFromNewTab(true);
+                            } catch (BraveActivity.BraveActivityNotFoundException e) {
+                                Log.e(TAG, "HomeButton click " + e);
+                            }
+                            mOriginalHomeButtonRunnable.run();
+                        } else {
+                            newTabClickListener.onClick(v);
+                        }
+                    };
 
             mHomeButton.setOnClickListener(homeButtonListener);
         }
@@ -278,15 +306,7 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
      */
     void setBottomToolbarVisible(boolean isVisible) {
         if (mTabSwitcherModeCoordinator != null) {
-            try {
-                ChromeActivity activity = BraveActivity.getBraveActivity();
-                mTabSwitcherModeCoordinator.showToolbarOnTop(
-                        !isVisible, TabUiFeatureUtilities.isGridTabSwitcherEnabled(activity));
-            } catch (BraveActivity.BraveActivityNotFoundException e) {
-                Log.e(TAG, "setBottomToolbarVisible " + e);
-                mTabSwitcherModeCoordinator.showToolbarOnTop(
-                        !isVisible, TabUiFeatureUtilities.isGridTabSwitcherEnabled(mContext));
-            }
+            mTabSwitcherModeCoordinator.showToolbarOnTop(!isVisible, true);
         }
         mBrowsingModeCoordinator.onVisibilityChanged(isVisible);
     }
@@ -318,6 +338,11 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
         if (mBrowsingModeCoordinator != null) {
             ((BrowsingModeBottomToolbarCoordinator) mBrowsingModeCoordinator)
                     .updateBookmarkButton(isBookmarked, editingAllowed);
+            if (mBookmarkButtonFilled != isBookmarked) {
+                // We need to update cached image with new bookmark button state.
+                mScrollingBottomView.triggerBitmapCapture(false);
+                mBookmarkButtonFilled = isBookmarked;
+            }
         }
     }
 
@@ -325,7 +350,7 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
     public boolean onLongClick(View v) {
         if (v == mHomeButton) {
             // It is currently a new tab button when homepage is disabled.
-            if (!HomepageManager.isHomepageEnabled()) {
+            if (!mHomepageManager.isHomepageEnabled()) {
                 TabUtils.showTabPopupMenu(mContext, v);
                 return true;
             }
@@ -344,7 +369,7 @@ class BottomToolbarCoordinator implements View.OnLongClickListener {
 
     public void updateHomeButtonState() {
         assert (mHomeButton != null);
-        if (!HomepageManager.isHomepageEnabled()) {
+        if (!mHomepageManager.isHomepageEnabled()) {
             mHomeButton.setImageDrawable(
                     ContextCompat.getDrawable(mContext, R.drawable.new_tab_icon));
             mHomeButton.setEnabled(true);

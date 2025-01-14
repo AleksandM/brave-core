@@ -25,21 +25,15 @@ int GetIconIndexForFileType() {
     case version_info::Channel::CANARY:
       return icon_resources::kSxSFileTypeIndex;
     default:
-      NOTREACHED();
-      return icon_resources::kFileTypeIndex;
+      break;
   }
+  // Official build uses above four types of channel.
+  NOTREACHED() << "All available types are handled above.";
 }
 
 #endif  // OFFICIAL_BUILD
 
 }  // namespace
-
-#define BRAVE_IPFS L"ipfs"
-#define BRAVE_IPNS L"ipns"
-
-#define BRAVE_BROWSER_PROTOCOL_ASSOCIATIONS BRAVE_IPFS, BRAVE_IPNS,
-
-#define BRAVE_POTENTIAL_PROTOCOL_ASSOCIATIONS BRAVE_IPFS, BRAVE_IPNS,
 
 #if defined(OFFICIAL_BUILD)
 // Add BraveFile prog id in registry with proper icon.
@@ -78,7 +72,3 @@ int GetIconIndexForFileType() {
 #undef BRAVE_GET_SHELL_INTEGRATION_ENTRIES
 #undef BRAVE_GET_APP_EXT_REGISTRATION_ENTRIES
 #undef BRAVE_GET_CHROME_PROG_ID_ENTRIES
-#undef BRAVE_IPFS
-#undef BRAVE_IPNS
-#undef BRAVE_POTENTIAL_PROTOCOL_ASSOCIATIONS
-#undef BRAVE_BROWSER_PROTOCOL_ASSOCIATIONS

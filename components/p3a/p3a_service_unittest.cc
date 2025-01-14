@@ -6,6 +6,7 @@
 #include "brave/components/p3a/p3a_service.h"
 
 #include <set>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -36,11 +37,14 @@ constexpr size_t kUploadIntervalSeconds = 60;
 constexpr char kP2APrefix[] = "Brave.P2A";
 constexpr char kTestCreativeMetric1[] = "creativeInstanceId.abc.views";
 constexpr char kTestCreativeMetric2[] = "creativeInstanceId.abc.clicks";
+constexpr char kTestExpressMetric[] = "Brave.Core.UsageDaily";
 constexpr char kTestExampleMetric[] = "Brave.Core.TestMetric";
 
 constexpr char kTestP3AJsonHost[] = "https://p3a-json.brave.com";
 constexpr char kTestP2AJsonHost[] = "https://p2a-json.brave.com";
 constexpr char kTestP3ACreativeHost[] = "https://p3a-creative.brave.com";
+
+constexpr char kTestEphemeralMetric[] = "Brave.AIChat.UsageWeekly";
 
 }  // namespace
 
@@ -78,6 +82,8 @@ class P3AServiceTest : public testing::Test {
     config_.p3a_creative_upload_url = GURL(kTestP3ACreativeHost);
   }
 
+  void TearDown() override { p3a_service_ = nullptr; }
+
   void SetUpP3AService() {
     p3a_service_ = scoped_refptr(new P3AService(
         local_state_, "release", "2049-01-01", P3AConfig(config_)));
@@ -98,15 +104,15 @@ class P3AServiceTest : public testing::Test {
     std::vector<std::string> result;
     size_t p3a_i = 0;
     size_t p2a_i = 0;
-    for (const base::StringPiece& histogram_name :
-         p3a::kCollectedTypicalHistograms) {
-      if (histogram_name.rfind(kP2APrefix, 0) == 0) {
+    for (const auto& histogram_pair : p3a::kCollectedTypicalHistograms) {
+      if (histogram_pair.first.rfind(kP2APrefix, 0) == 0) {
         if (p2a_i < p2a_count) {
-          result.push_back(std::string(histogram_name));
+          result.push_back(std::string(histogram_pair.first));
           p2a_i++;
         }
-      } else if (p3a_i < p3a_count) {
-        result.push_back(std::string(histogram_name));
+      } else if (p3a_i < p3a_count &&
+                 histogram_pair.first.starts_with("Brave.Core")) {
+        result.push_back(std::string(histogram_pair.first));
         p3a_i++;
       }
 
@@ -130,7 +136,7 @@ class P3AServiceTest : public testing::Test {
   std::set<std::string> p3a_creative_sent_metrics_;
 
  private:
-  base::StringPiece ExtractBodyFromRequest(
+  std::string_view ExtractBodyFromRequest(
       const network::ResourceRequest& request) {
     return request.request_body->elements()
         ->at(0)
@@ -140,7 +146,7 @@ class P3AServiceTest : public testing::Test {
 
   void StoreJsonMetricInMap(const network::ResourceRequest& request,
                             const GURL& url) {
-    base::StringPiece body = ExtractBodyFromRequest(request);
+    std::string_view body = ExtractBodyFromRequest(request);
     base::Value::Dict parsed_log = base::test::ParseJsonDict(body);
     std::string* metric_name = parsed_log.FindString("metric_name");
     ASSERT_TRUE(metric_name);
@@ -177,12 +183,12 @@ TEST_F(P3AServiceTest, UpdateLogsAndSendTypical) {
   EXPECT_EQ(p2a_json_sent_metrics_.size(), 4U);
   EXPECT_EQ(p3a_creative_sent_metrics_.size(), 0U);
 
-  for (size_t i = 0; i < test_histograms.size(); i++) {
-    if (test_histograms[i].rfind(kP2APrefix, 0) == 0) {
-      ASSERT_NE(p2a_json_sent_metrics_.find(test_histograms[i]),
+  for (const auto& test_histogram : test_histograms) {
+    if (test_histogram.rfind(kP2APrefix, 0) == 0) {
+      ASSERT_NE(p2a_json_sent_metrics_.find(test_histogram),
                 p2a_json_sent_metrics_.end());
     } else {
-      ASSERT_NE(p3a_json_sent_metrics_.find(test_histograms[i]),
+      ASSERT_NE(p3a_json_sent_metrics_.find(test_histogram),
                 p3a_json_sent_metrics_.end());
     }
   }
@@ -195,12 +201,12 @@ TEST_F(P3AServiceTest, UpdateLogsAndSendTypical) {
   EXPECT_EQ(p2a_json_sent_metrics_.size(), 4U);
   EXPECT_EQ(p3a_creative_sent_metrics_.size(), 0U);
 
-  for (size_t i = 0; i < test_histograms.size(); i++) {
-    if (test_histograms[i].rfind(kP2APrefix, 0) == 0) {
-      ASSERT_NE(p2a_json_sent_metrics_.find(test_histograms[i]),
+  for (const auto& test_histogram : test_histograms) {
+    if (test_histogram.rfind(kP2APrefix, 0) == 0) {
+      ASSERT_NE(p2a_json_sent_metrics_.find(test_histogram),
                 p2a_json_sent_metrics_.end());
     } else {
-      ASSERT_NE(p3a_json_sent_metrics_.find(test_histograms[i]),
+      ASSERT_NE(p3a_json_sent_metrics_.find(test_histogram),
                 p3a_json_sent_metrics_.end());
     }
   }
@@ -209,7 +215,7 @@ TEST_F(P3AServiceTest, UpdateLogsAndSendTypical) {
 TEST_F(P3AServiceTest, UpdateLogsAndSendExpress) {
   SetUpP3AService();
   std::vector<std::string> test_histograms({
-      std::string(*p3a::kCollectedExpressHistograms.begin()),
+      std::string(kTestExpressMetric),
       std::string(kTestCreativeMetric1),
       std::string(kTestCreativeMetric2),
   });
@@ -244,6 +250,16 @@ TEST_F(P3AServiceTest, UpdateLogsAndSendExpress) {
 
   EXPECT_EQ(p3a_json_sent_metrics_.size(), 1U);
   EXPECT_EQ(p2a_json_sent_metrics_.size(), 0U);
+  // Creative metrics are automatically ephemeral, should not auto resend.
+  EXPECT_EQ(p3a_creative_sent_metrics_.size(), 0U);
+
+  for (size_t i = 1; i < test_histograms.size(); i++) {
+    base::UmaHistogramExactLinear(test_histograms[i], i + 1, 8);
+    p3a_service_->OnHistogramChanged(test_histograms[i].c_str(), 0, i + 1);
+    task_environment_.RunUntilIdle();
+  }
+  task_environment_.FastForwardBy(base::Seconds(kUploadIntervalSeconds * 10));
+
   EXPECT_EQ(p3a_creative_sent_metrics_.size(), 2U);
 
   ResetInterceptorStores();
@@ -260,14 +276,19 @@ TEST_F(P3AServiceTest, UpdateLogsAndSendExpress) {
   EXPECT_EQ(p3a_creative_sent_metrics_.size(), 0U);
 }
 
-TEST_F(P3AServiceTest, UpdateLogsAndSendSlow) {
+#if !BUILDFLAG(IS_MAC)
+#define MAYBE_UpdateLogsAndSendSlow UpdateLogsAndSendSlow
+#else
+#define MAYBE_UpdateLogsAndSendSlow DISABLED_UpdateLogsAndSendSlow
+#endif
+
+TEST_F(P3AServiceTest, MAYBE_UpdateLogsAndSendSlow) {
   // Increase upload interval to reduce test time (less tasks to execute)
   config_.average_upload_interval = base::Seconds(6000);
   SetUpP3AService();
 
   std::vector<std::string> test_histograms(
-      {std::string(*p3a::kCollectedSlowHistograms.begin()),
-       std::string(kTestExampleMetric)});
+      {"Brave.Core.ProfileCount", std::string(kTestExampleMetric)});
 
   p3a_service_->RegisterDynamicMetric(kTestExampleMetric, MetricLogType::kSlow);
 
@@ -295,9 +316,16 @@ TEST_F(P3AServiceTest, UpdateLogsAndSendSlow) {
   task_environment_.FastForwardBy(base::Days(15) +
                                   base::Seconds(kUploadIntervalSeconds * 400));
 
-  EXPECT_EQ(p3a_json_sent_metrics_.size(), 2U);
+  EXPECT_EQ(p3a_json_sent_metrics_.size(), 1U);
   EXPECT_EQ(p2a_json_sent_metrics_.size(), 0U);
   EXPECT_EQ(p3a_creative_sent_metrics_.size(), 0U);
+
+  base::UmaHistogramExactLinear(kTestExampleMetric, 1, 8);
+  p3a_service_->OnHistogramChanged(kTestExampleMetric, 0, 1);
+  task_environment_.RunUntilIdle();
+  task_environment_.FastForwardBy(base::Seconds(kUploadIntervalSeconds * 400));
+
+  EXPECT_EQ(p3a_json_sent_metrics_.size(), 2U);
 
   ResetInterceptorStores();
 
@@ -363,25 +391,22 @@ TEST_F(P3AServiceTest, ShouldNotSendIfDisabled) {
 }
 
 TEST_F(P3AServiceTest, EphemeralMetricOnlySentOnce) {
-  // Increase upload interval to reduce test time (less tasks to execute)
-  base::CommandLine* cmdline = base::CommandLine::ForCurrentProcess();
-  cmdline->AppendSwitchASCII(switches::kP3AUploadIntervalSeconds, "13000");
   SetUpP3AService();
 
-  std::string test_histogram = std::string(*p3a::kEphemeralHistograms.begin());
-  base::UmaHistogramExactLinear(test_histogram, 1, 8);
-  p3a_service_->OnHistogramChanged(test_histogram.c_str(), 0, 8);
+  base::UmaHistogramExactLinear(kTestEphemeralMetric, 1, 8);
+  p3a_service_->OnHistogramChanged(kTestEphemeralMetric, 0, 8);
 
   EXPECT_EQ(p3a_json_sent_metrics_.size(), 0U);
 
-  task_environment_.FastForwardBy(base::Seconds(kUploadIntervalSeconds * 400));
+  task_environment_.FastForwardBy(base::Seconds(kUploadIntervalSeconds * 10));
 
   EXPECT_EQ(p3a_json_sent_metrics_.size(), 1U);
   EXPECT_EQ(p2a_json_sent_metrics_.size(), 0U);
   EXPECT_EQ(p3a_creative_sent_metrics_.size(), 0U);
 
   ResetInterceptorStores();
-  task_environment_.FastForwardBy(base::Days(15));
+  task_environment_.FastForwardBy(base::Days(7) +
+                                  base::Seconds(kUploadIntervalSeconds * 10));
 
   EXPECT_EQ(p3a_json_sent_metrics_.size(), 0U);
   EXPECT_EQ(p2a_json_sent_metrics_.size(), 0U);

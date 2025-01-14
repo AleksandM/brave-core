@@ -2,21 +2,20 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this file,
 // You can obtain one at https://mozilla.org/MPL/2.0/.
-import { CachingWrapper } from '$web-common/mojomCache'
+import { EntityCachingWrapper } from '$web-common/mojomCache'
 import {
   Command,
-  CommandsServiceRemote,
   CommandsListenerInterface,
   CommandsListenerReceiver,
-  CommandsService
+  CommandsService,
+  CommandsServiceRemote
 } from 'gen/brave/components/commands/common/commands.mojom.m.js'
 
 export const api = CommandsService.getRemote()
 
 export class CommandsCache
-  extends CachingWrapper<Command>
-  implements CommandsListenerInterface
-{
+  extends EntityCachingWrapper<Command>
+  implements CommandsListenerInterface {
   private receiver = new CommandsListenerReceiver(this)
   private controller: CommandsServiceRemote
 
@@ -36,7 +35,7 @@ export class CommandsCache
     commandId: number,
     accelerator: { codes: string; keys: string }
   ) {
-    this.change({
+    this.notifyChanged({
       ...this.cache,
       [commandId]: {
         ...this.cache[commandId],
@@ -51,7 +50,7 @@ export class CommandsCache
     command.accelerators = command.accelerators.filter(
       (a) => a.codes !== accelerator
     )
-    this.change({
+    this.notifyChanged({
       ...this.cache,
       [commandId]: command
     })
@@ -65,5 +64,9 @@ export class CommandsCache
 
   resetAll() {
     this.controller.resetAccelerators();
+  }
+
+  getKeyFromCode(code: string): Promise<string> {
+    return this.controller.getKeyFromCode(code).then(c => c.key)
   }
 }

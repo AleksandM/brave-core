@@ -11,10 +11,10 @@ source_set("unit_tests") {
 
     sources = [ "web_discovery_unittest.cc" ]
     deps = [
-      "//brave/browser/profiles",
       "//brave/components/constants",
       "//brave/components/search_engines",
       "//chrome/browser",
+      "//chrome/browser/prefs",
       "//chrome/test:test_support",
       "//components/prefs",
       "//components/search_engines",

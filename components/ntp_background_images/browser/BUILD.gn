@@ -15,12 +15,15 @@ static_library("browser") {
     "ntp_background_images_data.h",
     "ntp_background_images_service.cc",
     "ntp_background_images_service.h",
+    "ntp_background_images_update_util.cc",
+    "ntp_background_images_update_util.h",
     "ntp_p3a_helper.h",
+    "ntp_p3a_util.cc",
+    "ntp_p3a_util.h",
     "ntp_sponsored_images_data.cc",
     "ntp_sponsored_images_data.h",
     "sponsored_images_component_data.cc",
     "sponsored_images_component_data.h",
-    "switches.cc",
     "switches.h",
     "url_constants.h",
   ]
@@ -40,7 +43,6 @@ static_library("browser") {
 
   deps = [
     "//base",
-    "//brave/components/brave_ads/common",
     "//brave/components/brave_ads/core",
     "//brave/components/brave_component_updater/browser",
     "//brave/components/brave_rewards/common",

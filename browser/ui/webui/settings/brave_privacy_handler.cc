@@ -7,10 +7,12 @@
 
 #include "base/functional/bind.h"
 #include "base/values.h"
-#include "brave/components/brave_shields/common/features.h"
+#include "brave/components/ai_chat/core/browser/utils.h"
+#include "brave/components/ai_chat/core/common/features.h"
+#include "brave/components/brave_shields/core/common/features.h"
 #include "brave/components/constants/pref_names.h"
 #include "brave/components/de_amp/common/features.h"
-#include "brave/components/debounce/common/features.h"
+#include "brave/components/debounce/core/common/features.h"
 #include "brave/components/google_sign_in_permission/google_sign_in_permission_util.h"
 #include "brave/components/p3a/pref_names.h"
 #include "brave/components/request_otr/common/buildflags/buildflags.h"
@@ -96,6 +98,10 @@ void BravePrivacyHandler::AddLoadTimeData(content::WebUIDataSource* data_source,
       "isLocalhostAccessFeatureEnabled",
       base::FeatureList::IsEnabled(
           brave_shields::features::kBraveLocalhostAccessPermission));
+  data_source->AddBoolean(
+      "isOpenAIChatFromBraveSearchEnabled",
+      ai_chat::IsAIChatEnabled(profile->GetPrefs()) &&
+          ai_chat::features::IsOpenAIChatFromBraveSearchEnabled());
 }
 
 void BravePrivacyHandler::SetLocalStateBooleanEnabled(

@@ -15,6 +15,9 @@ namespace brave_wallet {
 
 class FilAddress {
  public:
+  static std::optional<mojom::FilecoinAddressProtocol> GetProtocolFromAddress(
+      const std::string& address);
+
   static FilAddress FromUncompressedPublicKey(
       const std::vector<uint8_t>& public_key,
       mojom::FilecoinAddressProtocol protocol,
@@ -26,6 +29,8 @@ class FilAddress {
   static FilAddress FromAddress(const std::string& address);
   static FilAddress FromBytes(const std::string& chain_id,
                               const std::vector<uint8_t>& bytes);
+  static FilAddress FromFEVMAddress(bool is_mainnet,
+                                    const std::string& fevm_address);
 
   static bool IsValidAddress(const std::string& input);
   FilAddress();
@@ -41,6 +46,7 @@ class FilAddress {
   // Represents byte form of the Filecoin address
   // https://spec.filecoin.io/appendix/address/#section-appendix.address.bytes
   std::vector<uint8_t> GetBytes() const;
+  bool IsMainNet() const;
 
  private:
   bool IsEqual(const FilAddress& other) const;

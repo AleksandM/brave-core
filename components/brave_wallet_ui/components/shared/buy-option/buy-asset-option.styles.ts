@@ -4,9 +4,12 @@
 // you can obtain one at https://mozilla.org/MPL/2.0/.
 
 import styled from 'styled-components'
+import * as leo from '@brave/leo/tokens/css/variables'
 import { WalletButton } from '../style'
 
-export const BuyAssetOptionWrapper = styled(WalletButton)<{ isSelected?: boolean }>`
+export const AssetButton = styled(WalletButton)<{
+  isSelected?: boolean
+}>`
   width: 100%;
   height: 76px;
   box-sizing: border-box;
@@ -16,13 +19,13 @@ export const BuyAssetOptionWrapper = styled(WalletButton)<{ isSelected?: boolean
   flex-direction: row;
   cursor: pointer;
   border-style: solid;
-  border-radius: 4px;
-  background-color: ${(p) => p.theme.color.background02};
-  border-color: ${(p) => p.isSelected ? p.theme.color.focusBorder : p.theme.color.divider01};
-  border-width: ${(p) => p.isSelected ? '3px' : '1px'};
-  margin-top: 6px;
-  margin-bottom: 18px;
-  padding: ${(p) => p.isSelected ? '11px' : '13px'};
+  border-radius: 8px;
+  background-color: ${(p) =>
+    p.isSelected ? leo.color.container.background : 'transparent'};
+  border-color: ${(p) =>
+    p.isSelected ? leo.color.button.background : leo.color.divider.subtle};
+  border-width: 1px;
+  padding: 8px 12px;
 `
 
 export const NameAndIcon = styled.div`
@@ -34,10 +37,10 @@ export const NameAndIcon = styled.div`
 
 export const AssetName = styled.span`
   font-family: Poppins;
-  font-size: 13px;
-  line-height: 20px;
-  letter-spacing: 0.01em;
-  color: ${(p) => p.theme.color.text01};
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 24px;
+  color: ${leo.color.text.primary};
 `
 
 export const NameColumn = styled.div`
@@ -49,10 +52,9 @@ export const NameColumn = styled.div`
 
 export const NetworkDescriptionText = styled.span`
   font-family: Poppins;
-  font-size: 13px;
-  line-height: 20px;
-  letter-spacing: 0.01em;
-  color: ${(p) => p.theme.color.text03};
+  font-size: 12px;
+  line-height: 18px;
+  color: ${leo.color.text.secondary};
 `
 
 export const PriceContainer = styled.div`
@@ -62,10 +64,10 @@ export const PriceContainer = styled.div`
 
 export const PriceText = styled.span`
   font-family: Poppins;
-  font-size: 13px;
-  line-height: 20px;
-  letter-spacing: 0.01em;
-  color: ${(p) => p.theme.color.text01};
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 24px;
+  color: ${leo.color.text.primary};
   text-align: right;
   vertical-align: middle;
 `

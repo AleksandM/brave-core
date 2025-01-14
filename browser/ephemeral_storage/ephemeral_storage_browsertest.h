@@ -7,12 +7,14 @@
 #define BRAVE_BROWSER_EPHEMERAL_STORAGE_EPHEMERAL_STORAGE_BROWSERTEST_H_
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "base/thread_annotations.h"
 #include "chrome/test/base/in_process_browser_test.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/test/browser_test_utils.h"
 #include "content/public/test/content_mock_cert_verifier.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "services/network/public/mojom/clear_data_filter.mojom.h"
@@ -59,6 +61,7 @@ class EphemeralStorageBrowserTest : public InProcessBrowserTest {
       delete;
   ~EphemeralStorageBrowserTest() override;
 
+  void SetUp() override;
   void SetUpOnMainThread() override;
   void SetUpCommandLine(base::CommandLine* command_line) override;
   void SetUpInProcessBrowserTestFixture() override;
@@ -93,7 +96,7 @@ class EphemeralStorageBrowserTest : public InProcessBrowserTest {
 
   void CreateBroadcastChannel(content::RenderFrameHost* frame);
   void SendBroadcastMessage(content::RenderFrameHost* frame,
-                            base::StringPiece message);
+                            std::string_view message);
   void ClearBroadcastMessage(content::RenderFrameHost* frame);
   content::EvalJsResult GetBroadcastMessage(content::RenderFrameHost* frame,
                                             bool wait_for_non_empty);
@@ -102,15 +105,13 @@ class EphemeralStorageBrowserTest : public InProcessBrowserTest {
 
   // Helper to load easy-to-use Indexed DB API.
   void LoadIndexedDbHelper(content::RenderFrameHost* host);
-  bool SetIDBValue(content::RenderFrameHost* host);
+  content::EvalJsResult SetIDBValue(content::RenderFrameHost* host);
 
   HostContentSettingsMap* content_settings();
   network::mojom::CookieManager* CookieManager();
   std::vector<net::CanonicalCookie> GetAllCookies();
 
  protected:
-  void SetUpHttpsServer();
-
   net::test_server::EmbeddedTestServer https_server_;
   content::ContentMockCertVerifier mock_cert_verifier_;
   GURL a_site_ephemeral_storage_url_;

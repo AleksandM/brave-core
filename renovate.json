@@ -1,12 +1,7 @@
 {
-  "extends": [
-    "config:base"
-  ],
-  "labels": [
-    "CI/skip",
-    "dependencies",
-    "renovate"
-  ],
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["local>brave/renovate-config"],
+  "addLabels": ["CI/skip", "dependencies", "renovate"],
   "draftPR": true,
   "prConcurrentLimit": 4,
   "reviewersFromCodeOwners": true

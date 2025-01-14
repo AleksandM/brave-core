@@ -30,7 +30,6 @@ public class PendingTxHelper implements TxServiceObserverImplDelegate {
     private HashMap<String, TransactionInfo[]> mTxInfos;
     private boolean mReturnAll;
     private String mFilterByContractAddress;
-    private String mGoerliContractAddress;
     private final List<TransactionInfo> mTransactionInfos;
     private final List<TransactionCacheRecord> mCacheTransactionInfos;
     private boolean isFetchingTx;
@@ -43,18 +42,13 @@ public class PendingTxHelper implements TxServiceObserverImplDelegate {
     public LiveData<TransactionInfo> mSelectedPendingRequest;
     public LiveData<Boolean> mHasNoPendingTxAfterProcessing;
     private TxServiceObserverImpl mTxServiceObserver;
-    private String mChainIdForTxs;
 
-    public PendingTxHelper(TxService txService, AccountInfo[] accountInfos, boolean returnAll,
-            String chainIdForTxs) {
-        // ChainId to fetch network specific transactions, pass null as value for `chainIdForTxs` to
-        // fetch all transactions across all networks.
-        mChainIdForTxs = chainIdForTxs;
+    public PendingTxHelper(TxService txService, AccountInfo[] accountInfos, boolean returnAll) {
         assert txService != null;
         mTxService = txService;
         mAccountInfos = accountInfos;
         mReturnAll = returnAll;
-        mTxInfos = new HashMap<String, TransactionInfo[]>();
+        mTxInfos = new HashMap<>();
 
         mTransactionInfos = new ArrayList<>();
         mCacheTransactionInfos = new ArrayList<>();
@@ -68,9 +62,12 @@ public class PendingTxHelper implements TxServiceObserverImplDelegate {
         mHasNoPendingTxAfterProcessing = _mHasNoPendingTxAfterProcessing;
     }
 
-    public PendingTxHelper(TxService txService, AccountInfo[] accountInfos, boolean returnAll,
-            boolean shouldObserveTxUpdates, String chainIdForTxs) {
-        this(txService, accountInfos, returnAll, chainIdForTxs);
+    public PendingTxHelper(
+            TxService txService,
+            AccountInfo[] accountInfos,
+            boolean returnAll,
+            boolean shouldObserveTxUpdates) {
+        this(txService, accountInfos, returnAll);
         if (shouldObserveTxUpdates) {
             mTxServiceObserver = new TxServiceObserverImpl(this);
             txService.addObserver(mTxServiceObserver);
@@ -106,54 +103,47 @@ public class PendingTxHelper implements TxServiceObserverImplDelegate {
                             allTxMultiResponse.singleResponseComplete, accountInfo.name);
             allTxContexts.add(allTxContext);
             mTxService.getAllTransactionInfo(
-                    accountInfo.accountId.coin, mChainIdForTxs, accountInfo.address, allTxContext);
+                    accountInfo.accountId.coin, null, accountInfo.accountId, allTxContext);
         }
-        allTxMultiResponse.setWhenAllCompletedAction(() -> {
-            for (AsyncUtils.GetAllTransactionInfoResponseContext allTxContext : allTxContexts) {
-                ArrayList<TransactionInfo> newValue = new ArrayList<TransactionInfo>();
-                for (TransactionInfo txInfo : allTxContext.txInfos) {
-                    if (mReturnAll || txInfo.txStatus == TransactionStatus.UNAPPROVED) {
-                        if (mFilterByContractAddress == null) {
-                            // Don't filter by contract
-                            newValue.add(txInfo);
-                        } else if (txInfo.txType != TransactionType.ERC20_APPROVE
-                                && txInfo.txType != TransactionType.ERC20_TRANSFER
-                                && txInfo.txType != TransactionType.ERC721_TRANSFER_FROM
-                                && txInfo.txType != TransactionType.ERC721_SAFE_TRANSFER_FROM) {
-                            // TODO: Filter by ETH only
-                            newValue.add(txInfo);
+        allTxMultiResponse.setWhenAllCompletedAction(
+                () -> {
+                    for (AsyncUtils.GetAllTransactionInfoResponseContext allTxContext :
+                            allTxContexts) {
+                        ArrayList<TransactionInfo> newValue = new ArrayList<TransactionInfo>();
+                        for (TransactionInfo txInfo : allTxContext.txInfos) {
+                            if (mReturnAll || txInfo.txStatus == TransactionStatus.UNAPPROVED) {
+                                if (mFilterByContractAddress == null) {
+                                    // Don't filter by contract
+                                    newValue.add(txInfo);
+                                } else if (txInfo.txType != TransactionType.ERC20_APPROVE
+                                        && txInfo.txType != TransactionType.ERC20_TRANSFER
+                                        && txInfo.txType != TransactionType.ERC721_TRANSFER_FROM
+                                        && txInfo.txType
+                                                != TransactionType.ERC721_SAFE_TRANSFER_FROM) {
+                                    // TODO: Filter by ETH only
+                                    newValue.add(txInfo);
+                                }
+                            }
+                        }
+                        Collections.sort(newValue, sortByDateComparator);
+                        TransactionInfo[] newArray = new TransactionInfo[newValue.size()];
+                        newArray = newValue.toArray(newArray);
+                        TransactionInfo[] value = mTxInfos.get(allTxContext.name);
+                        if (value == null) {
+                            mTxInfos.put(allTxContext.name, newArray);
+                        } else {
+                            TransactionInfo[] both =
+                                    Arrays.copyOf(value, value.length + newArray.length);
+                            System.arraycopy(newArray, 0, both, value.length, newArray.length);
+                            mTxInfos.put(allTxContext.name, both);
                         }
                     }
-                }
-                Collections.sort(newValue, sortByDateComparator);
-                TransactionInfo[] newArray = new TransactionInfo[newValue.size()];
-                newArray = newValue.toArray(newArray);
-                TransactionInfo[] value = mTxInfos.get(allTxContext.name);
-                if (value == null) {
-                    mTxInfos.put(allTxContext.name, newArray);
-                } else {
-                    TransactionInfo[] both = Arrays.copyOf(value, value.length + newArray.length);
-                    System.arraycopy(newArray, 0, both, value.length, newArray.length);
-                    mTxInfos.put(allTxContext.name, both);
-                }
-            }
-            isFetchingTx = false;
-            updateTransactionList();
-            if (runWhenDone != null) {
-                runWhenDone.run();
-            }
-        });
-    }
-
-    public String getAccountNameForTransaction(TransactionInfo transactionInfo) {
-        for (Map.Entry<String, TransactionInfo[]> entry : mTxInfos.entrySet()) {
-            for (TransactionInfo info : entry.getValue()) {
-                if (info.id.equals(transactionInfo.id)) {
-                    return entry.getKey();
-                }
-            }
-        }
-        return null;
+                    isFetchingTx = false;
+                    updateTransactionList();
+                    if (runWhenDone != null) {
+                        runWhenDone.run();
+                    }
+                });
     }
 
     public void updateTxInfosMap(TransactionInfo transactionInfo) {
@@ -269,9 +259,9 @@ public class PendingTxHelper implements TxServiceObserverImplDelegate {
                 mTransactionInfos.clear();
                 mTransactionInfos.addAll(newTransactionInfos);
                 Collections.sort(mTransactionInfos, sortByDateComparator);
-                if ((_mSelectedPendingRequest.getValue() != null
-                                    && _mSelectedPendingRequest.getValue().id.equals(txInfo.id)
-                            || _mSelectedPendingRequest.getValue() == null)) {
+                if (((_mSelectedPendingRequest.getValue() != null
+                                && _mSelectedPendingRequest.getValue().id.equals(txInfo.id))
+                        || _mSelectedPendingRequest.getValue() == null)) {
                     postTxUpdates();
                 }
             }

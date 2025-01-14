@@ -6,8 +6,10 @@
 #include "brave/components/brave_rewards/core/common/brotli_util.h"
 
 #include <memory>
+#include <string_view>
 #include <vector>
 
+#include "base/check_op.h"
 #include "third_party/brotli/include/brotli/decode.h"
 
 namespace {
@@ -72,10 +74,9 @@ class BrotliStreamDecoder {
 
 }  // namespace
 
-namespace brave_rewards::internal {
-namespace util {
+namespace brave_rewards::internal::util {
 
-bool DecodeBrotliString(base::StringPiece input,
+bool DecodeBrotliString(std::string_view input,
                         size_t uncompressed_size,
                         std::string* output) {
   DCHECK(output);
@@ -92,7 +93,7 @@ bool DecodeBrotliString(base::StringPiece input,
   return result == BROTLI_DECODER_RESULT_SUCCESS;
 }
 
-bool DecodeBrotliStringWithBuffer(base::StringPiece input,
+bool DecodeBrotliStringWithBuffer(std::string_view input,
                                   size_t buffer_size,
                                   std::string* output) {
   DCHECK(output);
@@ -111,5 +112,4 @@ bool DecodeBrotliStringWithBuffer(base::StringPiece input,
   return result == BrotliStreamDecoder::Result::Done;
 }
 
-}  // namespace util
-}  // namespace brave_rewards::internal
+}  // namespace brave_rewards::internal::util

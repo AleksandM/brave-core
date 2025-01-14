@@ -6,6 +6,7 @@
 // Utils
 import { debounce } from '../../common/debounce'
 import { loadTimeData } from '../../common/loadTimeData'
+import { braveSearchHost } from '../components/search/config'
 
 export const keyName = 'new-tab-data'
 
@@ -14,6 +15,7 @@ export const defaultState: NewTab.State = {
   textDirection: loadTimeData.getString('textdirection'),
   featureFlagBraveNTPSponsoredImagesWallpaper: loadTimeData.getBoolean('featureFlagBraveNTPSponsoredImagesWallpaper'),
   featureFlagBraveNewsPromptEnabled: loadTimeData.getBoolean('featureFlagBraveNewsPromptEnabled'),
+  featureFlagBraveNewsFeedV2Enabled: loadTimeData.getBoolean('featureFlagBraveNewsFeedV2Enabled'),
   featureCustomBackgroundEnabled: loadTimeData.getBoolean('featureCustomBackgroundEnabled'),
   searchPromotionEnabled: false,
   showBackgroundImage: false,
@@ -26,6 +28,11 @@ export const defaultState: NewTab.State = {
   customLinksNum: 0,
   showRewards: false,
   showBraveTalk: false,
+  showBraveVPN: false,
+  showSearchBox: true,
+  lastUsedNtpSearchEngine: braveSearchHost,
+  promptEnableSearchSuggestions: true,
+  searchSuggestionsEnabled: false,
   showBitcoinDotCom: false,
   hideAllWidgets: false,
   brandedWallpaperOptIn: false,
@@ -36,12 +43,9 @@ export const defaultState: NewTab.State = {
   braveTalkSupported: false,
   bitcoinDotComSupported: false,
   isIncognito: chrome.extension.inIncognitoContext,
-  useAlternativePrivateSearchEngine: false,
-  showAlternativePrivateSearchEngineToggle: false,
   torCircuitEstablished: false,
   torInitProgress: '',
   isTor: false,
-  isQwant: false,
   stats: {
     adsBlockedStat: 0,
     javascriptBlockedStat: 0,
@@ -64,14 +68,12 @@ export const defaultState: NewTab.State = {
     dismissedNotifications: [],
     rewardsEnabled: false,
     userType: '',
-    isUnsupportedRegion: false,
     declaredCountry: '',
-    enabledAds: false,
     needsBrowserUpgradeToServeAds: false,
-    adsSupported: false,
-    promotions: [],
     totalContribution: 0.0,
     publishersVisitedCount: 0,
+    selfCustodyInviteDismissed: false,
+    isTermsOfServiceUpdateRequired: false,
     parameters: {
       rate: 0,
       monthlyTipChoices: [],
@@ -84,23 +86,22 @@ export const defaultState: NewTab.State = {
   currentStackWidget: '',
   removedStackWidgets: [],
   // Order is ascending, with last entry being in the foreground
-  widgetStackOrder: ['rewards'],
+  widgetStackOrder: ['rewards', 'braveVPN'],
   customImageBackgrounds: []
 }
 
 if (chrome.extension.inIncognitoContext) {
   defaultState.isTor = loadTimeData.getBoolean('isTor')
-  defaultState.isQwant = loadTimeData.getBoolean('isQwant')
 }
 
-// Ensure any new stack widgets introduced are put behind
+// Ensure any new stack widgets introduced are put in front of
 // the others, and not re-added unecessarily if removed
 // at one point.
 export const addNewStackWidget = (state: NewTab.State) => {
   defaultState.widgetStackOrder.map((widget: NewTab.StackWidget) => {
     if (!state.widgetStackOrder.includes(widget) &&
-        !state.removedStackWidgets.includes(widget)) {
-      state.widgetStackOrder.unshift(widget)
+      !state.removedStackWidgets.includes(widget)) {
+      state.widgetStackOrder.push(widget)
     }
   })
   return state
@@ -115,7 +116,7 @@ export const replaceStackWidgets = (state: NewTab.State) => {
     braveRewardsSupported,
     braveTalkSupported
   } = state
-  const displayLookup = {
+  const displayLookup: { [p: string]: { display: boolean } } = {
     'rewards': {
       display: braveRewardsSupported && showRewards
     },
@@ -126,7 +127,7 @@ export const replaceStackWidgets = (state: NewTab.State) => {
   for (const key in displayLookup) {
     const widget = key as NewTab.StackWidget
     if (!state.widgetStackOrder.includes(widget) &&
-        displayLookup[widget].display) {
+      displayLookup[widget].display) {
       state.widgetStackOrder.unshift(widget)
     }
   }

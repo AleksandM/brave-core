@@ -11,8 +11,7 @@ export const reduxState: Rewards.ApplicationState = {
   rewardsData: {
     ...defaultState(),
 
-    enabledAds: false,
-    enabledAdsMigrated: false,
+    isAcSupported: true,
     enabledContribute: true,
     contributionMinTime: 8,
     contributionMinVisits: 1,
@@ -20,12 +19,13 @@ export const reduxState: Rewards.ApplicationState = {
     reconcileStamp: 0,
     ui: {
       modalConnect: false,
+      modalConnectState: '',
       modalRedirect: 'hide',
-      modalReset: false,
+      modalRedirectProvider: '',
+      modalReset: true,
       modalAdsHistory: false,
       adsSettings: false,
       autoContributeSettings: false,
-      contributionsSettings: false,
       promosDismissed: {}
     },
     autoContributeList: [
@@ -108,38 +108,33 @@ export const reduxState: Rewards.ApplicationState = {
       }
     ],
     adsData: {
-      adsEnabled: false,
       adsPerHour: 0,
       adsSubdivisionTargeting: '',
       automaticallyDetectedAdsSubdivisionTargeting: '',
       shouldAllowAdsSubdivisionTargeting: true,
       subdivisions: [],
-      adsUIEnabled: true,
       adsIsSupported: true,
       needsBrowserUpgradeToServeAds: false,
+      notificationAdsEnabled: false,
+      newTabAdsEnabled: false,
+      newsAdsEnabled: true,
+      searchAdsEnabled: true,
       adsNextPaymentDate: 0,
-      adsReceivedThisMonth: 0,
+      adsReceivedThisMonth: 4,
+      adTypesReceivedThisMonth: {
+        inline_content_ad: 1,
+        ad_notification: 1,
+        new_tab_page_ad: 2
+      },
       adsMinEarningsThisMonth: 0,
       adsMaxEarningsThisMonth: 0,
       adsMinEarningsLastMonth: 0,
       adsMaxEarningsLastMonth: 0
     },
     adsHistory: [],
-    promotions: [],
-    inlineTipsEnabled: true,
-    inlineTip: {
-      twitter: true,
-      reddit: true,
-      github: true
-    },
     excludedList: [],
     externalWalletProviderList: ['uphold'],
     balance: optional<number>(),
-    monthlyReport: {
-      month: -1,
-      year: -1
-    },
-    monthlyReportIds: [],
     currentCountryCode: '',
     parameters: {
       autoContributeChoice: 0,
@@ -156,6 +151,7 @@ export const reduxState: Rewards.ApplicationState = {
     },
     initializing: false,
     showOnboarding: false,
-    userType: 'unconnected'
+    userType: 'unconnected',
+    isUserTermsOfServiceUpdateRequired: true
   }
 }

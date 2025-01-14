@@ -25,7 +25,9 @@
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/browser_test.h"
+#include "content/public/test/browser_test_utils.h"
 #include "net/dns/mock_host_resolver.h"
+#include "third_party/blink/public/mojom/context_menu/context_menu.mojom.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/scroll_view.h"
 
@@ -41,7 +43,6 @@ class TextRecognitionBrowserTest : public InProcessBrowserTest {
     host_resolver()->AddRule("*", "127.0.0.1");
     content::SetupCrossSiteRedirector(embedded_test_server());
 
-    brave::RegisterPathProvider();
     base::FilePath test_data_dir;
     base::PathService::Get(brave::DIR_TEST_DATA, &test_data_dir);
     test_data_dir = test_data_dir.AppendASCII(kEmbeddedTestServerDirectory);
@@ -51,9 +52,11 @@ class TextRecognitionBrowserTest : public InProcessBrowserTest {
     image_html_url_ = embedded_test_server()->GetURL("a.com", "/image.html");
   }
 
-  void OnGetTextFromImage(const std::vector<std::string>& text) {
+  void OnGetTextFromImage(
+      const std::pair<bool, std::vector<std::string>>& supported_strs) {
     // Test image has "brave" text.
-    EXPECT_EQ("brave", text[0]);
+    EXPECT_TRUE(supported_strs.first);
+    EXPECT_EQ("brave", supported_strs.second[0]);
     run_loop_->Quit();
   }
 
@@ -71,7 +74,7 @@ class TextRecognitionBrowserTest : public InProcessBrowserTest {
 
     base::RepeatingTimer scheduler;
     scheduler.Start(FROM_HERE, base::Milliseconds(100),
-                    base::BindLambdaForTesting([this, &condition]() {
+                    base::BindLambdaForTesting([this, &condition] {
                       if (condition.Run())
                         run_loop_->Quit();
                     }));

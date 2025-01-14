@@ -4,35 +4,22 @@
 // You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import styled from 'styled-components'
-import * as leo from '@brave/leo/tokens/css'
+import * as leo from '@brave/leo/tokens/css/variables'
 import Icon from '@brave/leo/react/icon'
 import { WalletButton, Text } from '../../../shared/style'
 import { layoutSmallWidth } from '../../wallet-page-wrapper/wallet-page-wrapper.style'
 
-export const StyledButton = styled(WalletButton) <{ isSelected?: boolean }>`
-  --button-background-hover: ${leo.color.container.highlight};
-  @media (prefers-color-scheme: dark) {
-    --button-background-hover: ${leo.color.dark.gray[20]};
-  }
+export const StyledButton = styled(WalletButton)<{ isSelected?: boolean }>`
   --icon-color: ${(p) =>
-    p.isSelected
-      ? leo.color.icon.interactive
-      : leo.color.gray[30]
-  };
+    p.isSelected ? leo.color.icon.interactive : leo.color.neutral[30]};
   --text-color: ${(p) =>
-    p.isSelected
-      ? leo.color.text.interactive
-      : leo.color.text.secondary
-  };
+    p.isSelected ? leo.color.text.interactive : leo.color.text.secondary};
   --indicator-color: ${(p) =>
-    p.isSelected
-      ? leo.color.interaction.buttonPrimaryBackground
-      : 'none'
-  };
+    p.isSelected ? leo.color.icon.interactive : 'none'};
   &:hover {
     --icon-color: ${leo.color.icon.interactive};
     --text-color: ${leo.color.text.interactive};
-    }
+  }
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -53,11 +40,10 @@ export const StyledButton = styled(WalletButton) <{ isSelected?: boolean }>`
     flex-direction: column;
     margin-bottom: 0px;
     margin-right: 8px;
-    background-color: ${(p) => p.isSelected
-    ? 'var(--button-background-hover)'
-    : 'none'};
+    background-color: ${(p) =>
+      p.isSelected ? leo.color.container.highlight : 'none'};
     &:hover {
-      background-color: var(--button-background-hover);
+      background-color: ${leo.color.container.highlight};
     }
     &:last-child {
       margin-right: 0px;

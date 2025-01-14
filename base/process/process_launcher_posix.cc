@@ -5,6 +5,8 @@
 
 #include "brave/base/process/process_launcher.h"
 
+#include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -17,13 +19,13 @@ ProcessLauncher::ProcessLauncher() = default;
 ProcessLauncher::~ProcessLauncher() = default;
 
 // static
-absl::optional<std::string> ProcessLauncher::ReadAppOutput(
+std::optional<std::string> ProcessLauncher::ReadAppOutput(
     base::CommandLine cmdline,
     base::LaunchOptions options,
     int timeout_sec) {
-  int pipe_fd[2];
+  std::array<int, 2> pipe_fd;
   if (pipe(pipe_fd) < 0) {
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   options.fds_to_remap.emplace_back(pipe_fd[1], STDOUT_FILENO);
@@ -33,7 +35,7 @@ absl::optional<std::string> ProcessLauncher::ReadAppOutput(
   if (!process.IsValid()) {
     close(pipe_fd[0]);
     close(pipe_fd[1]);
-    return absl::nullopt;
+    return std::nullopt;
   }
 
   bool exited = false;
@@ -53,7 +55,7 @@ absl::optional<std::string> ProcessLauncher::ReadAppOutput(
   if (exited && !exit_code && read_result) {
     return result;
   } else {
-    return absl::nullopt;
+    return std::nullopt;
   }
 }
 

@@ -9,7 +9,8 @@ import Radio from 'brave-ui/components/formControls/radio'
 import { getLocale } from '$web-common/locale'
 
 // Styled Components
-import { NavButton, Panel } from '../'
+import { NavButton } from '../buttons/nav-button/index'
+import { Panel } from '../panel/index'
 import {
   StyledWrapper,
   FormColumn,
@@ -21,9 +22,7 @@ import {
   AllowanceOption
 } from './style'
 
-type AllowanceTypes =
-  | 'proposed'
-  | 'custom'
+type AllowanceTypes = 'proposed' | 'custom'
 
 export interface Props {
   onCancel: () => void
@@ -34,8 +33,9 @@ export interface Props {
   isApprovalUnlimited: boolean
 }
 
-const EditAllowance = (props: Props) => {
-  const [allowanceType, setAllowanceType] = React.useState<AllowanceTypes>('proposed')
+export const EditAllowance = (props: Props) => {
+  const [allowanceType, setAllowanceType] =
+    React.useState<AllowanceTypes>('proposed')
   const [customAllowance, setCustomAllowance] = React.useState<string>('')
 
   const {
@@ -51,7 +51,9 @@ const EditAllowance = (props: Props) => {
     setAllowanceType(key)
   }
 
-  const onChangeCustomAllowance = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onChangeCustomAllowance = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     setCustomAllowance(event.target.value)
   }
 
@@ -77,7 +79,10 @@ const EditAllowance = (props: Props) => {
     >
       <StyledWrapper>
         <Description>
-          {getLocale('braveWalletEditPermissionsDescription').replace('$1', approvalTarget)}
+          {getLocale('braveWalletEditPermissionsDescription').replace(
+            '$1',
+            approvalTarget
+          )}
         </Description>
         <FormColumn>
           <Radio

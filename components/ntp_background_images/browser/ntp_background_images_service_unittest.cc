@@ -11,6 +11,7 @@
 #include "brave/components/brave_referrals/browser/brave_referrals_service.h"
 #include "brave/components/brave_referrals/common/pref_names.h"
 #include "brave/components/constants/pref_names.h"
+#include "brave/components/l10n/common/prefs.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_data.h"
 #include "brave/components/ntp_background_images/browser/ntp_background_images_service.h"
 #include "brave/components/ntp_background_images/browser/ntp_sponsored_images_data.h"
@@ -120,6 +121,34 @@ constexpr char kTestSponsoredImagesWithMultipleCampaigns[] = R"(
         ]
     })";
 
+constexpr char kTestSponsoredImagesWithMissingImageUrl[] = R"(
+    {
+        "schemaVersion": 1,
+        "campaignId": "fb7ee174-5430-4fb9-8e97-29bf14e8d828",
+        "logo": {
+          "imageUrl":  "logo.png",
+          "alt": "Technikke: For music lovers",
+          "destinationUrl": "https://www.brave.com/",
+          "companyName": "Technikke"
+        },
+        "wallpapers": [
+            {
+              "missing_imageUrl": "background-1.jpg",
+              "focalPoint": { "x": 696, "y": 691 }
+            },
+            {
+              "missing_imageUrl": "background-2.jpg",
+              "creativeInstanceId": "c0d61af3-3b85-4af4-a3cc-cf1b3dd40e70",
+              "logo": {
+                "imageUrl": "logo-2.png",
+                "alt": "logo2",
+                "companyName": "BAT",
+                "destinationUrl": "https://www.bat.com/"
+              }
+            }
+        ]
+    })";
+
 constexpr char kTestBackgroundImages[] = R"(
     {
       "schemaVersion": 1,
@@ -163,7 +192,7 @@ class TestObserver : public NTPBackgroundImagesService::Observer {
 
   raw_ptr<NTPBackgroundImagesData> bi_data_ = nullptr;
   bool on_bi_updated_ = false;
-  raw_ptr<NTPSponsoredImagesData> si_data_ = nullptr;
+  raw_ptr<NTPSponsoredImagesData, DanglingUntriaged> si_data_ = nullptr;
   bool on_si_updated_ = false;
   bool on_super_referral_ended_ = false;
 };
@@ -230,6 +259,7 @@ class NTPBackgroundImagesServiceTest : public testing::Test {
     auto* registry = pref_service_.registry();
     NTPBackgroundImagesService::RegisterLocalStatePrefs(registry);
     brave::RegisterPrefsForBraveReferralsService(registry);
+    brave_l10n::RegisterL10nLocalStatePrefs(registry);
   }
 
   void Init() {
@@ -268,26 +298,26 @@ TEST_F(NTPBackgroundImagesServiceTest, InternalDataTest) {
   EXPECT_EQ(nullptr, service_->GetBackgroundImagesData());
 
   // Check with json file with empty object.
+  observer.si_data_ = nullptr;
   service_->si_images_data_.reset();
   observer.on_si_updated_ = false;
-  observer.si_data_ = nullptr;
   service_->OnGetSponsoredComponentJsonData(false, kTestEmptyComponent);
   auto* si_data = service_->GetBrandedImagesData(false);
   EXPECT_EQ(si_data, nullptr);
   EXPECT_TRUE(observer.on_si_updated_);
   EXPECT_TRUE(observer.si_data_->campaigns.empty());
+  observer.bi_data_ = nullptr;
   service_->bi_images_data_.reset();
   observer.on_bi_updated_ = false;
-  observer.bi_data_ = nullptr;
   service_->OnGetComponentJsonData(kTestEmptyComponent);
   auto* bi_data = service_->GetBackgroundImagesData();
   EXPECT_EQ(bi_data, nullptr);
   EXPECT_TRUE(observer.on_bi_updated_);
   EXPECT_FALSE(observer.bi_data_->IsValid());
 
+  observer.si_data_ = nullptr;
   service_->si_images_data_.reset();
   observer.on_si_updated_ = false;
-  observer.si_data_ = nullptr;
   service_->OnGetSponsoredComponentJsonData(false, kTestSponsoredImages);
   // Mark this is not SR to get SI data.
   service_->MarkThisInstallIsNotSuperReferralForever();
@@ -329,9 +359,9 @@ TEST_F(NTPBackgroundImagesServiceTest, InternalDataTest) {
       *si_data->GetBackgroundAt(0, 1)->FindStringByDottedPath(kLogoImagePath));
 
   // Test BI data loading
+  observer.bi_data_ = nullptr;
   service_->bi_images_data_.reset();
   observer.on_bi_updated_ = false;
-  observer.bi_data_ = nullptr;
   service_->OnGetComponentJsonData(kTestBackgroundImages);
   bi_data = service_->GetBackgroundImagesData();
   EXPECT_TRUE(bi_data);
@@ -378,9 +408,9 @@ TEST_F(NTPBackgroundImagesServiceTest, InternalDataTest) {
             }
         ]
     })";
+  observer.si_data_ = nullptr;
   service_->si_images_data_.reset();
   observer.on_si_updated_ = false;
-  observer.si_data_ = nullptr;
   service_->OnGetSponsoredComponentJsonData(false,
                                             test_json_string_higher_schema);
   si_data = service_->GetBrandedImagesData(false);
@@ -400,9 +430,9 @@ TEST_F(NTPBackgroundImagesServiceTest, InternalDataTest) {
       }
     ]
   })";
+  observer.bi_data_ = nullptr;
   service_->bi_images_data_.reset();
   observer.on_bi_updated_ = false;
-  observer.bi_data_ = nullptr;
   service_->OnGetComponentJsonData(test_background_json_string_higher_schema);
   bi_data = service_->GetBackgroundImagesData();
   EXPECT_FALSE(bi_data);
@@ -418,9 +448,9 @@ TEST_F(NTPBackgroundImagesServiceTest, MultipleCampaignsTest) {
   pref_service_.SetBoolean(kReferralCheckedForPromoCodeFile, true);
   pref_service_.SetBoolean(kReferralInitialization, true);
 
+  observer.si_data_ = nullptr;
   service_->si_images_data_.reset();
   observer.on_si_updated_ = false;
-  observer.si_data_ = nullptr;
   service_->OnGetSponsoredComponentJsonData(
       false, kTestSponsoredImagesWithMultipleCampaigns);
   // Mark this is not SR to get SI data.
@@ -458,6 +488,29 @@ TEST_F(NTPBackgroundImagesServiceTest, MultipleCampaignsTest) {
   service_->RemoveObserver(&observer);
 }
 
+TEST_F(NTPBackgroundImagesServiceTest, SponsoredImageWithMissingImageUrlTest) {
+  Init();
+  TestObserver observer;
+  service_->AddObserver(&observer);
+
+  pref_service_.SetBoolean(kReferralCheckedForPromoCodeFile, true);
+  pref_service_.SetBoolean(kReferralInitialization, true);
+
+  observer.si_data_ = nullptr;
+  service_->si_images_data_.reset();
+  observer.on_si_updated_ = false;
+  service_->OnGetSponsoredComponentJsonData(
+      false, kTestSponsoredImagesWithMissingImageUrl);
+  // Mark this is not SR to get SI data.
+  service_->MarkThisInstallIsNotSuperReferralForever();
+
+  auto* si_data = service_->GetBrandedImagesData(false);
+  EXPECT_FALSE(si_data);
+  EXPECT_TRUE(observer.on_si_updated_);
+  EXPECT_TRUE(observer.si_data_->campaigns.empty());
+  EXPECT_TRUE(service_->si_images_data_->campaigns.empty());
+}
+
 #if BUILDFLAG(IS_LINUX)
 
 // Linux doesn't support referral service now.
@@ -473,7 +526,7 @@ TEST_F(NTPBackgroundImagesServiceTest, TestOnNonReferralService) {
 
 #else
 
-const char kTestMappingTable[] = R"(
+constexpr char kTestMappingTable[] = R"(
     {
         "schemaVersion": 1,
         "BRV003": {
@@ -488,8 +541,8 @@ const char kTestMappingTable[] = R"(
         }
     })";
 
-  // Super referral wallpaper json data.
-const char kTestSuperReferral[] = R"(
+// Super referral wallpaper json data.
+constexpr char kTestSuperReferral[] = R"(
     {
       "schemaVersion": 1,
       "themeName": "Technikke",
