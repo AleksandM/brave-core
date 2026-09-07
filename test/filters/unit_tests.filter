@@ -279,7 +279,6 @@
 -IsolatedWebAppPolicyManagerOnDemandUpdatePreloadedTest.ComponentUpdateQueuedButNoUpdate
 -SiteSettingsHelperIsolatedWebAppTest.AutomaticFullscreenVisibility
 -SiteSettingsHelperIsolatedWebAppTest.IsolatedWebAppsUseAppNameAsDisplayName
-
 # Upstream Chromium test: CHECK failure in UpdateKeyDistributionInfo due to
 # race condition in async component loading. LoadKeyDistributionData posts
 # thread pool tasks and the TestFuture can receive a stale notification.
@@ -448,10 +447,6 @@
 
 # Flaky upstream tests
 -FirstRunTest.CreateSentinelIfNeeded_SkippedIfSuppressed
-
-# These tests are flaky both for us and upstream.
-# https://github.com/brave/brave-browser/issues/56768
--FullStreamUIPolicyTest.*
 
 # This test fails because we use our own preferences for showing the bookmarks
 # bar
@@ -804,9 +799,6 @@
 -ManifestV2HandlerUnitTest.ProfileMetrics_ExtensionLocationsAreProperlyGrouped
 -ManifestV2HandlerUnitTest.ProfileMetrics_ExtensionsThatAreDisabledForOtherReasonsEmitOther
 -ManifestV2HandlerUnitTest.ShouldBlockInstallation_UserInstalledExtensions
-
-# Flaky on our CI and upstream
--IndigoToolbarTest.ExpandCollapseInteractions
 
 # These tests assume kSensorsAllowAskBlockPermissionModel's upstream default
 # (disabled), under which the sensors content setting icon stays hidden while
